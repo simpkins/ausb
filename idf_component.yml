@@ -1,0 +1,9 @@
+dependencies:
+  idf:
+    version: '>=5.0'
+description: Adam's USB Library
+repository: https://github.com/simpkins/ausb.git
+targets:
+- esp32s2
+- esp32s3
+version: 0.0.1-a1
