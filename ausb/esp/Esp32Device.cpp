@@ -41,7 +41,7 @@ DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
   if (xQueueReceive(event_queue_, &event, max_wait) == pdTRUE) {
     return event;
   } else {
-    return UninitializedEvent();
+    return NoEvent();
   }
 }
 
@@ -192,16 +192,13 @@ void Esp32Device::interrupt_handler() {
     //
     // These two tend to be asserted together when first initializing the bus
     // as a device.
-    DBG_ISR_LOG("USB int: reset");
     usb_->gintsts = USB_USBRST_M | USB_RESETDET_M;
     bus_reset();
   }
 
   if (int_status & USB_ENUMDONE_M) {
     usb_->gintsts = USB_ENUMDONE_M;
-#if 0
     enum_done();
-#endif
   }
 
   if (int_status & USB_ERLYSUSPMSK_M) {
@@ -234,15 +231,13 @@ void Esp32Device::interrupt_handler() {
   }
 
   if (int_status & USB_RXFLVI_M) {
-    DBG_ISR_LOG("USB int: rx");
+    DBG_ISR_LOG("USB int: RX FIFO level");
     // No need to update usb_->gintsts to indicate we have handled the
     // interrupt; this will be cleared when we read from the fifo.
 
     // Disable the RXFLVL interrupt while reading data from the FIFO
     clear_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
-#if 0
-    read_rx_fifo();
-#endif
+    rx_fifo_nonempty();
     set_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
   }
 
@@ -250,22 +245,18 @@ void Esp32Device::interrupt_handler() {
     // OUT endpoint interrupt
     DBG_ISR_LOG("USB int: OUT endpoint");
     // No need to update usb_->gintsts to indicate we have handled the
-    // interrupt; handle_out_endpoint_intr() will update the endpoint doepint
+    // interrupt; handle_out_ep_interrupt() will update the endpoint doepint
     // register instead.
-#if 0
-    handle_out_endpoint_intr();
-#endif
+    handle_out_ep_interrupt();
   }
 
   if (int_status & USB_IEPINT_M) {
     // IN endpoint interrupt
     DBG_ISR_LOG("USB int: IN endpoint");
     // No need to update usb_->gintsts to indicate we have handled the
-    // interrupt; handle_in_endpoint_intr() will update the endpoint diepint
+    // interrupt; handle_in_ep_interrupt() will update the endpoint diepint
     // register instead.
-#if 0
-    handle_in_endpoint_intr();
-#endif
+    handle_in_ep_interrupt();
   }
 
   // Clear other interrupt bits that we do not handle.
@@ -278,6 +269,7 @@ void Esp32Device::interrupt_handler() {
 }
 
 void Esp32Device::bus_reset() {
+  DBG_ISR_LOG("USB int: reset");
   all_endpoints_nak();
 
   // clear the device address
@@ -307,6 +299,204 @@ void Esp32Device::bus_reset() {
   set_bits(usb_->gintmsk, USB_IEPINTMSK_M | USB_OEPINTMSK_M);
 
   send_event_from_isr<BusResetEvent>();
+}
+
+void Esp32Device::enum_done() {
+  // The Device Status register (DSTS_REG) contains the enumerated speed
+  // We pretty much always expect this to be Speed::Full48Mhz.  In theory if we
+  // are connected to a host that only supports low speed we could see
+  // Speed::Low6Mhz.
+  uint32_t enum_spd = (usb_->dsts >> USB_ENUMSPD_S) & (USB_ENUMSPD_V);
+  DBG_ISR_LOG("USB int: enumeration done; speed=%d", enum_spd);
+
+#if 0
+  uint16_t max_ep0_packet_size;
+#endif
+  UsbSpeed speed;
+  if (enum_spd == Speed::Full48Mhz) {
+    // Max packet size is 64 bytes
+    clear_bits(usb_->in_ep_reg[0].diepctl, USB_D_MPS0_V);
+#if 0
+    max_ep0_packet_size = 64;
+#endif
+    speed = UsbSpeed::Full;
+  } else {
+    // Max packet size is 8 bytes
+    set_bits(usb_->in_ep_reg[0].diepctl, USB_D_MPS0_V);
+#if 0
+    max_ep0_packet_size = 8;
+#endif
+    speed = UsbSpeed::Low;
+  }
+  // Clear the stall bit
+  clear_bits(usb_->in_ep_reg[0].diepctl, USB_D_STALL0_M);
+
+#if 0
+  xfer_status_[0].out.max_size = max_ep0_packet_size;
+  xfer_status_[0].in.max_size = max_ep0_packet_size;
+#endif
+  send_event_from_isr<BusEnumDone>(speed);
+}
+
+void Esp32Device::rx_fifo_nonempty() {
+  // USB_PKTSTS values from the comments in soc/usb_reg.h
+  enum Pktsts : uint32_t {
+    GlobalOutNak = 1,
+    PktReceived = 2,
+    TxComplete = 3,
+    SetupComplete = 4,
+    DataToggleError = 5, // host mode only
+    SetupReceived = 6,
+    ChannelHalted = 7, // host mode only
+  };
+
+  uint32_t const ctl_word = usb_->grxstsp;
+  uint8_t const pktsts = (ctl_word & USB_PKTSTS_M) >> USB_PKTSTS_S;
+  switch (pktsts) {
+  case Pktsts::PktReceived: {
+    uint8_t const endpoint_num = (ctl_word & USB_CHNUM_M) >> USB_CHNUM_S;
+    uint16_t const byte_count = (ctl_word & USB_BCNT_M) >> USB_BCNT_S;
+    DBG_ISR_LOG("USB RX: OUT packet received; size=%u", byte_count);
+    receive_packet(endpoint_num, byte_count);
+    break;
+  }
+  case Pktsts::SetupComplete: {
+    // Setup OUT packet received.  After this we should receive an OUT endpoint
+    // interrupt with the SETUP bit set.  We generate an event to handle the
+    // SetupPacket there.
+    uint8_t const endpoint_num = (ctl_word & USB_CHNUM_M) >> USB_CHNUM_S;
+    DBG_ISR_LOG("USB RX: setup done");
+    // Set the USB_SUPCNT0_M bits in the doeptsiz register, to indicate that
+    // we can receive up to 3 DATA packets in this setup transfer.
+    set_bits(usb_->out_ep_reg[endpoint_num].doeptsiz, USB_SUPCNT0_M);
+    break;
+  }
+  case Pktsts::SetupReceived: {
+    // We should receive a SetupComplete interrupt after SetupReceived.
+    // We simply store the setup packet data here.
+    volatile uint32_t *rx_fifo = usb_->fifo[0];
+    setup_packet_.u32[0] = (*rx_fifo);
+    setup_packet_.u32[1] = (*rx_fifo);
+    DBG_ISR_LOG("USB RX: setup packet: 0x%08x 0x%08x", setup_packet_.u32[0],
+                setup_packet_.u32[1]);
+    break;
+  }
+  case Pktsts::GlobalOutNak:
+    DBG_ISR_LOG("USB RX: Global OUT NAK");
+    break;
+  case Pktsts::TxComplete:
+    DBG_ISR_LOG("USB RX: OUT packet done");
+    break;
+  default:
+    ESP_EARLY_LOGE(LogTag, "USB RX: unexpected pktsts value: %x", pktsts);
+    break;
+  }
+}
+
+void Esp32Device::handle_out_ep_interrupt() {
+  for (uint8_t epnum = 0; epnum < USB_OUT_EP_NUM; ++epnum) {
+    if (usb_->daint & (1 << (16 + epnum))) {
+      out_endpoint_interrupt(epnum);
+    }
+  }
+}
+
+void Esp32Device::handle_in_ep_interrupt() {
+  for (uint8_t epnum = 0; epnum < USB_IN_EP_NUM; ++epnum) {
+    if (usb_->daint & (1 << epnum)) {
+      in_endpoint_interrupt(epnum);
+    }
+  }
+}
+
+void Esp32Device::out_endpoint_interrupt(uint8_t epnum) {
+  // Setup packet receipt done
+  // This should presumably only happen for endpoint 0.
+  if ((usb_->out_ep_reg[epnum].doepint & USB_SETUP0_M)) {
+    DBG_ISR_LOG("USB: SETUP receive complete on EP%u", epnum);
+    // Clear the interrupt bits
+    usb_->out_ep_reg[epnum].doepint = USB_STUPPKTRCVD0_M | USB_SETUP0_M;
+    send_event_from_isr<SetupPacket>(setup_packet_.setup);
+  }
+
+  // OUT transaction complete (one packet received)
+  if (usb_->out_ep_reg[epnum].doepint & USB_XFERCOMPL0_M) {
+    DBG_ISR_LOG("USB: OUT transaction complete on EP%u", epnum);
+    // Clear the interrupt bit
+    usb_->out_ep_reg[epnum].doepint = USB_XFERCOMPL0_M;
+
+#if 0
+    auto &xfer = xfer_status_[epnum].out;
+    // Transfer complete if short packet or total length is received
+    if (xfer.recv_complete) {
+      send_event_from_isr<OutXferCompleteEvent>(epnum, xfer.received_bytes);
+    } else {
+      // Enable receiving another packet on this endpoint
+      set_bits(usb_->out_ep_reg[epnum].doeptsiz,
+               USB_PKTCNT0_M |
+                   ((xfer.max_size & USB_XFERSIZE0_V) << USB_XFERSIZE0_S));
+      set_bits(usb_->out_ep_reg[epnum].doepctl, USB_EPENA0_M | USB_CNAK0_M);
+    }
+#endif
+  }
+}
+
+void Esp32Device::in_endpoint_interrupt(uint8_t epnum) {
+  // TODO
+  ESP_EARLY_LOGE(LogTag, "TODO: process IN endpoint interrupt");
+}
+
+void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
+  // We currently operate in what the ESP32-S3 Technical Reference Manual
+  // describes as "Slave mode", and manually read data from the RX FIFO.
+  //
+  // The device also supports using DMA to directly place data into our memory.
+  // It would probably be nicer to use DMA mode in the future, but the
+  // documentation for DMA functionality is somewhat limited and I haven't
+  // spent much time playing around with it.
+
+  DBG_ISR_LOG("todo: receive OUT packet");
+#if 0
+  auto *xfer = &xfer_status_[endpoint_num].out;
+  // All RX transfers are performed using FIFO 0.
+  volatile uint32_t *rx_fifo = usb_->fifo[0];
+
+  // We can read up to the smaller of:
+  // - the remaining size until the buffer is full
+  // - the maximum transfer size for this endpoint
+  // - or the packet_size argument
+  //
+  // TODO: If bufsize_left is less than packet_size, the host may have sent a
+  // full packet but we are not able to read all of it.  I haven't played
+  // around with how the ESP32 behaves in this case, but I think it will mess
+  // up the current code's detection of end of transmission.  We probably
+  // should require that start_out_read() always be called with a buffer size
+  // that is a multiple of the maximum endpoint packet size.
+  const uint16_t bufsize_left = xfer->buffer_size - xfer->received_bytes;
+  uint16_t read_size =
+      std::min(std::min(bufsize_left, xfer->max_size), packet_size);
+
+  uint8_t *out_ptr = (xfer->buffer + xfer->received_bytes);
+  uint8_t *const end = out_ptr + read_size;
+  // Read 32-bit words at a time from the FIFO
+  // Copy into out_ptr with memcmp, since out_ptr may not be word-aligned.
+  while (out_ptr + 4 < end) {
+    const uint32_t tmp = (*rx_fifo);
+    memcpy(out_ptr, &tmp, 4);
+    out_ptr += 4;
+  }
+  if (out_ptr < end) {
+    const uint32_t tmp = (*rx_fifo);
+    memcpy(out_ptr, &tmp, end - out_ptr);
+  }
+
+  xfer->received_bytes = end - xfer->buffer;
+
+  // An OUT packet with a length less than the maximum endpoint packet size
+  // always indicates the end of a transfer.
+  xfer->recv_complete = (packet_size < xfer->max_size) ||
+                        (xfer->received_bytes == xfer->buffer_size);
+#endif
 }
 
 } // namespace ausb

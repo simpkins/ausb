@@ -2,6 +2,7 @@
 #pragma once
 
 #include "ausb/DeviceEvent.h"
+#include "ausb/usb_types.h"
 
 #include <esp_err.h>
 #include <esp_private/usb_phy.h>
@@ -102,6 +103,13 @@ private:
   void interrupt_handler();
 
   void bus_reset();
+  void enum_done();
+  void rx_fifo_nonempty();
+  void receive_packet(uint8_t endpoint_num, uint16_t packet_size);
+  void handle_out_ep_interrupt();
+  void handle_in_ep_interrupt();
+  void out_endpoint_interrupt(uint8_t epnum);
+  void in_endpoint_interrupt(uint8_t epnum);
 
   static constexpr uint8_t kMaxEventQueueSize = 32;
 
@@ -112,6 +120,11 @@ private:
   intr_handle_t interrupt_handle_ = nullptr;
   std::array<uint8_t, sizeof(DeviceEvent) *kMaxEventQueueSize> queue_buffer_ =
       {};
+
+  union {
+    std::array<uint32_t, 2> u32;
+    SetupPacket setup;
+  } setup_packet_ = {};
 };
 
 } // namespace ausb

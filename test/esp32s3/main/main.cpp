@@ -4,6 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "ausb/UsbDevice.h"
 #include "ausb/esp/Esp32Device.h"
 
 using namespace ausb;
@@ -11,6 +12,7 @@ using namespace std::chrono_literals;
 
 namespace {
 static constinit Esp32Device dev;
+static constinit UsbDevice usb;
 const char *LogTag = "ausb.test";
 }
 
@@ -23,10 +25,11 @@ const char *LogTag = "ausb.test";
   while (true) {
     ++n;
     const auto event = dev.wait_for_event(10000ms);
-    if (std::holds_alternative<UninitializedEvent>(event)) {
+    if (std::holds_alternative<NoEvent>(event)) {
       ESP_LOGI(LogTag, "usb %zu: no event", n);
     } else {
       ESP_LOGI(LogTag, "usb %zu: got event", n);
+      usb.handle_event(event);
     }
   }
 
