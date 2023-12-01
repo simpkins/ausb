@@ -5,14 +5,23 @@
 #include <freertos/task.h>
 
 #include "ausb/UsbDevice.h"
+#include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/esp/Esp32Device.h"
 
 using namespace ausb;
 using namespace std::chrono_literals;
 
 namespace {
+constexpr DeviceDescriptor make_device_descriptor() {
+  DeviceDescriptor dev;
+  dev.set_vendor(0x6666); // Prototype product vendor ID
+  dev.set_product(0x1235);
+  dev.set_device_release(0, 1);
+  return dev;
+}
+
 static constinit Esp32Device dev;
-static constinit UsbDevice usb(&dev);
+static constinit UsbDevice usb(&dev, make_device_descriptor());
 const char *LogTag = "ausb.test";
 }
 

@@ -94,7 +94,7 @@ public:
   /**
    * Configure endpoint 0.
    *
-   * This should normally be called in response to a BusEnumDone event.
+   * This should be called in response to a BusEnumDone event.
    *
    * The Esp32Device will store a pointer to this RxBuffer, but does not own
    * it.  The caller is responsible for ensuring that the RxBuffer object is
@@ -105,8 +105,37 @@ public:
    * in the RxBuffer.  The packet size must be valid for the USB speed that was
    * negotiated in the BusEnumDone event.  (MPS must be 8 for low speed and 64
    * for full speed.)
+   *
+   * Returns true on success, or false if called in an invalid state or with
+   * bad arguments.
    */
   bool configure_ep0(RxBuffer* buffer);
+
+  /**
+   * Configure Endpoint 0 to STALL the next IN or OUT token it receives.
+   */
+  void stall_ep0();
+
+  /**
+   * Configure an OUT endpoint to respond to the next token with a STALL error.
+   *
+   * This method should not be used for endpoint 0.  Use stall_ep0() for
+   * stalling the control endpoint.
+   */
+  void stall_out_endpoint(uint8_t endpoint_num);
+
+  /**
+   * Configure an IN endpoint to respond to the next token with a STALL error.
+   *
+   * This method should not be used for endpoint 0.  Use stall_ep0() for
+   * stalling the control endpoint.
+   */
+  void stall_in_endpoint(uint8_t endpoint_num);
+
+  /**
+   * Flush the transmit FIFO for an IN endpoint.
+   */
+  void flush_tx_fifo(uint8_t endpoint_num);
 
 private:
   // Speed bits used by the dcfg and dsts registers.

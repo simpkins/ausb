@@ -3,6 +3,7 @@
 
 #include "ausb/DeviceEvent.h"
 #include "ausb/ausb_types.h"
+#include "ausb/desc/DeviceDescriptor.h"
 
 #include <cstdint>
 #include <memory>
@@ -18,7 +19,9 @@ namespace ausb {
 
 class UsbDevice {
 public:
-  constexpr explicit UsbDevice(HWDevice* hw) noexcept : hw_(hw) {}
+  constexpr explicit UsbDevice(HWDevice *hw,
+                               const DeviceDescriptor &desc) noexcept
+      : hw_(hw), dev_descriptor_(desc) {}
 
   void handle_event(const DeviceEvent &event);
 
@@ -27,6 +30,14 @@ public:
   void ctrl_out_ack();
   void ctrl_out_error();
 #endif
+
+  /**
+   * Send data for the current control IN transfer.
+   *
+   * This method should only be invoked by the current DevCtrlInTransfer
+   * object.
+   */
+  bool send_ctrl_in_xfer(const void *data, size_t size);
 
 private:
   // Figure 9-1 in the USB 2.0 spec lists the various device states.
@@ -49,34 +60,34 @@ private:
   };
 
   enum class CtrlXferStatus {
-      // No control transfer in progress
-      Idle,
-      // We have received a SETUP packet for an OUT transfer,
-      // but have not yet received any OUT data packets.
-      OutSetupReceived,
+    // No control transfer in progress
+    Idle,
+    // We have received a SETUP packet for an OUT transfer,
+    // but have not yet received any OUT data packets.
+    OutSetupReceived,
 
-      // We received a SETUP packet for an OUT transfer,
-      // and we are waiting on more OUT data
-      OutRecvData,
-      // A OUT transfer has been started and we have received all data,
-      // and we are not processing the transfer before sending an
-      // acknowledgement
-      OutStatus,
-      // We are acknowledging an OUT transfer.
-      // (Unclear if we need this state; in general the HW can receive our
-      // 0-length IN packet without waiting for the host to ACK it.)
-      OutAck,
+    // We received a SETUP packet for an OUT transfer,
+    // and we are waiting on more OUT data
+    OutRecvData,
+    // A OUT transfer has been started and we have received all data,
+    // and we are not processing the transfer before sending an
+    // acknowledgement
+    OutStatus,
+    // We are acknowledging an OUT transfer.
+    // (Unclear if we need this state; in general the HW can receive our
+    // 0-length IN packet without waiting for the host to ACK it.)
+    OutAck,
 
-      // We have received a SETUP packet for an IN transfer,
-      // but have not yet received any IN data packets.
-      InSetupReceived,
+    // We have received a SETUP packet for an IN transfer,
+    // but have not yet started prepared IN data to send to the hsot.
+    InSetupReceived,
 
-      // We received a SETUP packet for an IN transfer,
-      // and are currently sending data.
-      InSendData,
-      // We have sent all data for an IN transfer, and are waiting for the host
-      // to acknowledge the transfer.
-      InStatus,
+    // We received a SETUP packet for an IN transfer,
+    // and are currently sending data.
+    InSendData,
+    // We have sent all data for an IN transfer, and are waiting for the host
+    // to acknowledge the transfer.
+    InStatus,
   };
 
   friend State &operator|=(State &s, StateFlag flag) {
@@ -121,11 +132,6 @@ private:
   bool remote_wakeup_enabled_ = false;
 
   CtrlXferStatus ctrl_status_ = CtrlXferStatus::Idle;
-  // A copy of the SETUP packet for the control transfer currently being
-  // processed.  We keep this mainly so we can detect SETUP packet
-  // retransmissions, and avoid unnecessarily aborting an then restarting a
-  // transfer on SETUP retransmission.
-  SetupPacket current_ctrl_transfer_;
 
   RxBuffer ep0_rx_buffer_;
   HWDevice* hw_ = nullptr;
@@ -140,6 +146,13 @@ private:
     // Out is set during InSendData and InStatus states
     std::unique_ptr<DevCtrlInTransfer> in;
   } ctrl_xfer_;
+
+  // A copy of the SETUP packet for the control transfer currently being
+  // processed.  We keep this mainly so we can detect SETUP packet
+  // retransmissions, and avoid unnecessarily aborting an then restarting a
+  // transfer on SETUP retransmission.
+  SetupPacket current_ctrl_transfer_;
+  DeviceDescriptor dev_descriptor_;
 };
 
 } // namespace ausb

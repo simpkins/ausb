@@ -2,6 +2,7 @@
 #include "ausb/UsbDevice.h"
 
 #include "ausb/log.h"
+#include "ausb/dev_ctrl/GetStaticDescriptor.h"
 
 namespace {
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
@@ -28,6 +29,8 @@ void UsbDevice::handle_event(const DeviceEvent &event) {
 
 void UsbDevice::on_bus_reset() {
   AUSB_LOGI("on_bus_reset");
+  fail_control_transfer(XferCancelReason::BusReset);
+
 #if 0
   callbacks_->on_reset();
 #endif
@@ -68,14 +71,17 @@ void UsbDevice::on_enum_done(UsbSpeed speed) {
   config_id_ = 0;
   remote_wakeup_enabled_ = false;
 
+  // We already called fail_control_transfer() in bus_reset(), so there
+  // probably shouldn't be any transfers in progress at this point, but call it
+  // again just to be safe.
+  fail_control_transfer(XferCancelReason::BusReset);
+
   // EP0 max packet size requirements
   // - Must be 8 when low speed
   // - Must be 64 when full speed
   // - May be 8, 16, 32, or 64 when high speed
   uint16_t max_packet_size = (speed == UsbSpeed::Low) ? 8 : 64;
-#if 0
-  abort_control_transfer();
-#endif
+  dev_descriptor_.set_max_pkt_size0(max_packet_size);
 
   ep0_rx_buffer_ = hw_->create_rx_buffer(/*endpoint_num=*/0, max_packet_size,
                                          /*num_packets=*/2);
@@ -101,13 +107,29 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
   // Handle receipt of a new SETUP packet if we think that we are currently
   // still processing an existing control transfer.
   if (ctrl_status_ != CtrlXferStatus::Idle) [[unlikely]] {
-    if (ctrl_status_ == CtrlXferStatus::OutSetupReceived ||
-        ctrl_status_ == CtrlXferStatus::InSetupReceived) {
-      // This may be a retransmitted SETUP packet.  If it is identical to
-      // the current SETUP packet we are processing, ignore it.  Otherwise,
-      // fail the current transfer and start a new one.
-      if (packet == current_ctrl_transfer_) {
+    // The host is allowed to retransmit SETUP packets in case it thinks thee
+    // was an error with the transmission.  If this packet is identical to the
+    // last SETUP packet and we haven't seen any other packets since then,
+    // assume it was a retransmit and simply keep processing the transfer we
+    // already started.
+    if (current_ctrl_transfer_ == packet) {
+      if (ctrl_status_ == CtrlXferStatus::OutSetupReceived ||
+          ctrl_status_ == CtrlXferStatus::InSetupReceived) {
+        // This may be a retransmitted SETUP packet.  If it is identical to
+        // the current SETUP packet we are processing, ignore it.  Otherwise,
+        // fail the current transfer and start a new one.
         AUSB_LOGI("ignoring retransmitted SETUP packet");
+        return;
+      } else if (ctrl_status_ == CtrlXferStatus::InSendData) {
+        // TODO: For the InSendData state, we have prepared data to send, but
+        // we don't know if the host has sent us any IN tokens yet.  If we
+        // haven't seen an IN token yet, then we should treat this SETUP packet
+        // as a retransmit.  If we have seen an IN token, then this new SETUP
+        // packet isn't a retransmit.
+        //
+        // For now, optimistically assume this is a retransmit.
+        AUSB_LOGI(
+            "ignoring likely retransmitted SETUP packet during control IN");
         return;
       }
     }
@@ -128,7 +150,9 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
     ctrl_status_ = CtrlXferStatus::InSetupReceived;
     new (&ctrl_xfer_.in)
         std::unique_ptr<DevCtrlInTransfer>(process_ctrl_in_setup(packet));
-    if (!ctrl_xfer_.in) {
+    if (ctrl_xfer_.in) {
+      ctrl_xfer_.in->start(current_ctrl_transfer_);
+    } else {
       ctrl_xfer_.in.~unique_ptr();
       ctrl_status_ = CtrlXferStatus::Idle;
       stall_ctrl_transfer();
@@ -141,20 +165,6 @@ void UsbDevice::process_ctrl_out_setup(const SetupPacket &packet) {
   AUSB_LOGW("TODO: process OUT setup packet");
 }
 
-class GetDescriptorXfer : public DevCtrlInTransfer {
-public:
-  GetDescriptorXfer(UsbDevice* dev) : DevCtrlInTransfer(dev) {}
-
-  void start(const SetupPacket& packet) {
-    AUSB_LOGI("GET_DESCRIPTOR: value=0x%x index=%u", packet.value,
-              packet.index);
-  }
-
-  virtual void transfer_cancelled(XferCancelReason reason) {
-    AUSB_LOGI("GET_DESCRIPTOR xfer cancelled");
-  }
-};
-
 std::unique_ptr<DevCtrlInTransfer>
 UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   const auto recipient = packet.get_recipient();
@@ -164,7 +174,8 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
       const auto std_req_type = packet.get_std_request();
       if (std_req_type == StdRequestType::GetDescriptor) {
         AUSB_LOGW("TODO: process GET_DESCRIPTOR request");
-        return std::make_unique<GetDescriptorXfer>(this);
+        return std::make_unique<GetStaticDescriptor>(this,
+                                                     dev_descriptor_.data());
       }
     }
   }
@@ -172,6 +183,24 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   // TODO
   AUSB_LOGW("TODO: unhandled IN setup packet");
   return nullptr;
+}
+
+bool UsbDevice::send_ctrl_in_xfer(const void *data, size_t size) {
+  if (ctrl_status_ == CtrlXferStatus::InSetupReceived) [[likely]] {
+    ctrl_status_ = CtrlXferStatus::InSendData;
+  } else if (ctrl_status_ != CtrlXferStatus::InSendData) [[unlikely]] {
+    AUSB_LOGE("send_ctrl_in_xfer invoked in bad ctrl state %d",
+              static_cast<int>(ctrl_status_));
+    return false;
+  }
+
+  AUSB_LOGE("TODO: send_ctrl_in_xfer");
+#if 0
+  if (size == 0) {
+  }
+#endif
+  // TODO
+  return false;
 }
 
 void UsbDevice::fail_control_transfer(XferCancelReason reason) {
@@ -182,15 +211,18 @@ void UsbDevice::fail_control_transfer(XferCancelReason reason) {
   case CtrlXferStatus::OutRecvData:
   case CtrlXferStatus::OutStatus:
   case CtrlXferStatus::OutAck:
-    ctrl_xfer_.out->transfer_cancelled(reason);
+    ctrl_xfer_.out->invoke_xfer_cancelled(reason);
+    ctrl_xfer_.out.reset();
     ctrl_xfer_.out.~unique_ptr();
     ctrl_status_ = CtrlXferStatus::Idle;
     return;
   case CtrlXferStatus::InSetupReceived:
   case CtrlXferStatus::InSendData:
   case CtrlXferStatus::InStatus:
-    ctrl_xfer_.in->transfer_cancelled(reason);
+    ctrl_xfer_.in->invoke_xfer_cancelled(reason);
+    ctrl_xfer_.in.reset();
     ctrl_xfer_.in.~unique_ptr();
+    hw_->flush_tx_fifo(0);
     ctrl_status_ = CtrlXferStatus::Idle;
     return;
   }
@@ -200,11 +232,8 @@ void UsbDevice::fail_control_transfer(XferCancelReason reason) {
 }
 
 void UsbDevice::stall_ctrl_transfer() {
-  // TODO
-#if 0
-  hw_.stall_in_endpoint(0);
-  hw_.stall_out_endpoint(0);
-#endif
+  hw_->stall_in_endpoint(0);
+  hw_->stall_out_endpoint(0);
 }
 
 #if 0

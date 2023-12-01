@@ -21,7 +21,7 @@ class UsbDevice;
  * - destructor:
  *   - may need to trigger error() if it was not called.
  *     generally bad if caller does not call ack() or error() first,
- *     since a call to transfer_cancelled() can race with the destructor.
+ *     since a call to xfer_cancelled() can race with the destructor.
  *
  * - ack() and error():
  *   - generate a
@@ -29,11 +29,11 @@ class UsbDevice;
  * - RxDataReference destructor:
  *   - inform the device more buffer space is available from any task
  *
- * - transfer_cancelled() may be called in the USB task while ack() or error()
+ * - xfer_cancelled() may be called in the USB task while ack() or error()
  *   are running in another task
  *
  * - UsbDevice destructor:
- *   - needs to call transfer_cancelled() on this object
+ *   - needs to call xfer_cancelled() on this object
  *     - also needs to wait for RxDataReference objects to be freed :-(
  *
  * -----
@@ -85,16 +85,16 @@ public:
 #endif
 
   /**
-   * transfer_cancelled() will be called if the transfer is cancelled.
+   * xfer_cancelled() will be called if the transfer is cancelled.
    *
    * This method will always be invoked on the main USB task.
    *
    * The DevCtrlOutTransfer implementation should cancel any processing
    * they are doing.  It is not necessary to call ack() or error() (doing so
    * will be a no-op).  The DevCtrlOutTransfer destructor will be called
-   * immediately after transfer_cancelled() returns.
+   * immediately after xfer_cancelled() returns.
    */
-  virtual void transfer_cancelled(XferCancelReason reason) = 0;
+  virtual void xfer_cancelled(XferCancelReason reason) = 0;
 
 private:
   enum class State {
@@ -114,9 +114,9 @@ private:
   DevCtrlOutTransfer &operator=(DevCtrlOutTransfer const &) = delete;
 
   friend class UsbDevice;
-  void invoke_transfer_cancelled(XferCancelReason reason) {
+  void invoke_xfer_cancelled(XferCancelReason reason) {
       device_ = nullptr;
-      transfer_cancelled(reason);
+      xfer_cancelled(reason);
   }
 
   // Whether all OUT data has been received yet.
@@ -127,7 +127,7 @@ private:
   // The pointer to the UsbDevice.
   // This will be reset to null when the transfer is complete (by calling ack()
   // or error()), or once it has been cancelled, immediately before a
-  // transfer_cancelled() call.
+  // xfer_cancelled() call.
   UsbDevice *device_{nullptr};
 };
 

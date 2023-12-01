@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/usb_types.h"
+#include "ausb/SetupPacket.h"
 
 #include <type_traits>
 #include <variant>

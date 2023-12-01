@@ -174,6 +174,7 @@ esp_err_t Esp32Device::init(EspPhyType phy_type,
 
 void Esp32Device::reset() {
   usb_->gintmsk = 0; // Mask all interrupts
+  usb_->daintmsk = 0;
   set_bits(usb_->dctl, USB_SFTDISCON_M); // Disable the data pull-up line
 
   if (interrupt_handle_) {
@@ -181,6 +182,7 @@ void Esp32Device::reset() {
     // finish before it returns.
     esp_intr_free(interrupt_handle_);
     usb_->gintmsk = 0;
+    usb_->daintmsk = 0;
   }
   if (phy_) {
     usb_del_phy(phy_);
@@ -238,13 +240,24 @@ Esp32Device::create_rx_buffer(uint8_t endpoint, uint16_t max_packet_size,
 
 bool Esp32Device::configure_ep0(RxBuffer* buffer) {
   ESP_LOGI(LogTag, "configure EP0 RX buffer");
-  // TODO: handle a configure_ep0() call racing with a intr_bus_reset()
-  if (ep0_rx_buffer_ != nullptr) {
+  // This method should only be called when EP0 is disabled and has not yet
+  // been configured.  (e.g., after a bus reset)
+  if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
     ESP_LOGE(LogTag,
              "configure_ep0() called when endpoint 0 was already configured");
     return false;
   }
   ep0_rx_buffer_ = buffer;
+
+  // Configure FIFO sizes
+  // Configure the receive FIFO size.
+  // Use 52 words (208 bytes), simply since this is the value that tinyusb
+  // uses.  The comments in the tinyusb code appear to refer to data from
+  // Synopsys technical reference manuals.
+  usb_->grxfsiz = 52;
+  // TX FIFO size
+  // Control IN uses FIFO 0 with 64 bytes (16 32-bit words)
+  usb_->gnptxfsiz = (16 << USB_NPTXFDEP_S) | (usb_->grxfsiz & 0x0000ffffUL);
 
   // Compute bits to set in the doepctl and diepctl registers
   const auto mps = buffer->max_packet_size();
@@ -299,11 +312,14 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
   diepctl &= ~(USB_D_MPS0_M | USB_D_TXFNUM0_M | USB_D_STALL0_M);
   diepctl |= (mps_bits << USB_D_MPS0_S);
 
-  // TODO: probably update doepctl and diepctl now,
+  // TODO: perhaps update doepctl and diepctl now,
   // and move the free_packets logic below to a separate helper function that
   // we all any time the RxBuffer goes from full to space available.
 
   const auto free_packets = buffer->num_free_pkts();
+  uint32_t doeptsiz = usb_->out_ep_reg[0].doeptsiz;
+  // Enable receipt of setup packets
+  doeptsiz |= USB_SUPCNT0_M;
   if (free_packets > 0) {
     // Indicate how much data we can receive.
     // Note that USB_PKTCNT0_V is 1 on ESP32-S2 and ESP32-S3, so it only
@@ -321,9 +337,8 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
         std::max(static_cast<int>(free_packets), USB_PKTCNT0_V);
     const uint32_t max_recv_bytes = std::max(
         buffer->max_packet_size(), static_cast<uint16_t>(USB_XFERSIZE0_V));
-    set_bits(usb_->out_ep_reg[endpoint_num].doeptsiz,
-             (max_recv_pkts << USB_PKTCNT0_S) |
-                 (max_recv_bytes << USB_XFERSIZE0_S));
+    doeptsiz |=
+        (max_recv_pkts << USB_PKTCNT0_S) | (max_recv_bytes << USB_XFERSIZE0_S);
 
     // Enable the OUT endpoint, and clear the NAK flag.
     doepctl |= (USB_EPENA0_M | USB_CNAK0_M);
@@ -332,14 +347,100 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
     doepctl |= USB_DO_SNAK0_M;
   }
 
-  // Now actually set the doepctl and diepctl registers
+  // Now actually set the doeptsiz, doepctl and diepctl registers
+  usb_->out_ep_reg[endpoint_num].doeptsiz = doeptsiz;
   usb_->out_ep_reg[endpoint_num].doepctl = doepctl;
   usb_->in_ep_reg[endpoint_num].diepctl = diepctl;
 
+  // Enable receipt of endpoint IN and OUT interrupts
+  set_bits(usb_->gintmsk, USB_IEPINTMSK_M | USB_OEPINTMSK_M);
   // Enable IN and OUT interrupts for EP0.
   usb_->daintmsk = USB_OUTEPMSK0_M | USB_INEPMSK0_M;
 
   return true;
+}
+
+void Esp32Device::stall_ep0() {
+  // For EP0, we simply set the STALL flags, but leave the endpoint enabled
+  set_bits(usb_->out_ep_reg[0].doepctl, USB_STALL0_M);
+  set_bits(usb_->in_ep_reg[0].diepctl, USB_DI_SNAK1_M | USB_D_STALL1_M);
+  flush_tx_fifo(0);
+}
+
+void Esp32Device::stall_in_endpoint(uint8_t endpoint_num) {
+  assert(endpoint_num != 0);
+  usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
+
+  if ((endpoint_num == 0) || !(in_ep->diepctl & USB_D_EPENA1_M)) {
+    // If the endpoint is not currently enabled, we just have to set the STALL
+    // flag, and don't need to disable it.
+    set_bits(in_ep->diepctl, USB_DI_SNAK1_M | USB_D_STALL1_M);
+  } else {
+    // Set USB_DI_SNAK1_M to NAK transfers.
+    set_bits(in_ep->diepctl, USB_DI_SNAK1_M);
+    while ((in_ep->diepint & USB_DI_SNAK1_M) == 0) {
+      // Busy loop until we observe the USB_DI_SNAK1_M interrupt flag.
+      // TODO: It would ideally be nicer to make this API asynchronous, and
+      // finish the operation in the interrupt handler rather than busy
+      // looping.
+    }
+
+    // Disable the endpoint and also set the STALL flag.
+    // NAK is also still set.
+    set_bits(in_ep->diepctl,
+             USB_DI_SNAK1_M | USB_D_STALL1_M | USB_D_EPDIS1_M);
+    while ((in_ep->diepint & USB_D_EPDISBLD0_M) == 0) {
+      // Busy loop until we observe the USB_D_EPDISBLD0_M interrupt flag.
+    }
+    // Clear the USB_D_EPDISBLD0_M interrupt.
+    in_ep->diepint = USB_D_EPDISBLD0_M;
+  }
+
+  // Flush the transmit FIFO.
+  flush_tx_fifo(endpoint_num);
+}
+
+void Esp32Device::flush_tx_fifo(uint8_t endpoint_num) {
+  usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
+  uint8_t const fifo_num =
+      ((in_ep->diepctl >> USB_D_TXFNUM1_S) & USB_D_TXFNUM1_V);
+  set_bits(usb_->grstctl, fifo_num << USB_TXFNUM_S);
+  set_bits(usb_->grstctl, USB_TXFFLSH_M);
+  while ((usb_->grstctl & USB_TXFFLSH_M) != 0) {
+    // Busy loop until the FIFO has been cleared.
+  }
+}
+
+void Esp32Device::stall_out_endpoint(uint8_t endpoint_num) {
+  assert(endpoint_num != 0);
+  usb_out_endpoint_t *const out_ep = &(usb_->out_ep_reg[endpoint_num]);
+
+  if (!(out_ep->doepctl & USB_EPENA0_M)) {
+    // If the endpoint is not currently enabled, nothing else to do besides set
+    // the STALL flag.
+    set_bits(out_ep->doepctl, USB_STALL0_M);
+  } else {
+    // The Global NAK flag apparently must be enabled to STALL an OUT
+    // endpoint.  Enable this flag, and wait for it to take effect.
+    set_bits(usb_->dctl, USB_SGOUTNAK_M);
+    while ((usb_->gintsts & USB_GOUTNAKEFF_M) == 0) {
+      // Busy loop until we have seen the USB_GOUTNAKEFF_M interrupt.
+      // TODO: It would ideally be nicer to make this API asynchronous, and
+      // finish the operation in the interrupt handler rather than busy
+      // looping.
+    }
+
+    // Disable the endpoint, and set the STALL flag.
+    set_bits(out_ep->doepctl, USB_STALL0_M | USB_EPDIS0_M);
+    while ((out_ep->doepint & USB_EPDISBLD0_M) == 0) {
+      // Busy loop until we have seen the endpoint disabled interrupt.
+    }
+    out_ep->doepint = USB_EPDISBLD0_M;
+
+    // Clear the Global NAK flag to allow other OUT endpoints to continue
+    // functioning.
+    set_bits(usb_->dctl, USB_CGOUTNAK_M);
+  }
 }
 
 void Esp32Device::static_interrupt_handler(void *arg) {
@@ -464,21 +565,6 @@ void Esp32Device::intr_bus_reset() {
   usb_->daintmsk = 0;
   usb_->doepmsk = USB_SETUPMSK_M | USB_XFERCOMPLMSK;
   usb_->diepmsk = USB_TIMEOUTMSK_M | USB_DI_XFERCOMPLMSK_M;
-
-  // Configure FIFO sizes
-  // Configure the receive FIFO size.
-  // Use 52 words (208 bytes), simply since this is the value that tinyusb
-  // uses.  The comments in the tinyusb code appear to refer to data from
-  // Synopsys technical reference manuals.
-  usb_->grxfsiz = 52;
-  // TX FIFO size
-  // Control IN uses FIFO 0 with 64 bytes (16 32-bit words)
-  usb_->gnptxfsiz = (16 << USB_NPTXFDEP_S) | (usb_->grxfsiz & 0x0000ffffUL);
-
-  // Enable receipt of setup packets
-  set_bits(usb_->out_ep_reg[0].doeptsiz, USB_SUPCNT0_M);
-  // Enable receipt of endpoint IN and OUT interrupts
-  set_bits(usb_->gintmsk, USB_IEPINTMSK_M | USB_OEPINTMSK_M);
 
   send_event_from_isr<BusResetEvent>();
 }
