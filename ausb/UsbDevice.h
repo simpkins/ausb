@@ -2,14 +2,23 @@
 #pragma once
 
 #include "ausb/DeviceEvent.h"
+#include "ausb/ausb_types.h"
 
 #include <cstdint>
+#include <memory>
+
+#include "ausb/DevCtrlOutTransfer.h"
+#include "ausb/DevCtrlInTransfer.h"
+#include "ausb/RxBuffer.h"
+// TODO: create a separate header for HWDevice
+#include "ausb/esp/Esp32Device.h"
+namespace ausb { using HWDevice = Esp32Device; }
 
 namespace ausb {
 
 class UsbDevice {
 public:
-  constexpr UsbDevice() noexcept = default;
+  constexpr explicit UsbDevice(HWDevice* hw) noexcept : hw_(hw) {}
 
   void handle_event(const DeviceEvent &event);
 
@@ -39,9 +48,13 @@ private:
     Mask = 0x0f,
   };
 
-  enum class CtrlXferState {
+  enum class CtrlXferStatus {
       // No control transfer in progress
       Idle,
+      // We have received a SETUP packet for an OUT transfer,
+      // but have not yet received any OUT data packets.
+      OutSetupReceived,
+
       // We received a SETUP packet for an OUT transfer,
       // and we are waiting on more OUT data
       OutRecvData,
@@ -53,6 +66,11 @@ private:
       // (Unclear if we need this state; in general the HW can receive our
       // 0-length IN packet without waiting for the host to ACK it.)
       OutAck,
+
+      // We have received a SETUP packet for an IN transfer,
+      // but have not yet received any IN data packets.
+      InSetupReceived,
+
       // We received a SETUP packet for an IN transfer,
       // and are currently sending data.
       InSendData,
@@ -91,21 +109,37 @@ private:
   void on_resume();
   void on_enum_done(UsbSpeed speed);
   void on_setup_received(const SetupPacket &packet);
-  void process_setup_packet(const SetupPacket &packet);
+
+  void process_ctrl_out_setup(const SetupPacket &packet);
+  std::unique_ptr<DevCtrlInTransfer>
+  process_ctrl_in_setup(const SetupPacket &packet);
+  void fail_control_transfer(XferCancelReason reason);
+  void stall_ctrl_transfer();
 
   State state_ = State::Uninit;
   uint8_t config_id_ = 0;
   bool remote_wakeup_enabled_ = false;
 
-  CtrlXferState ctrl_state_ = CtrlXferState::Idle;
-#if 0
-  union {
+  CtrlXferStatus ctrl_status_ = CtrlXferStatus::Idle;
+  // A copy of the SETUP packet for the control transfer currently being
+  // processed.  We keep this mainly so we can detect SETUP packet
+  // retransmissions, and avoid unnecessarily aborting an then restarting a
+  // transfer on SETUP retransmission.
+  SetupPacket current_ctrl_transfer_;
+
+  RxBuffer ep0_rx_buffer_;
+  HWDevice* hw_ = nullptr;
+  union CtrlXfer {
+    constexpr CtrlXfer() : idle(nullptr) {}
+    ~CtrlXfer() {}
+
+    // Idle is set when ctrl_status_ is Idle
+    void* idle;
     // Out is set during OutRecvData and OutStatus states
-    DevCtrlOutTransfer *out;
+    std::unique_ptr<DevCtrlOutTransfer> out;
     // Out is set during InSendData and InStatus states
-    DevCtrlInTransfer *in;
+    std::unique_ptr<DevCtrlInTransfer> in;
   } ctrl_xfer_;
-#endif
 };
 
 } // namespace ausb

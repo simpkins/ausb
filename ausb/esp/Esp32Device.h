@@ -15,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 namespace ausb {
@@ -29,13 +30,14 @@ class RxBuffer;
 /**
  * A USB device implementation for ESP32-S2 and ESP32-S3 chips.
  *
- * Note that the Espressif documentation for USB functionality is somewhat
- * sparse.  The ESP32-S3 Technical Reference Manual indicates that full
- * register documentation is subject to an NDA, and therefore isn't easily
- * available.  The Technical Reference Manual contains a pretty high-level
- * overview of the behavior, and the comments in
- * esp-idf/components/soc/esp32s3/include/soc/usb_reg.h provide some minimal
- * descriptions of some of the register behavior.
+ * Note that Espressif provides rather limited documentation of their USB
+ * core.  The ESP32-S3 Technical Reference Manual contains a high level
+ * overview, but notes that full register documentation is subject to an NDA.
+ * The comments in esp-idf/components/soc/esp32s3/include/soc/usb_reg.h provide
+ * some minimal descriptions of some of the register behavior.
+ *
+ * It looks like the ESP32 USB core is based on IP from Synopsys.
+ *
  *
  * Synchronization behavior
  * ------------------------
@@ -86,6 +88,9 @@ public:
    */
   QueueHandle_t event_queue() const { return event_queue_; }
 
+  RxBuffer create_rx_buffer(uint8_t endpoint, uint16_t max_packet_size,
+                            uint8_t num_packets);
+
   /**
    * Configure endpoint 0.
    *
@@ -95,6 +100,11 @@ public:
    * it.  The caller is responsible for ensuring that the RxBuffer object is
    * valid until the Esp32Device object is destroyed, or until the next bus
    * reset event (either initiated by the host or locally with a reset() call).
+   *
+   * It is the caller's responsibility to set the maximum packet size correctly
+   * in the RxBuffer.  The packet size must be valid for the USB speed that was
+   * negotiated in the BusEnumDone event.  (MPS must be 8 for low speed and 64
+   * for full speed.)
    */
   bool configure_ep0(RxBuffer* buffer);
 
@@ -130,16 +140,17 @@ private:
   void all_endpoints_nak();
   [[nodiscard]] esp_err_t enable_interrupts();
   static void static_interrupt_handler(void *arg);
-  void interrupt_handler();
 
-  void bus_reset();
-  void enum_done();
-  void rx_fifo_nonempty();
-  void receive_packet(uint8_t endpoint_num, uint16_t packet_size);
-  void handle_out_ep_interrupt();
-  void handle_in_ep_interrupt();
-  void out_endpoint_interrupt(uint8_t epnum);
-  void in_endpoint_interrupt(uint8_t epnum);
+  // Methods invoked from interrupt context
+  void intr_main();
+  void intr_bus_reset();
+  void intr_enum_done();
+  void intr_rx_fifo_nonempty();
+  void intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size);
+  void intr_out_endpoint_main();
+  void intr_in_endpoint_main();
+  void intr_out_endpoint(uint8_t epnum);
+  void intr_in_endpoint(uint8_t epnum);
 
   static constexpr uint8_t kMaxEventQueueSize = 32;
 

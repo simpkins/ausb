@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 namespace {
 static constinit Esp32Device dev;
-static constinit UsbDevice usb;
+static constinit UsbDevice usb(&dev);
 const char *LogTag = "ausb.test";
 }
 

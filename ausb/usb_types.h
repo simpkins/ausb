@@ -55,11 +55,13 @@ struct SetupPacket {
     return static_cast<StdRequestType>(request);
   }
 
-  uint8_t request_type;
-  uint8_t request;
-  uint16_t value;
-  uint16_t index;
-  uint16_t length;
+  bool operator==(const SetupPacket&) const = default;
+
+  uint8_t request_type = 0;
+  uint8_t request = 0;
+  uint16_t value = 0;
+  uint16_t index = 0;
+  uint16_t length = 0;
 };
 
 } // namespace ausb

@@ -2,7 +2,11 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
+#include <cstdlib>
+#include <limits>
+
+// TODO: allocate the data in a single allocation rather than using vector
+#include <vector>
 
 namespace ausb {
 
@@ -26,29 +30,43 @@ namespace ausb {
  */
 class RxBuffer {
 public:
-  std::unique_ptr<RxBuffer> create(uint8_t endpoint, uint16_t max_packet_size,
-                                   uint8_t num_packets);
+  constexpr RxBuffer() noexcept = default;
+  RxBuffer(RxBuffer &&) = default;
+  RxBuffer &operator=(RxBuffer &&) = default;
+
+  static RxBuffer create(uint8_t endpoint, uint16_t max_packet_size,
+                         uint8_t num_packets);
 
   uint8_t endpoint() const { return endpoint_; }
   uint16_t max_packet_size() const { return max_packet_size_; }
 
-  uint8_t num_free_pkts() const {
-    // FIXME
-    return 1;
+  uint8_t num_free_pkts() {
+    return capacity_ - num_pkts_available();
+  }
+  uint8_t num_pkts_available() const {
+    // TODO: this might need to use atomic operations, depending on how we
+    // implement interrupt processing
+    const auto r = read_index_;
+    const auto w = write_index_;
+    if (w < r) [[unlikely]] {
+      // The write counter has wrapped around, but the read counter hasn't yet.
+      return (w + 1 + (std::numeric_limits<decltype(r)>::max() - r));
+    }
+    return w - r;
   }
 
 private:
   RxBuffer(uint8_t endpoint, uint16_t max_packet_size, uint16_t num_packets);
-  RxBuffer(RxBuffer const &) = delete;
-  RxBuffer &operator=(RxBuffer const &) = delete;
 
   uint8_t endpoint_ = 0;
   uint8_t capacity_ = 0;  // Number of packets
   uint16_t max_packet_size_ = 0;
   uint8_t write_index_ = 0;
   uint8_t read_index_ = 0;
-  uint8_t* buffer_;
-  uint16_t* sizes_;
+
+  // TODO: allocate all of the RxBuffer data in a single allocation
+  std::vector<uint8_t> buffer_;
+  std::vector<uint16_t> sizes_;
 };
 
 } // namespace ausb
