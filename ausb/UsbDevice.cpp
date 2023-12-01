@@ -92,8 +92,28 @@ void UsbDevice::process_setup_packet(const SetupPacket &packet) {
             packet.request_type, packet.request, packet.value, packet.index,
             packet.length);
 
+  // Note: we can receive a retransmitted SetupPacket while we are already
+  // processing an existing SETUP transfer.
+
   // TODO
   AUSB_LOGW("TODO: process setup packet");
 }
+
+#if 0
+void UsbDevice::on_ep0_out_data(void* arg) {
+  // allow notification of multiple packets at once.
+  // process each packet in a loop
+  //
+  // - In OutRecvData state:
+  //   - If we receive more data than setup wLength, then error.
+  //   - If packet is shorter than max packet size, this is the last potion of
+  //     data.
+  //   - If packet is max packet size and we have received full amount of data
+  //     specified in the SETUP wLength, this is the last portion of data
+  //   - otherwise, more data is expected
+  // - In any other state:
+  //   - error
+}
+#endif
 
 } // namespace ausb

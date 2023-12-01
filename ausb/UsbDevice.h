@@ -13,6 +13,12 @@ public:
 
   void handle_event(const DeviceEvent &event);
 
+#if 0
+  void release_rx_buffer(uint8_t endpoint, buf_size_t size);
+  void ctrl_out_ack();
+  void ctrl_out_error();
+#endif
+
 private:
   // Figure 9-1 in the USB 2.0 spec lists the various device states.
   //
@@ -31,6 +37,28 @@ private:
   };
   enum class StateMask : uint8_t {
     Mask = 0x0f,
+  };
+
+  enum class CtrlXferState {
+      // No control transfer in progress
+      Idle,
+      // We received a SETUP packet for an OUT transfer,
+      // and we are waiting on more OUT data
+      OutRecvData,
+      // A OUT transfer has been started and we have received all data,
+      // and we are not processing the transfer before sending an
+      // acknowledgement
+      OutStatus,
+      // We are acknowledging an OUT transfer.
+      // (Unclear if we need this state; in general the HW can receive our
+      // 0-length IN packet without waiting for the host to ACK it.)
+      OutAck,
+      // We received a SETUP packet for an IN transfer,
+      // and are currently sending data.
+      InSendData,
+      // We have sent all data for an IN transfer, and are waiting for the host
+      // to acknowledge the transfer.
+      InStatus,
   };
 
   friend State &operator|=(State &s, StateFlag flag) {
@@ -65,9 +93,19 @@ private:
   void on_setup_received(const SetupPacket &packet);
   void process_setup_packet(const SetupPacket &packet);
 
-  State state_{State::Uninit};
-  uint8_t config_id_{0};
-  bool remote_wakeup_enabled_{false};
+  State state_ = State::Uninit;
+  uint8_t config_id_ = 0;
+  bool remote_wakeup_enabled_ = false;
+
+  CtrlXferState ctrl_state_ = CtrlXferState::Idle;
+#if 0
+  union {
+    // Out is set during OutRecvData and OutStatus states
+    DevCtrlOutTransfer *out;
+    // Out is set during InSendData and InStatus states
+    DevCtrlInTransfer *in;
+  } ctrl_xfer_;
+#endif
 };
 
 } // namespace ausb

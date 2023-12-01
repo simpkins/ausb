@@ -1,6 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/esp/Esp32Device.h"
 
+#include "ausb/RxBuffer.h"
+
 #include <esp_check.h>
 #include <esp_log.h>
 #include <hal/usb_hal.h>
@@ -9,6 +11,48 @@
 #include <soc/usb_pins.h>
 
 #include <atomic>
+
+/*
+ * Some notes on concurrency and synchronization:
+ *
+ * In general we try to perform relatively little in the interrupt context,
+ * and do most work in the main USB task.
+ *
+ * - Endpoint configuration:
+ *   Most manipulation of the doepctl and diepctl registers happens in the main
+ *   USB task.
+ *
+ * - Manipulation of the doepctl and doeptsiz registers for OUT transfer
+ *   receive operations:
+ *   - These registers are initially set in the main USB task when the RX
+ *     buffer for and endpoint is first initialized.
+ *   - After receiving data, an interrupt handler may wish to update these
+ *     registers to allow receiving more data.
+ *   - The application may wish to change the RX buffer, or turn on NAK for the
+ *     endpoint.  These operations probably need to block and wait for any
+ *     currently running interrupt handler to finish.
+ *
+ *   - When the application releases an RX buffer, we need to check if receives
+ *     need to be re-enabled.  If they are currently disabled, it is safe to
+ *     re-enable them.
+ *
+ *   - When the interrupt handler finishes a receive, it may need to disable
+ *     receives if the RX buffer is now full.
+ *
+ *     Need to properly handle interrupt handler racing with a buffer free.
+ *     - after interrupt receive:
+ *       - if not full -> enable receipt of more data
+ *       - if full -> notify main task of data, and that RX buffer is full
+ *
+ *     - after main task notification of receive:
+ *       - if full -> check if we are still full
+ *         - if still full, record that we are full for next buffer release
+ *         - if no longer full, re-enable RX, clear full notification
+ *
+ *     - after buffer release (must happen on main task):
+ *       - if we never received a full notification, nothing to do
+ *       - if full notif received, re-enable RX
+ */
 
 #define AUSB_VERBOSE_LOGGING
 
@@ -21,12 +65,15 @@
 namespace {
 const char *LogTag = "ausb.esp32";
 
+// These helper functions avoid compiler warnings about using |= or &= on
+// volatile integers.
 inline void set_bits(volatile uint32_t &value, uint32_t bits) {
   value = (value | bits);
 }
 inline void clear_bits(volatile uint32_t &value, uint32_t bits) {
   value = (value & ~bits);
 }
+
 } // unnamed namespace
 
 namespace ausb {
@@ -116,7 +163,10 @@ void Esp32Device::reset() {
   set_bits(usb_->dctl, USB_SFTDISCON_M); // Disable the data pull-up line
 
   if (interrupt_handle_) {
+    // esp_intr_free() will wait for any in-progress interrupt handlers to
+    // finish before it returns.
     esp_intr_free(interrupt_handle_);
+    usb_->gintmsk = 0;
   }
   if (phy_) {
     usb_del_phy(phy_);
@@ -164,6 +214,112 @@ esp_err_t Esp32Device::enable_interrupts() {
   return esp_intr_alloc(ETS_USB_INTR_SOURCE, ESP_INTR_FLAG_LOWMED,
                         Esp32Device::static_interrupt_handler, this,
                         &interrupt_handle_);
+}
+
+bool Esp32Device::configure_ep0(RxBuffer* buffer) {
+  ESP_LOGI(LogTag, "configure EP0 RX buffer");
+  if (ep0_rx_buffer_ != nullptr) {
+    ESP_LOGE(LogTag,
+             "configure_ep0() called when endpoint 0 was already configured");
+    return false;
+  }
+
+  // Compute bits to set in the doepctl and diepctl registers
+  const auto mps = buffer->max_packet_size();
+  EP0MaxPktSize mps_bits;
+  if (mps == 64) {
+    mps_bits = EP0MaxPktSize::Mps64;
+  } else if (mps == 32) {
+    mps_bits = EP0MaxPktSize::Mps32;
+  } else if (mps == 16) {
+    mps_bits = EP0MaxPktSize::Mps16;
+  } else if (mps == 8) {
+    mps_bits = EP0MaxPktSize::Mps8;
+  } else {
+    ESP_LOGE(LogTag, "configure_ep0() called with invalid max packet size %d",
+             mps);
+    return false;
+  }
+  constexpr int endpoint_num = 0;
+  // USB_DOEPCTL0_REG fields:
+  // - USB_MPS0: Maximum packet size
+  // - USB_USBACTEP0: comments in soc/usb_reg.h appear to indicate that this
+  //   bit is unnecessary as EP0 is always active.
+  // - USB_NAKSTS0: NAK status.  I'm assuming this is read-only, and write is
+  //   done via the USB_CNAK0 and USB_DO_SNAK0 fields.
+  // - USB_EPTYPE0: endpoint type.  Always 0 (control) for EP0.
+  // - USB_SNP0: reserved
+  // - USB_STALL0: set to trigger STALL response to SETUP handshake
+  // - USB_CNAK0 and USB_DO_SNAK0: control NAK responses to OUT data packets.
+  //   We set this below based on whether we have OUT buffer space.
+  // - USB_EPDIS0: disable endpoint
+  // - USB_EPENA0: enable endpoint
+  uint32_t doepctl = usb_->out_ep_reg[endpoint_num].doepctl;
+  doepctl &= ~USB_MPS0_M;
+  doepctl |= (mps_bits << USB_MPS0_S);
+  // USB_DIEPCTL0_REG fields:
+  // - USB_D_MPS0: Maximum packet size
+  // - USB_D_USBACTEP0: comments in soc/usb_reg.h appear to indicate that this
+  //   bit is unnecessary as EP0 is always active.
+  // - USB_D_NAKSTS0: NAK status
+  // - USB_D_EPTYPE0: endpoint type.  Always 0 (control) for EP0.
+  // - USB_D_STALL0: set to trigger STALL response
+  // - USB_D_TXFNUM0: TX FIFO number.  We always use FIFO 0 for EP0.
+  // - USB_D_CNAK0 and USB_DI_SNAK0: clear or set the NAK bit for responding to
+  //   IN packets
+  // - USB_D_EPDIS0: disable endpoint
+  // - USB_D_EPENA0: enable endpoint
+  //
+  // TODO: According to the comments in soc/usb_reg.h we probably don't really
+  // need to clear USB_D_STALL0_M.  It sounds like this is cleared by the HW
+  // and ignored if SW tries to clear it.
+  uint32_t diepctl = usb_->in_ep_reg[endpoint_num].diepctl;
+  diepctl &= ~(USB_D_MPS0_M | USB_D_TXFNUM0_M | USB_D_STALL0_M);
+  diepctl |= (mps_bits << USB_D_MPS0_S);
+
+  // TODO: probably update doepctl and diepctl now,
+  // and move the free_packets logic below to a separate helper function that
+  // we all any time the RxBuffer goes from full to space available.
+
+  const auto free_packets = buffer->num_free_pkts();
+  if (free_packets > 0) {
+    // Indicate how much data we can receive.
+    // Note that USB_PKTCNT0_V is 1 on ESP32-S2 and ESP32-S3, so it only
+    // allows receiving a single packet at a time.
+    //
+    // Also note that USB_XFERSIZE0_V is only 127 bytes.  With full speed USB,
+    // the max packet size is only 64 bytes for control, interrupt, and bulk
+    // endpoints.  However, the USB spec allows isochronous endpoints to have a
+    // max packet size of up to 1023 bytes, and the USB_MPS1 register field
+    // seems to support max packet sizes larger than 127 bytes.  I haven't
+    // tested how receive behaves if the max packet size is larger than 127
+    // bytes.  (Do we need to increase the xfer size register after reading
+    // data in the RXFLVI interrupt?)
+    const uint32_t max_recv_pkts =
+        std::max(static_cast<int>(free_packets), USB_PKTCNT0_V);
+    const uint32_t max_recv_bytes = std::max(
+        buffer->max_packet_size(), static_cast<uint16_t>(USB_XFERSIZE0_V));
+    set_bits(usb_->out_ep_reg[endpoint_num].doeptsiz,
+             (max_recv_pkts << USB_PKTCNT0_S) |
+                 (max_recv_bytes << USB_XFERSIZE0_S));
+
+    // Enable the OUT endpoint, and clear the NAK flag.
+    doepctl |= (USB_EPENA0_M | USB_CNAK0_M);
+  } else {
+    // Set the NAK flag
+    doepctl |= USB_DO_SNAK0_M;
+  }
+
+  // Now actually set the doepctl and diepctl registers
+  usb_->out_ep_reg[endpoint_num].doepctl = doepctl;
+  usb_->in_ep_reg[endpoint_num].diepctl = diepctl;
+
+  // We already enabled IN and OUT interrupts for EP0 in bus_reset(),
+  // so no need to update usb_.daintmsk again here.
+  //
+  // TODO: maybe move daintmsk manipulation to here?
+
+  return true;
 }
 
 void Esp32Device::static_interrupt_handler(void *arg) {
@@ -309,32 +465,13 @@ void Esp32Device::enum_done() {
   uint32_t enum_spd = (usb_->dsts >> USB_ENUMSPD_S) & (USB_ENUMSPD_V);
   DBG_ISR_LOG("USB int: enumeration done; speed=%d", enum_spd);
 
-#if 0
-  uint16_t max_ep0_packet_size;
-#endif
   UsbSpeed speed;
   if (enum_spd == Speed::Full48Mhz) {
-    // Max packet size is 64 bytes
-    clear_bits(usb_->in_ep_reg[0].diepctl, USB_D_MPS0_V);
-#if 0
-    max_ep0_packet_size = 64;
-#endif
     speed = UsbSpeed::Full;
   } else {
-    // Max packet size is 8 bytes
-    set_bits(usb_->in_ep_reg[0].diepctl, USB_D_MPS0_V);
-#if 0
-    max_ep0_packet_size = 8;
-#endif
     speed = UsbSpeed::Low;
   }
-  // Clear the stall bit
-  clear_bits(usb_->in_ep_reg[0].diepctl, USB_D_STALL0_M);
 
-#if 0
-  xfer_status_[0].out.max_size = max_ep0_packet_size;
-  xfer_status_[0].in.max_size = max_ep0_packet_size;
-#endif
   send_event_from_isr<BusEnumDone>(speed);
 }
 
@@ -365,15 +502,25 @@ void Esp32Device::rx_fifo_nonempty() {
     // interrupt with the SETUP bit set.  We generate an event to handle the
     // SetupPacket there.
     uint8_t const endpoint_num = (ctl_word & USB_CHNUM_M) >> USB_CHNUM_S;
-    DBG_ISR_LOG("USB RX: setup done");
-    // Set the USB_SUPCNT0_M bits in the doeptsiz register, to indicate that
-    // we can receive up to 3 DATA packets in this setup transfer.
+    DBG_ISR_LOG("USB RX: setup done EP%d", endpoint_num);
+
+    // Reset the doeptsiz register to indicate that we can receive more SETUP
+    // packets.
     set_bits(usb_->out_ep_reg[endpoint_num].doeptsiz, USB_SUPCNT0_M);
     break;
   }
   case Pktsts::SetupReceived: {
-    // We should receive a SetupComplete interrupt after SetupReceived.
-    // We simply store the setup packet data here.
+    // We store the setup packet in a dedicated member variable rather than a
+    // normal RX buffer.  The host may retransmit SETUP packets, and the packet
+    // data itself does not indicate if this is a retransmission.  If we
+    // receive multiple SETUP packets in a row before notifying the main task
+    // of receipt, we simply overwrite the data from previous packets.
+    //
+    // We should receive a SetupComplete interrupt after SetupReceived, follwed
+    // by an OUT interrupt with the USB_SETUP0_M flag set.  We wait to inform
+    // the main task of the SETUP packet until we get the final OUT interrupt.
+    // (I'm not really sure why the HW generates 3 separate interrupts for each
+    // SETUP transaction.)
     volatile uint32_t *rx_fifo = usb_->fifo[0];
     setup_packet_.u32[0] = (*rx_fifo);
     setup_packet_.u32[1] = (*rx_fifo);

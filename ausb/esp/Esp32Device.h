@@ -24,6 +24,8 @@ enum class EspPhyType {
   External,
 };
 
+class RxBuffer;
+
 /**
  * A USB device implementation for ESP32-S2 and ESP32-S3 chips.
  *
@@ -34,6 +36,15 @@ enum class EspPhyType {
  * overview of the behavior, and the comments in
  * esp-idf/components/soc/esp32s3/include/soc/usb_reg.h provide some minimal
  * descriptions of some of the register behavior.
+ *
+ * Synchronization behavior
+ * ------------------------
+ * The Esp32Device class is not thread safe.  Callers should ensure that it is
+ * only accessed from a single task, or perform their own locking around calls
+ * to Esp32Device functions.
+ *
+ * Esp32Device does internally manage synchronization done on the normal USB
+ * task vs work done in interrupt handlers.
  */
 class Esp32Device {
 public:
@@ -75,6 +86,18 @@ public:
    */
   QueueHandle_t event_queue() const { return event_queue_; }
 
+  /**
+   * Configure endpoint 0.
+   *
+   * This should normally be called in response to a BusEnumDone event.
+   *
+   * The Esp32Device will store a pointer to this RxBuffer, but does not own
+   * it.  The caller is responsible for ensuring that the RxBuffer object is
+   * valid until the Esp32Device object is destroyed, or until the next bus
+   * reset event (either initiated by the host or locally with a reset() call).
+   */
+  bool configure_ep0(RxBuffer* buffer);
+
 private:
   // Speed bits used by the dcfg and dsts registers.
   // These unfortunately are not defined in soc/usb_reg.h
@@ -83,6 +106,13 @@ private:
     Full30Mhz = 1,
     Low6Mhz = 2,
     Full48Mhz = 3,
+  };
+  // Max Packet Size setting for endpoint 0 in USB_DOEPCTL0_REG (USB_MPS0)
+  enum EP0MaxPktSize : uint32_t {
+    Mps64 = 0,
+    Mps32 = 1,
+    Mps16 = 2,
+    Mps8 = 3,
   };
 
   Esp32Device(Esp32Device const &) = delete;
@@ -125,6 +155,11 @@ private:
     std::array<uint32_t, 2> u32;
     SetupPacket setup;
   } setup_packet_ = {};
+
+  // A pointer to the RX buffer for the control endpoint.
+  // Note that this object is now owned by us.  Our user is responsible
+  // for ensuring it remains valid until the bus is reset.
+  RxBuffer* ep0_rx_buffer_ = nullptr;
 };
 
 } // namespace ausb
