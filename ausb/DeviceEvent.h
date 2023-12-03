@@ -8,7 +8,20 @@
 
 namespace ausb {
 
-struct NoEvent {};
+enum NoEventReason {
+    // No event occurred before the timeout
+    Timeout,
+    // An event occurred before the timeout, but it only required some
+    // low-level logic to continue processing of an existing transfer
+    // and did not generate an event that needs to be visible to the higher
+    // level application logic.
+    HwProcessing,
+};
+
+struct NoEvent {
+  explicit NoEvent(NoEventReason r) : reason(r) {}
+  NoEventReason reason;
+};
 struct BusResetEvent {};
 struct SuspendEvent {};
 struct ResumeEvent {};
@@ -22,11 +35,24 @@ struct BusEnumDone {
   explicit BusEnumDone(UsbSpeed spd)
       : speed{spd} {}
 
-  UsbSpeed speed{UsbSpeed::Low};
+  UsbSpeed speed = UsbSpeed::Low;
 };
 
-using DeviceEvent = std::variant<NoEvent, BusResetEvent, SuspendEvent,
-                                 ResumeEvent, BusEnumDone, SetupPacket>;
+struct InXferCompleteEvent {
+  explicit InXferCompleteEvent(uint8_t epnum) : endpoint_num(epnum) {}
+
+  uint8_t endpoint_num{0};
+};
+
+struct InXferFailedEvent {
+  explicit InXferFailedEvent(uint8_t epnum) : endpoint_num(epnum) {}
+
+  uint8_t endpoint_num{0};
+};
+
+using DeviceEvent =
+    std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent, BusEnumDone,
+                 SetupPacket, InXferCompleteEvent, InXferFailedEvent>;
 static_assert(std::is_trivially_copyable_v<DeviceEvent>,
               "DeviceEvent must be trivially copyable");
 

@@ -23,6 +23,12 @@ void UsbDevice::handle_event(const DeviceEvent &event) {
                  [this](const ResumeEvent &) { on_resume(); },
                  [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
                  [this](const SetupPacket &pkt) { on_setup_received(pkt); },
+                 [this](const InXferCompleteEvent &ev) {
+                   on_in_xfer_complete(ev.endpoint_num);
+                 },
+                 [this](const InXferFailedEvent &ev) {
+                   on_in_xfer_failed(ev.endpoint_num);
+                 },
              },
              event);
 }
@@ -160,6 +166,16 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
   }
 }
 
+void UsbDevice::on_in_xfer_complete(uint8_t endpoint_num) {
+  // TODO
+  AUSB_LOGE("TODO: on_in_xfer_complete");
+}
+
+void UsbDevice::on_in_xfer_failed(uint8_t endpoint_num) {
+  // TODO
+  AUSB_LOGE("TODO: on_in_xfer_failed");
+}
+
 void UsbDevice::process_ctrl_out_setup(const SetupPacket &packet) {
   // TODO
   AUSB_LOGW("TODO: process OUT setup packet");
@@ -173,9 +189,14 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
     if (req_type == SetupReqType::Standard) {
       const auto std_req_type = packet.get_std_request();
       if (std_req_type == StdRequestType::GetDescriptor) {
-        AUSB_LOGW("TODO: process GET_DESCRIPTOR request");
-        return std::make_unique<GetStaticDescriptor>(this,
-                                                     dev_descriptor_.data());
+          if (packet.value == 0x0100 && packet.index == 0) {
+            AUSB_LOGI("process GET_DESCRIPTOR request for device descriptor");
+            return std::make_unique<GetStaticDescriptor>(
+                this, dev_descriptor_.data());
+          }
+          else {
+            AUSB_LOGW("TODO: process GET_DESCRIPTOR request");
+          }
       }
     }
   }
@@ -185,22 +206,16 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   return nullptr;
 }
 
-bool UsbDevice::send_ctrl_in_xfer(const void *data, size_t size) {
+TxStartResult UsbDevice::send_ctrl_in_xfer(const void *data, size_t size) {
   if (ctrl_status_ == CtrlXferStatus::InSetupReceived) [[likely]] {
     ctrl_status_ = CtrlXferStatus::InSendData;
   } else if (ctrl_status_ != CtrlXferStatus::InSendData) [[unlikely]] {
     AUSB_LOGE("send_ctrl_in_xfer invoked in bad ctrl state %d",
               static_cast<int>(ctrl_status_));
-    return false;
+    return TxStartResult::Busy;
   }
 
-  AUSB_LOGE("TODO: send_ctrl_in_xfer");
-#if 0
-  if (size == 0) {
-  }
-#endif
-  // TODO
-  return false;
+  return hw_->start_write(/*endpoint_num=*/0, data, size);
 }
 
 void UsbDevice::fail_control_transfer(XferCancelReason reason) {

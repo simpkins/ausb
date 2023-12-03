@@ -11,6 +11,7 @@
 #include <soc/usb_pins.h>
 
 #include <atomic>
+#include <cinttypes>
 
 /*
  * Some notes on concurrency and synchronization:
@@ -74,6 +75,25 @@ inline void clear_bits(volatile uint32_t &value, uint32_t bits) {
   value = (value & ~bits);
 }
 
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+
+// The definitions for some of the endpoint register fields appears to be
+// incorrect in soc/usb_reg.h.  It looks like some of the settings were
+// copy-and-pasted from endpoint 0 to all other endpoints, but the other
+// endpoints should be using different values for several fields in DIEPCTL,
+// DIEPTSIZ, DOEPCTL, and DOEPTSIZ.
+// (https://github.com/espressif/esp-idf/issues/12710)
+constexpr uint32_t Correct_USB_D_MPS1_V = 0x7FF;
+constexpr uint32_t Correct_USB_D_MPS1_M =
+    (Correct_USB_D_MPS1_V << USB_D_MPS1_S);
+constexpr uint32_t Correct_USB_D_PKTCNT1_V = 0x3FF;
+constexpr uint32_t Correct_USB_D_PKTCNT1_M =
+    (Correct_USB_D_PKTCNT1_V << USB_D_PKTCNT1_S);
+constexpr uint32_t Correct_USB_D_XFERSIZE1_V = 0x7FFFF;
+constexpr uint32_t Correct_USB_D_XFERSIZE1_M =
+    (Correct_USB_D_XFERSIZE1_V << USB_D_XFERSIZE1_S);
+
 } // unnamed namespace
 
 namespace ausb {
@@ -84,15 +104,81 @@ Esp32Device::~Esp32Device() {
 
 DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
   TickType_t max_wait = pdMS_TO_TICKS(timeout.count());
-  DeviceEvent event;
+  Esp32DeviceEvent event(NoEvent(NoEventReason::Timeout));
   if (xQueueReceive(event_queue_, &event, max_wait) == pdTRUE) {
-    return event;
+    return preprocess_event(event);
   } else {
-    return NoEvent();
+    return NoEvent(NoEventReason::Timeout);
   }
 }
 
-void Esp32Device::send_event_from_isr(const DeviceEvent& event) {
+DeviceEvent Esp32Device::preprocess_event(Esp32DeviceEvent event) {
+  return std::visit(
+      overloaded{
+          [this](const NoEvent &ev) -> DeviceEvent { return ev; },
+          [this](const BusResetEvent &ev) -> DeviceEvent {
+            process_bus_reset();
+            return ev;
+          },
+          [this](const SuspendEvent &ev) -> DeviceEvent { return ev; },
+          [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
+          [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
+          [this](const SetupPacket &pkt) -> DeviceEvent { return pkt; },
+          [this](const InXferCompleteEvent &ev) -> DeviceEvent {
+            // This means a hardware transfer was complete.  The full transfer
+            // requested by the application may not yet be complete if it could
+            // not fit into a single HW transfer.
+            auto& xfer = in_transfers_[ev.endpoint_num];
+            if (xfer.status != InEPStatus::Busy) {
+              // It's possible that this could happen if we recently processed
+              // application-initiated request to abort the transfer and this
+              // raced with the hardware actually finishing the transfer.
+              ESP_LOGD(LogTag,
+                       "xfer complete on endpoint %d, but transfer was no "
+                       "longer in progress",
+                       ev.endpoint_num);
+              return NoEvent(NoEventReason::HwProcessing);
+            }
+
+            if (xfer.cur_xfer_end == xfer.size) {
+              in_transfers_[ev.endpoint_num].reset();
+              return InXferCompleteEvent(ev.endpoint_num);
+            } else {
+              initiate_next_write_xfer(ev.endpoint_num);
+              return NoEvent(NoEventReason::HwProcessing);
+            }
+          },
+          [this](const InXferFailedEvent &ev) -> DeviceEvent {
+            // TODO: flush the TX queue and abort the transfer
+            in_transfers_[ev.endpoint_num].reset();
+            return ev;
+          },
+          [this](const InFifoSpaceAvailable &ev) -> DeviceEvent {
+            ESP_LOGD(LogTag, "TX FIFO space available on endpoint %d",
+                     ev.endpoint_num);
+            auto& xfer = in_transfers_[ev.endpoint_num];
+            if (xfer.status != InEPStatus::Busy) {
+              // The transfer may have been aborted by the application
+              // before we could process the TX FIFO empty event.
+              ESP_LOGD(LogTag, "xfer no longer in progress");
+              return NoEvent(NoEventReason::HwProcessing);
+            }
+
+            write_to_fifo(ev.endpoint_num);
+            return NoEvent(NoEventReason::HwProcessing);
+          },
+      },
+      event);
+}
+
+void Esp32Device::process_bus_reset() {
+  for (size_t endpoint_num = 0; endpoint_num < in_transfers_.size();
+       ++endpoint_num) {
+    in_transfers_[endpoint_num].reset();
+  }
+}
+
+void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
   BaseType_t higher_prio_task_woken;
   BaseType_t res =
       xQueueSendToBackFromISR(event_queue_, &event, &higher_prio_task_woken);
@@ -248,6 +334,7 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
     return false;
   }
   ep0_rx_buffer_ = buffer;
+  assert(in_transfers_[0].status == InEPStatus::Unconfigured);
 
   // Configure FIFO sizes
   // Configure the receive FIFO size.
@@ -276,6 +363,10 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
     return false;
   }
   constexpr int endpoint_num = 0;
+
+  in_transfers_[endpoint_num].status = InEPStatus::Idle;
+  in_transfers_[endpoint_num].max_packet_size = mps;
+
   // USB_DOEPCTL0_REG fields:
   // - USB_MPS0: Maximum packet size
   // - USB_USBACTEP0: comments in soc/usb_reg.h appear to indicate that this
@@ -365,6 +456,212 @@ void Esp32Device::stall_ep0() {
   set_bits(usb_->out_ep_reg[0].doepctl, USB_STALL0_M);
   set_bits(usb_->in_ep_reg[0].diepctl, USB_DI_SNAK1_M | USB_D_STALL1_M);
   flush_tx_fifo(0);
+}
+
+TxStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
+                                          uint32_t size) {
+  ESP_LOGD(LogTag, "start_write() %" PRIu32 " bytes on endpoint %d", size,
+           endpoint);
+  const auto ep_status = in_transfers_[endpoint].status;
+  if (ep_status != InEPStatus::Idle) {
+    if (ep_status == InEPStatus::Busy) {
+      ESP_LOGW(
+          LogTag,
+          "start_write called on endpoint %d while an existing transfer is "
+          "still in progress",
+          endpoint);
+      return TxStartResult::Busy;
+    }
+    ESP_LOGW(LogTag, "start_write called on endpoint %d in bad state %d",
+             endpoint, static_cast<int>(in_transfers_[endpoint].status));
+    return TxStartResult::EndpointNotConfigured;
+  }
+
+  // Record the transfer information in in_transfers_[endpoint]
+  in_transfers_[endpoint].start(data, size);
+
+  initiate_next_write_xfer(endpoint);
+  return TxStartResult::Ok;
+}
+
+/*
+ * Overall device IN transfer steps:
+ * 1) Update the DIEPTSIZ register with the number of packets and total number
+ *    of bytes being sent.
+ * 2) Update the DIEPCTL to enable the endpoint to start transmitting.
+ * 3) Write data into the TX FIFO.  We may not be able to fit everything at
+ *    once, so write as many whole packets as we can, then wait for a TXFE
+ *    interrupt to signal we can write more.
+ * 4) Once we have written everything to the FIFO and they have actually been
+ *    consumed by the host, we will get an XFERCOMPL interrupt to signal the
+ *    transfer is done.
+ *
+ * This function updates the DIEPTSIZ and DIEPCTL registers to start a new IN
+ * transfer, and then calls write_to_fifo() to start writing the data to the
+ * FIFO.  The transfer information should have already been placed in
+ * in_transfers_[endpoint].
+ */
+void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
+  usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
+  uint32_t diepctl = in_ep->diepctl;
+  auto& xfer = in_transfers_[endpoint_num];
+
+  assert(xfer.status == InEPStatus::Busy);
+  // We should only invoke initiate_next_write_xfer() when the hardware
+  // is not currently performing a transfer and is ready to accept a new
+  // transfer.  Our own tracking of the endpoint status should ensure this.
+  assert((diepctl & USB_D_EPENA1_M) == 0);
+
+  // Compute the number of packets and bytes to send in this HW transfer
+  uint16_t pkts_to_send;
+  uint32_t bytes_to_send;
+  const auto size_remaining = xfer.size - xfer.cur_xfer_end;
+  if (size_remaining == 0) {
+    // This should only ever happen for the first and only call o
+    // a 0-length tranfer.
+    assert(xfer.size == 0);
+    pkts_to_send = 0;
+    bytes_to_send = 0;
+  } else {
+    uint16_t max_pkt_size;
+    uint16_t max_pkt_cnt;
+    uint32_t max_xfer_size;
+    if (endpoint_num == 0) {
+      // EP0 uses a different encoding for the MPS in diepctl than other
+      // endpoints.  Rather than convert it's enum field back to an integer,
+      // just read the max packet size from ep0_rx_buffer_.
+      max_pkt_size = ep0_rx_buffer_->max_packet_size();
+      max_pkt_cnt = USB_D_PKTCNT0_V;
+      max_xfer_size = USB_D_XFERSIZE1_V;
+    } else {
+      max_pkt_size = ((diepctl >> USB_D_MPS1_S) & Correct_USB_D_MPS1_V);
+      max_pkt_cnt = Correct_USB_D_PKTCNT1_V;
+      max_xfer_size = Correct_USB_D_XFERSIZE1_V;
+    }
+
+    auto max_bytes_to_send = std::min(size_remaining, max_xfer_size);
+    const auto pkts_left =
+        (max_bytes_to_send + (max_xfer_size - 1)) / max_xfer_size;
+    if (pkts_left > max_pkt_cnt) {
+      pkts_to_send = max_pkt_cnt;
+      bytes_to_send = pkts_to_send * max_pkt_size;
+    } else {
+      pkts_to_send = pkts_left;
+      bytes_to_send = max_bytes_to_send;
+    }
+  }
+
+  ESP_LOGV(LogTag,
+           "start IN XFER on endpoint %d: %" PRIu16 " packets, %" PRIu32
+           " bytes",
+           endpoint_num, pkts_to_send, bytes_to_send);
+  xfer.cur_xfer_end += bytes_to_send;
+
+  // Now start the HW transfer
+  in_ep->dieptsiz =
+      (pkts_to_send << USB_D_PKTCNT1_S) | (bytes_to_send << USB_D_XFERSIZE1_S);
+  // TODO: for isochronous endpoints we may need to set USB_DI_SETD0PID1 or
+  // USB_DI_SETD1PID1 appropriately in diepctl.
+  in_ep->diepctl = diepctl | USB_D_EPENA1_M | USB_D_CNAK1_M;
+
+  if (bytes_to_send > 0) {
+    write_to_fifo(endpoint_num);
+  }
+}
+
+/*
+ * Write more data from the current in_transfers_[endpoint_num] to the FIFO.
+ *
+ * Will write data up to the cur_xfer_end.  Updates the cur_fifo_ptr field of
+ * the transfer based on how much data was written to the FIFO.  This method
+ * should only be called when cur_fifo_ptr is less than cur_xfer_end.
+ *
+ * If not all data could be written, this enables the TXFE interrupt.  Once the
+ * TXFE interrupt is seen, write_to_fifo() should be called again to write more
+ * data.
+ */
+void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
+  usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
+  uint32_t diepctl = in_ep->diepctl;
+  auto& xfer = in_transfers_[endpoint_num];
+
+  assert((diepctl & USB_D_EPENA1_M) != 0);
+  uint8_t const fifo_num = ((diepctl >> USB_D_TXFNUM1_S) & USB_D_TXFNUM1_V);
+  const auto tx_words_avail =
+      (in_ep->dtxfsts & USB_D_INEPTXFSPCAVAIL0_M) >> USB_D_INEPTXFSPCAVAIL0_S;
+  auto tx_space_avail = tx_words_avail * 4;
+  ESP_LOGV(LogTag, "write_to_fifo() on endpoint %d: tx_space_avail=%" PRIu32,
+           endpoint_num, tx_space_avail);
+
+  while (true) {
+    const auto bytes_left = xfer.cur_xfer_end - xfer.cur_fifo_ptr;
+    if (bytes_left <= 0) {
+      break;
+    }
+    const uint16_t pkt_size =
+        std::min(bytes_left, static_cast<uint32_t>(xfer.max_packet_size));
+
+    if (tx_space_avail < pkt_size) {
+      // We have more data to send, but no more room in the FIFO at the moment.
+      // Enable the TXFE interrupt for this endpoint so we will be notified
+      // when the FIFO is empty.
+      ESP_LOGV(LogTag,
+               "endpoint %d TX FIFO is full, enabling FIFO empty interrupt",
+               endpoint_num);
+      set_bits(usb_->dtknqr4_fifoemptymsk, 1 << endpoint_num);
+      return;
+    }
+
+    copy_pkt_to_fifo(
+        fifo_num, static_cast<const uint8_t *>(xfer.data) + xfer.cur_fifo_ptr,
+        pkt_size);
+    xfer.cur_fifo_ptr += pkt_size;
+    tx_space_avail -= pkt_size;
+    ESP_LOGV(LogTag, "copied packet of size %" PRIu16 " to endpoint %d FIFO %d",
+             pkt_size, endpoint_num, fifo_num);
+  }
+}
+
+/*
+ * Copy a single packet into a TX FIFO.
+ */
+void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num, const void *data,
+                                   uint16_t pkt_size) {
+  volatile uint32_t *tx_fifo = usb_->fifo[fifo_num];
+  const uint16_t whole_words = pkt_size / 4;
+  if ((reinterpret_cast<intptr_t>(data) % 4) == 0) {
+    const uint32_t* data32 = static_cast<const uint32_t*>(data);
+    for (uint16_t n = 0; n < whole_words; ++n) {
+      (*tx_fifo) = data32[n];
+      ESP_LOGV(LogTag, "  aligned write word %" PRIu16, n);
+    }
+  } else {
+    // Handle writing unaligned input data
+    const uint8_t* data8 = static_cast<const uint8_t*>(data);
+    const uint16_t end = whole_words * 4;
+    for (uint16_t n = 0; n < end; n += 4) {
+      uint32_t word = data8[n] | (data8[n + 1] << 8) | (data8[n + 2] << 16) |
+                      (data8[n + 3] << 24);
+      (*tx_fifo) = word;
+      ESP_LOGV(LogTag, "  unaligned write word %" PRIu16, n);
+    }
+  }
+
+  // Handle any remaining data less than a full word
+  const uint16_t idx = whole_words * 4;
+  if (idx < pkt_size) {
+    ESP_LOGV(LogTag, "  write tail difference %" PRIu16 " - %" PRIu16, pkt_size,
+             idx);
+    const uint8_t* tail = static_cast<const uint8_t*>(data) + idx;
+    uint32_t word = tail[0];
+    if (idx + 1 < pkt_size) {
+      word |= (tail[1] << 8);
+    }
+    if (idx + 2 < pkt_size) {
+      word |= (tail[2] << 16);
+    }
+    (*tx_fifo) = word;
+  }
 }
 
 void Esp32Device::stall_in_endpoint(uint8_t endpoint_num) {
@@ -476,6 +773,10 @@ void Esp32Device::intr_main() {
 
   if (int_status & USB_ERLYSUSP_M) {
     DBG_ISR_LOG("USB int: early suspend");
+    // TODO: might need to check for USB_ERRTICERR in the dsts register?
+    // According to some of the STM docs it looks like erratic errors can
+    // trigger an early suspend interrupt with the erratic error status flag
+    // set.  We need to then do a soft disconnect to recover.
     usb_->gintsts = USB_ERLYSUSP_M;
   }
 
@@ -701,8 +1002,29 @@ void Esp32Device::intr_out_endpoint(uint8_t epnum) {
 }
 
 void Esp32Device::intr_in_endpoint(uint8_t epnum) {
-  // TODO
-  ESP_EARLY_LOGE(LogTag, "TODO: process IN endpoint interrupt");
+  ESP_EARLY_LOGI(LogTag, "USB IN interrupt: EP%u", epnum);
+
+  // IN transfer complete
+  if (usb_->in_ep_reg[epnum].diepint & USB_D_XFERCOMPL0_M) {
+    ESP_EARLY_LOGI(LogTag, "USB: IN transfer complete on EP%u", epnum);
+    usb_->in_ep_reg[epnum].diepint = USB_D_XFERCOMPL0_M;
+    send_event_from_isr<InXferCompleteEvent>(epnum);
+  }
+
+  // FIFO empty
+  if (usb_->in_ep_reg[epnum].diepint & USB_D_TXFEMP0_M) {
+    ESP_EARLY_LOGI(LogTag, "USB IN FIFO empty: EP%u", epnum);
+    clear_bits(usb_->dtknqr4_fifoemptymsk, 1 << epnum);
+    usb_->in_ep_reg[epnum].diepint = USB_D_TXFEMP0_M;
+    send_event_from_isr<InFifoSpaceAvailable>(epnum);
+  }
+
+  // Transfer timeout
+  if (usb_->in_ep_reg[epnum].diepint & USB_D_TIMEOUT0_M) {
+    ESP_EARLY_LOGW(LogTag, "USB IN transfer timeout on EP%u", epnum);
+    usb_->in_ep_reg[epnum].diepint = USB_D_TIMEOUT0_M;
+    send_event_from_isr<InXferFailedEvent>(epnum);
+  }
 }
 
 void Esp32Device::intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size) {

@@ -37,7 +37,7 @@ public:
    * This method should only be invoked by the current DevCtrlInTransfer
    * object.
    */
-  bool send_ctrl_in_xfer(const void *data, size_t size);
+  TxStartResult send_ctrl_in_xfer(const void *data, size_t size);
 
 private:
   // Figure 9-1 in the USB 2.0 spec lists the various device states.
@@ -120,6 +120,8 @@ private:
   void on_resume();
   void on_enum_done(UsbSpeed speed);
   void on_setup_received(const SetupPacket &packet);
+  void on_in_xfer_complete(uint8_t endpoint_num);
+  void on_in_xfer_failed(uint8_t endpoint_num);
 
   void process_ctrl_out_setup(const SetupPacket &packet);
   std::unique_ptr<DevCtrlInTransfer>

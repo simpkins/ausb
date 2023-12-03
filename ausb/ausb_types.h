@@ -15,4 +15,10 @@ enum class XferCancelReason {
   UsbDeviceDestroyed,
 };
 
+enum class TxStartResult {
+  Ok,
+  Busy, // An existing write is already in progress for this endpoint
+  EndpointNotConfigured,
+};
+
 } // namespace ausb
