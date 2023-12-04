@@ -19,7 +19,7 @@ enum NoEventReason {
 };
 
 struct NoEvent {
-  explicit NoEvent(NoEventReason r) : reason(r) {}
+  explicit constexpr NoEvent(NoEventReason r) : reason(r) {}
   NoEventReason reason;
 };
 struct BusResetEvent {};
@@ -32,20 +32,20 @@ enum class UsbSpeed {
 };
 
 struct BusEnumDone {
-  explicit BusEnumDone(UsbSpeed spd)
+  explicit constexpr BusEnumDone(UsbSpeed spd)
       : speed{spd} {}
 
   UsbSpeed speed = UsbSpeed::Low;
 };
 
 struct InXferCompleteEvent {
-  explicit InXferCompleteEvent(uint8_t epnum) : endpoint_num(epnum) {}
+  explicit constexpr InXferCompleteEvent(uint8_t epnum) : endpoint_num(epnum) {}
 
   uint8_t endpoint_num{0};
 };
 
 struct InXferFailedEvent {
-  explicit InXferFailedEvent(uint8_t epnum) : endpoint_num(epnum) {}
+  explicit constexpr InXferFailedEvent(uint8_t epnum) : endpoint_num(epnum) {}
 
   uint8_t endpoint_num{0};
 };

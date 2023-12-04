@@ -247,10 +247,19 @@ private:
     uint8_t endpoint_num = 0;
     uint32_t diepint = 0;
   };
+  struct OutEndpointInterrupt {
+    OutEndpointInterrupt(uint8_t epnum, uint32_t flags)
+        : endpoint_num(epnum), doepint(flags) {}
+
+    uint8_t endpoint_num = 0;
+    uint32_t doepint = 0;
+  };
+  struct RxFifoNonEmpty {};
 
   using Esp32DeviceEvent =
       std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent,
-                   BusEnumDone, SetupPacket, InEndpointInterrupt>;
+                   BusEnumDone, SetupPacket, InEndpointInterrupt,
+                   OutEndpointInterrupt, RxFifoNonEmpty>;
   static_assert(std::is_trivially_copyable_v<Esp32DeviceEvent>,
                 "Esp32DeviceEvent must be trivially copyable");
 
@@ -274,8 +283,6 @@ private:
   void intr_main();
   void intr_bus_reset();
   void intr_enum_done();
-  void intr_rx_fifo_nonempty();
-  void intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size);
   void intr_out_endpoint_main();
   void intr_in_endpoint_main();
   void intr_out_endpoint(uint8_t endpoint_num);
@@ -287,6 +294,11 @@ private:
   void initiate_next_write_xfer(uint8_t endpoint_num);
   void write_to_fifo(uint8_t endpoint_num);
   void copy_pkt_to_fifo(uint8_t fifo_num, const void *data, uint16_t pkt_size);
+  DeviceEvent process_rx_fifo();
+  DeviceEvent process_one_rx_entry(uint32_t ctrl_word);
+  void receive_packet(uint8_t endpoint_num, uint16_t packet_size);
+
+  DeviceEvent process_out_ep_interrupt(uint8_t endpoint_num, uint32_t doepint);
 
   static constexpr uint8_t kMaxEventQueueSize = 32;
 
@@ -302,6 +314,8 @@ private:
     std::array<uint32_t, 2> u32;
     SetupPacket setup;
   } setup_packet_ = {};
+
+  Esp32DeviceEvent pending_event_ = NoEvent(NoEventReason::Timeout);
 
   // A pointer to the (software) RX buffer for the control endpoint.
   // Note that this object is not owned by us.  Our user is responsible

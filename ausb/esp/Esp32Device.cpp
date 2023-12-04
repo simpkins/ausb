@@ -103,6 +103,19 @@ Esp32Device::~Esp32Device() {
 }
 
 DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
+  // If pending_event_ is set, we have a previously-received interrupt event
+  // that still needs additional processing to be done.
+  if (!std::holds_alternative<NoEvent>(pending_event_)) {
+    const auto evt = pending_event_;
+    pending_event_ = NoEvent(NoEventReason::Timeout);
+    ESP_LOGV(LogTag, "USB wait_for_event() processing existing pending event");
+    // If preprocess_event() returns NoEvent we could potentially fall through 
+    // and process an event from the queue.  However, for now it's simpler to
+    // just return back to the caller and let them call wait_for_event() again
+    // on the next loop.
+    return preprocess_event(evt);
+  }
+
   TickType_t max_wait = pdMS_TO_TICKS(timeout.count());
   Esp32DeviceEvent event(NoEvent(NoEventReason::Timeout));
   if (xQueueReceive(event_queue_, &event, max_wait) == pdTRUE) {
@@ -114,20 +127,24 @@ DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
 
 DeviceEvent Esp32Device::preprocess_event(Esp32DeviceEvent event) {
   return std::visit(
-      overloaded{
-          [this](const NoEvent &ev) -> DeviceEvent { return ev; },
-          [this](const BusResetEvent &ev) -> DeviceEvent {
-            process_bus_reset();
-            return ev;
-          },
-          [this](const SuspendEvent &ev) -> DeviceEvent { return ev; },
-          [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
-          [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
-          [this](const SetupPacket &pkt) -> DeviceEvent { return pkt; },
-          [this](const InEndpointInterrupt &ev) -> DeviceEvent {
-            return process_in_ep_interrupt(ev.endpoint_num, ev.diepint);
-          },
-      },
+      overloaded{[this](const NoEvent &ev) -> DeviceEvent { return ev; },
+                 [this](const BusResetEvent &ev) -> DeviceEvent {
+                   process_bus_reset();
+                   return ev;
+                 },
+                 [this](const SuspendEvent &ev) -> DeviceEvent { return ev; },
+                 [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
+                 [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
+                 [this](const SetupPacket &pkt) -> DeviceEvent { return pkt; },
+                 [this](const InEndpointInterrupt &ev) -> DeviceEvent {
+                   return process_in_ep_interrupt(ev.endpoint_num, ev.diepint);
+                 },
+                 [this](const OutEndpointInterrupt &ev) -> DeviceEvent {
+                   return process_out_ep_interrupt(ev.endpoint_num, ev.doepint);
+                 },
+                 [this](const RxFifoNonEmpty &) -> DeviceEvent {
+                   return process_rx_fifo();
+                 }},
       event);
 }
 
@@ -191,6 +208,45 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
   // It's sort of unexpected to reach here with no flags set.
   ESP_LOGD(LogTag, "IN interrupt on endpoint %d, but no flags set",
            endpoint_num);
+  return NoEvent(NoEventReason::HwProcessing);
+}
+
+DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
+                                                  uint32_t doepint) {
+  // Setup packet receipt done
+  // This should presumably only happen for endpoint 0.
+  if ((doepint & USB_SETUP0_M)) {
+    ESP_LOGD(LogTag, "USB OUT: SETUP receive complete on EP%u", endpoint_num);
+
+    // TODO: move this up to generic logic at the start of this function
+    if (doepint & USB_XFERCOMPL0_M) {
+      pending_event_ =
+          OutEndpointInterrupt(endpoint_num, doepint & ~USB_SETUP0_M);
+    }
+
+    return SetupPacket(setup_packet_.setup);
+  }
+
+  // OUT transaction complete (one packet received)
+  if (doepint & USB_XFERCOMPL0_M) {
+    ESP_LOGD(LogTag, "USB: OUT transaction complete on EP%u", endpoint_num);
+
+#if 0
+    auto &xfer = xfer_status_[epnum].out;
+    // Transfer complete if short packet or total length is received
+    if (xfer.recv_complete) {
+      send_event_from_isr<OutXferCompleteEvent>(epnum, xfer.received_bytes);
+    } else {
+      // Enable receiving another packet on this endpoint
+      set_bits(usb_->out_ep_reg[epnum].doeptsiz,
+               USB_PKTCNT0_M |
+                   ((xfer.max_size & USB_XFERSIZE0_V) << USB_XFERSIZE0_S));
+      set_bits(usb_->out_ep_reg[epnum].doepctl, USB_EPENA0_M | USB_CNAK0_M);
+    }
+#endif
+  }
+
+  // FIXME
   return NoEvent(NoEventReason::HwProcessing);
 }
 
@@ -294,6 +350,10 @@ void Esp32Device::reset() {
   usb_->gintmsk = 0; // Mask all interrupts
   usb_->daintmsk = 0;
   set_bits(usb_->dctl, USB_SFTDISCON_M); // Disable the data pull-up line
+
+  // TODO: flush RX FIFO
+  // TODO: flush all TX FIFOs
+  pending_event_ = NoEvent(NoEventReason::Timeout);
 
   if (interrupt_handle_) {
     // esp_intr_free() will wait for any in-progress interrupt handlers to
@@ -852,10 +912,10 @@ void Esp32Device::intr_main() {
     // No need to update usb_->gintsts to indicate we have handled the
     // interrupt; this will be cleared when we read from the fifo.
 
-    // Disable the RXFLVL interrupt while reading data from the FIFO
+    // Disable the RXFLVL interrupt.  The main USB task will re-enable it once
+    // it has processed data from the FIFO.
     clear_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
-    intr_rx_fifo_nonempty();
-    set_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
+    send_event_from_isr<RxFifoNonEmpty>();
   }
 
   if (int_status & USB_OEPINT_M) {
@@ -931,7 +991,43 @@ void Esp32Device::intr_enum_done() {
   send_event_from_isr<BusEnumDone>(speed);
 }
 
-void Esp32Device::intr_rx_fifo_nonempty() {
+DeviceEvent Esp32Device::process_rx_fifo() {
+  // Process entries from the FIFO until we encounter an event to return to the
+  // application, or until the FIFO is empty.
+  while (true) {
+    // Pop the control word from the top of the RX FIFO
+    uint32_t const ctrl_word = usb_->grxstsp;
+    auto event = process_one_rx_entry(ctrl_word);
+    if (!std::holds_alternative<NoEvent>(event)) {
+      // If the FIFO still has data to process, add another RxFifoNonEmpty
+      // event to the front of the queue so we will check if there is still
+      // more to process in the RX FIFO the next time wait_for_event() is
+      // called.
+      if ((usb_->gintsts & USB_RXFLVI_M) == 0) {
+        pending_event_ = RxFifoNonEmpty();
+      } else {
+        // Re-enable the RXFLVL interrupt to be notified when there is more
+        // data in the fifo.
+        set_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
+      }
+      return event;
+    }
+
+    // If USB_RXFLVI_M is no longer set in GINTSTS, there is nothing more to
+    // read from the RX FIFO.
+    if ((usb_->gintsts & USB_RXFLVI_M) == 0) {
+      // Re-enable the RXFLVL interrupt to be notified when there is more
+      // data in the fifo.
+      set_bits(usb_->gintmsk, USB_RXFLVIMSK_M);
+      return NoEvent(NoEventReason::HwProcessing);
+    }
+  }
+}
+
+/*
+ * Process one entry from the RX FIFO
+ */
+DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
   // USB_PKTSTS values from the comments in soc/usb_reg.h
   enum Pktsts : uint32_t {
     GlobalOutNak = 1,
@@ -943,27 +1039,27 @@ void Esp32Device::intr_rx_fifo_nonempty() {
     ChannelHalted = 7, // host mode only
   };
 
-  uint32_t const ctl_word = usb_->grxstsp;
-  uint8_t const pktsts = (ctl_word & USB_PKTSTS_M) >> USB_PKTSTS_S;
+  uint8_t const pktsts = (ctrl_word & USB_PKTSTS_M) >> USB_PKTSTS_S;
   switch (pktsts) {
   case Pktsts::PktReceived: {
-    uint8_t const endpoint_num = (ctl_word & USB_CHNUM_M) >> USB_CHNUM_S;
-    uint16_t const byte_count = (ctl_word & USB_BCNT_M) >> USB_BCNT_S;
-    DBG_ISR_LOG("USB RX: OUT packet received; size=%u", byte_count);
-    intr_receive_pkt(endpoint_num, byte_count);
+    uint8_t const endpoint_num = (ctrl_word & USB_CHNUM_M) >> USB_CHNUM_S;
+    uint16_t const byte_count = (ctrl_word & USB_BCNT_M) >> USB_BCNT_S;
+    ESP_LOGD(LogTag, "USB RX: OUT packet received on EP%u; size=%u",
+             endpoint_num, byte_count);
+    receive_packet(endpoint_num, byte_count);
     break;
   }
   case Pktsts::SetupComplete: {
     // Setup OUT packet received.  After this we should receive an OUT endpoint
     // interrupt with the SETUP bit set.  We generate an event to handle the
     // SetupPacket there.
-    uint8_t const endpoint_num = (ctl_word & USB_CHNUM_M) >> USB_CHNUM_S;
-    DBG_ISR_LOG("USB RX: setup done EP%d", endpoint_num);
+    uint8_t const endpoint_num = (ctrl_word & USB_CHNUM_M) >> USB_CHNUM_S;
+    ESP_LOGD(LogTag, "USB RX: setup done EP%d", endpoint_num);
 
     // Reset the doeptsiz register to indicate that we can receive more SETUP
     // packets.
     set_bits(usb_->out_ep_reg[endpoint_num].doeptsiz, USB_SUPCNT0_M);
-    break;
+    return NoEvent(NoEventReason::HwProcessing);
   }
   case Pktsts::SetupReceived: {
     // We store the setup packet in a dedicated member variable rather than a
@@ -980,20 +1076,22 @@ void Esp32Device::intr_rx_fifo_nonempty() {
     volatile uint32_t *rx_fifo = usb_->fifo[0];
     setup_packet_.u32[0] = (*rx_fifo);
     setup_packet_.u32[1] = (*rx_fifo);
-    DBG_ISR_LOG("USB RX: setup packet: 0x%08x 0x%08x", setup_packet_.u32[0],
-                setup_packet_.u32[1]);
-    break;
+    ESP_LOGD(LogTag, "USB RX: setup packet: 0x%08" PRIx32" 0x%08" PRIx32,
+             setup_packet_.u32[0], setup_packet_.u32[1]);
+    return NoEvent(NoEventReason::HwProcessing);
   }
   case Pktsts::GlobalOutNak:
-    DBG_ISR_LOG("USB RX: Global OUT NAK");
+    ESP_LOGD(LogTag, "USB RX: Global OUT NAK effective");
     break;
   case Pktsts::TxComplete:
-    DBG_ISR_LOG("USB RX: OUT packet done");
+    ESP_LOGD(LogTag, "USB RX: OUT packet done");
     break;
   default:
-    ESP_EARLY_LOGE(LogTag, "USB RX: unexpected pktsts value: %x", pktsts);
+    ESP_LOGE(LogTag, "USB RX: unexpected pktsts value: %x", pktsts);
     break;
   }
+
+  return NoEvent(NoEventReason::HwProcessing);
 }
 
 void Esp32Device::intr_out_endpoint_main() {
@@ -1012,42 +1110,20 @@ void Esp32Device::intr_in_endpoint_main() {
   }
 }
 
-void Esp32Device::intr_out_endpoint(uint8_t epnum) {
-  // Setup packet receipt done
-  // This should presumably only happen for endpoint 0.
-  if ((usb_->out_ep_reg[epnum].doepint & USB_SETUP0_M)) {
-    DBG_ISR_LOG("USB: SETUP receive complete on EP%u", epnum);
-    // Clear the interrupt bits
-    usb_->out_ep_reg[epnum].doepint = USB_STUPPKTRCVD0_M | USB_SETUP0_M;
-    send_event_from_isr<SetupPacket>(setup_packet_.setup);
-  }
+void Esp32Device::intr_out_endpoint(uint8_t endpoint_num) {
+  const auto doepint = usb_->out_ep_reg[endpoint_num].doepint;
+  DBG_ISR_LOG("USB OUT interrupt: EP%u DOEPINT=%" PRIx32, endpoint_num,
+              doepint);
 
-  // OUT transaction complete (one packet received)
-  if (usb_->out_ep_reg[epnum].doepint & USB_XFERCOMPL0_M) {
-    DBG_ISR_LOG("USB: OUT transaction complete on EP%u", epnum);
-    // Clear the interrupt bit
-    usb_->out_ep_reg[epnum].doepint = USB_XFERCOMPL0_M;
-
-#if 0
-    auto &xfer = xfer_status_[epnum].out;
-    // Transfer complete if short packet or total length is received
-    if (xfer.recv_complete) {
-      send_event_from_isr<OutXferCompleteEvent>(epnum, xfer.received_bytes);
-    } else {
-      // Enable receiving another packet on this endpoint
-      set_bits(usb_->out_ep_reg[epnum].doeptsiz,
-               USB_PKTCNT0_M |
-                   ((xfer.max_size & USB_XFERSIZE0_V) << USB_XFERSIZE0_S));
-      set_bits(usb_->out_ep_reg[epnum].doepctl, USB_EPENA0_M | USB_CNAK0_M);
-    }
-#endif
-  }
+  // Clear all of the interrupt flags we handle
+  set_bits(usb_->out_ep_reg[endpoint_num].doepint,
+           doepint & (USB_SETUP0_M | USB_STUPPKTRCVD0_M | USB_XFERCOMPL0_M));
+  send_event_from_isr<OutEndpointInterrupt>(endpoint_num, doepint);
 }
 
 void Esp32Device::intr_in_endpoint(uint8_t endpoint_num) {
   const auto diepint = usb_->in_ep_reg[endpoint_num].diepint;
-  ESP_EARLY_LOGI(LogTag, "USB IN interrupt: EP%u DIEPINT=%" PRIx32,
-                 endpoint_num, diepint);
+  DBG_ISR_LOG("USB IN interrupt: EP%u DIEPINT=%" PRIx32, endpoint_num, diepint);
 
   // If the TX FIFO is empty, clear the interrupt mask to stop receiving this
   // interrupt until we re-enable it.
@@ -1060,7 +1136,7 @@ void Esp32Device::intr_in_endpoint(uint8_t endpoint_num) {
   send_event_from_isr<InEndpointInterrupt>(endpoint_num, diepint);
 }
 
-void Esp32Device::intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size) {
+void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   // We currently operate in what the ESP32-S3 Technical Reference Manual
   // describes as "Slave mode", and manually read data from the RX FIFO.
   //
