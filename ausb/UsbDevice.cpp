@@ -167,8 +167,25 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
 }
 
 void UsbDevice::on_in_xfer_complete(uint8_t endpoint_num) {
-  // TODO
-  AUSB_LOGE("TODO: on_in_xfer_complete");
+  switch (ctrl_status_) {
+  case CtrlXferStatus::Idle:
+  case CtrlXferStatus::OutSetupReceived:
+  case CtrlXferStatus::OutRecvData:
+  case CtrlXferStatus::OutStatus:
+  case CtrlXferStatus::OutAck:
+  case CtrlXferStatus::InSetupReceived:
+  case CtrlXferStatus::InStatus:
+    AUSB_LOGE("on_in_xfer_complete() received in unexpected state %d",
+              static_cast<int>(ctrl_status_));
+    return;
+  case CtrlXferStatus::InSendData:
+    AUSB_LOGD("control IN transfer complete");
+    ctrl_status_ = CtrlXferStatus::InStatus;
+    return;
+  }
+
+  AUSB_LOGE("unexpected ctrl xfer state %d in fail_control_transfer()",
+            static_cast<int>(ctrl_status_));
 }
 
 void UsbDevice::on_in_xfer_failed(uint8_t endpoint_num) {

@@ -240,16 +240,17 @@ private:
     uint32_t cur_fifo_ptr = 0;
   };
 
-  struct InFifoSpaceAvailable {
-    explicit InFifoSpaceAvailable(uint8_t epnum) : endpoint_num{epnum} {}
+  struct InEndpointInterrupt {
+    InEndpointInterrupt(uint8_t epnum, uint32_t flags)
+        : endpoint_num(epnum), diepint(flags) {}
 
-    uint8_t endpoint_num{0};
+    uint8_t endpoint_num = 0;
+    uint32_t diepint = 0;
   };
 
   using Esp32DeviceEvent =
       std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent,
-                   BusEnumDone, SetupPacket, InXferCompleteEvent,
-                   InXferFailedEvent, InFifoSpaceAvailable>;
+                   BusEnumDone, SetupPacket, InEndpointInterrupt>;
   static_assert(std::is_trivially_copyable_v<Esp32DeviceEvent>,
                 "Esp32DeviceEvent must be trivially copyable");
 
@@ -277,11 +278,12 @@ private:
   void intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size);
   void intr_out_endpoint_main();
   void intr_in_endpoint_main();
-  void intr_out_endpoint(uint8_t epnum);
-  void intr_in_endpoint(uint8_t epnum);
+  void intr_out_endpoint(uint8_t endpoint_num);
+  void intr_in_endpoint(uint8_t endpoint_num);
 
   DeviceEvent preprocess_event(Esp32DeviceEvent event);
   void process_bus_reset();
+  DeviceEvent process_in_ep_interrupt(uint8_t endpoint_num, uint32_t diepint);
   void initiate_next_write_xfer(uint8_t endpoint_num);
   void write_to_fifo(uint8_t endpoint_num);
   void copy_pkt_to_fifo(uint8_t fifo_num, const void *data, uint16_t pkt_size);

@@ -79,7 +79,7 @@ private:
     OutAck,
 
     // We have received a SETUP packet for an IN transfer,
-    // but have not yet started prepared IN data to send to the hsot.
+    // but have not yet prepared IN data to send to the host.
     InSetupReceived,
 
     // We received a SETUP packet for an IN transfer,

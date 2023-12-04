@@ -124,48 +124,8 @@ DeviceEvent Esp32Device::preprocess_event(Esp32DeviceEvent event) {
           [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
           [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
           [this](const SetupPacket &pkt) -> DeviceEvent { return pkt; },
-          [this](const InXferCompleteEvent &ev) -> DeviceEvent {
-            // This means a hardware transfer was complete.  The full transfer
-            // requested by the application may not yet be complete if it could
-            // not fit into a single HW transfer.
-            auto& xfer = in_transfers_[ev.endpoint_num];
-            if (xfer.status != InEPStatus::Busy) {
-              // It's possible that this could happen if we recently processed
-              // application-initiated request to abort the transfer and this
-              // raced with the hardware actually finishing the transfer.
-              ESP_LOGD(LogTag,
-                       "xfer complete on endpoint %d, but transfer was no "
-                       "longer in progress",
-                       ev.endpoint_num);
-              return NoEvent(NoEventReason::HwProcessing);
-            }
-
-            if (xfer.cur_xfer_end == xfer.size) {
-              in_transfers_[ev.endpoint_num].reset();
-              return InXferCompleteEvent(ev.endpoint_num);
-            } else {
-              initiate_next_write_xfer(ev.endpoint_num);
-              return NoEvent(NoEventReason::HwProcessing);
-            }
-          },
-          [this](const InXferFailedEvent &ev) -> DeviceEvent {
-            // TODO: flush the TX queue and abort the transfer
-            in_transfers_[ev.endpoint_num].reset();
-            return ev;
-          },
-          [this](const InFifoSpaceAvailable &ev) -> DeviceEvent {
-            ESP_LOGD(LogTag, "TX FIFO space available on endpoint %d",
-                     ev.endpoint_num);
-            auto& xfer = in_transfers_[ev.endpoint_num];
-            if (xfer.status != InEPStatus::Busy) {
-              // The transfer may have been aborted by the application
-              // before we could process the TX FIFO empty event.
-              ESP_LOGD(LogTag, "xfer no longer in progress");
-              return NoEvent(NoEventReason::HwProcessing);
-            }
-
-            write_to_fifo(ev.endpoint_num);
-            return NoEvent(NoEventReason::HwProcessing);
+          [this](const InEndpointInterrupt &ev) -> DeviceEvent {
+            return process_in_ep_interrupt(ev.endpoint_num, ev.diepint);
           },
       },
       event);
@@ -176,6 +136,62 @@ void Esp32Device::process_bus_reset() {
        ++endpoint_num) {
     in_transfers_[endpoint_num].reset();
   }
+}
+
+// Note that process_in_ep_interrupt() runs in the main USB task, and not in an
+// interrupt context.  The interrupt handler simply sends the event to the main
+// USB task, and this function handles it on the USB task.
+DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
+                                                 uint32_t diepint) {
+  auto &xfer = in_transfers_[endpoint_num];
+  if (xfer.status != InEPStatus::Busy) {
+    // It's possible that this could happen if we recently processed
+    // application-initiated request to abort the transfer and this raced with
+    // us receiving the interrupt.
+    ESP_LOGD(LogTag,
+             "IN interrupt on endpoint %d, but transfer was no "
+             "longer in progress",
+             endpoint_num);
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+
+  // Transfer timeout
+  if (diepint & USB_D_TIMEOUT0_M) {
+    ESP_LOGW(LogTag, "USB IN transfer timeout on EP%u", endpoint_num);
+    // TODO: flush the TX FIFO and abort the write
+    xfer.reset();
+    return InXferFailedEvent(endpoint_num);
+  }
+
+  // IN transfer complete
+  // Note that this means a hardware transfer was complete.  The full transfer
+  // requested by the application may not yet be complete if it could not fit
+  // into a single HW transfer.
+  if (diepint & USB_D_XFERCOMPL0_M) {
+    ESP_LOGD(LogTag, "USB: IN transfer complete on EP%u", endpoint_num);
+    if (xfer.cur_xfer_end == xfer.size) {
+      in_transfers_[endpoint_num].reset();
+      return InXferCompleteEvent(endpoint_num);
+    } else {
+      initiate_next_write_xfer(endpoint_num);
+      return NoEvent(NoEventReason::HwProcessing);
+    }
+  }
+
+  // FIFO empty
+  // Note that this flag will usually also be set when USB_D_XFERCOMPL0_M
+  // is set.  However, we only care about processing this event when
+  // USB_D_XFERCOMPL0_M is not set.
+  if (diepint & USB_D_TXFEMP0_M) {
+    ESP_LOGD(LogTag, "TX FIFO space available on endpoint %d", endpoint_num);
+    write_to_fifo(endpoint_num);
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+
+  // It's sort of unexpected to reach here with no flags set.
+  ESP_LOGD(LogTag, "IN interrupt on endpoint %d, but no flags set",
+           endpoint_num);
+  return NoEvent(NoEventReason::HwProcessing);
 }
 
 void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
@@ -217,12 +233,28 @@ esp_err_t Esp32Device::init(EspPhyType phy_type,
   set_bits(usb_->dcfg, USB_NZSTSOUTHSHK_M | Speed::Full48Mhz);
 
   // Configure AHB interrupts:
-  // - enable interrupt when TxFIFO is empty (rather than half empty)
-  // - global interrupts enable flag
-  set_bits(usb_->gahbcfg, USB_NPTXFEMPLVL_M | USB_GLBLLNTRMSK_M);
+  // - Global interrupts enable flag
+  // - Enable periodic TxFIFO empty interrupt (recommended by STM32 reference
+  //   manual)
+  // - Configure the non-periodic TxFIFO empty interrupt to fire when
+  //   completely empty rather than half empty
+  set_bits(usb_->gahbcfg,
+           USB_GLBLLNTRMSK_M | USB_PTXFEMPLVL_M | USB_NPTXFEMPLVL_M);
+
   // USB configuration:
-  // - Force device mode (rather than OTG)
-  set_bits(usb_->gusbcfg, USB_FORCEDEVMODE_M);
+  auto gusbcfg = usb_->gusbcfg;
+  // We currently don't support HNP or SRP
+  // Clear the timeout calibration and turnaround time bits, as we will set
+  // these fields below.
+  gusbcfg &= ~(USB_HNPCAP_M | USB_SRPCAP_M | USB_TOUTCAL_M | USB_USBTRDTIM_M);
+  // Force device mode (rather than OTG)
+  gusbcfg |= USB_FORCEDEVMODE_M;
+  // Set the timeout calibration to the maximum value
+  gusbcfg |= USB_TOUTCAL_M;
+  // Set the USB turnaround time to 5 (recommended default value from the docs)
+  gusbcfg |= (5 << USB_USBTRDTIM_S);
+  usb_->gusbcfg = gusbcfg;
+
   // OTG configuration:
   // - disable overrides
   clear_bits(usb_->gotgctl,
@@ -245,9 +277,9 @@ esp_err_t Esp32Device::init(EspPhyType phy_type,
   usb_->gotgint = 0xffffffff; // clear OTG interrupts
                               // (even though we leave OTG interrupts disabled)
   usb_->gintsts = 0xffffffff; // clear pending interrupts
-  usb_->gintmsk = USB_MODEMISMSK_M | USB_RXFLVIMSK_M | USB_ERLYSUSPMSK_M |
-                 USB_USBSUSPMSK_M | USB_USBRSTMSK_M | USB_ENUMDONEMSK_M |
-                 USB_RESETDETMSK_M | USB_DISCONNINTMSK_M;
+  usb_->gintmsk = USB_MODEMISMSK_M | USB_OTGINTMSK_M | USB_RXFLVIMSK_M |
+                  USB_ERLYSUSPMSK_M | USB_USBSUSPMSK_M | USB_USBRSTMSK_M |
+                  USB_ENUMDONEMSK_M | USB_RESETDETMSK_M | USB_DISCONNINTMSK_M;
 
   ESP_RETURN_ON_ERROR(
       enable_interrupts(), LogTag, "error enabling USB interrupts");
@@ -425,9 +457,13 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
     // bytes.  (Do we need to increase the xfer size register after reading
     // data in the RXFLVI interrupt?)
     const uint32_t max_recv_pkts =
-        std::max(static_cast<int>(free_packets), USB_PKTCNT0_V);
+        std::min(static_cast<int>(free_packets), USB_PKTCNT0_V);
     const uint32_t max_recv_bytes = std::max(
         buffer->max_packet_size(), static_cast<uint16_t>(USB_XFERSIZE0_V));
+    ESP_LOGD(LogTag,
+             "enable EP0 to receive up to %" PRIu32 " packets, %" PRIu32
+             " bytes",
+             max_recv_pkts, max_recv_bytes);
     doeptsiz |=
         (max_recv_pkts << USB_PKTCNT0_S) | (max_recv_bytes << USB_XFERSIZE0_S);
 
@@ -435,6 +471,8 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
     doepctl |= (USB_EPENA0_M | USB_CNAK0_M);
   } else {
     // Set the NAK flag
+    ESP_LOGD(LogTag,
+             "EP0 currently set to NAK out packets, no RX buffer space");
     doepctl |= USB_DO_SNAK0_M;
   }
 
@@ -845,13 +883,18 @@ void Esp32Device::intr_main() {
     ESP_EARLY_LOGE(LogTag, "bug: USB_MODEMIS_M interrupt fired");
   }
 
+  if (int_status & USB_OTGINT_M) {
+    usb_->gintsts = USB_OTGINT_M;
+    ESP_EARLY_LOGI(LogTag, "USB OTG interrupt");
+  }
+
   // Clear other interrupt bits that we do not handle.
   // (This is probably unnecessary since never enable these in gintmsk)
-  usb_->gintsts = USB_CURMOD_INT_M | USB_OTGINT_M | USB_NPTXFEMP_M |
-                  USB_GINNAKEFF_M | USB_GOUTNAKEFF | USB_ISOOUTDROP_M |
-                  USB_EOPF_M | USB_EPMIS_M | USB_INCOMPISOIN_M |
-                  USB_INCOMPIP_M | USB_FETSUSP_M | USB_PRTLNT_M | USB_HCHLNT_M |
-                  USB_PTXFEMP_M | USB_CONIDSTSCHNG_M | USB_SESSREQINT_M;
+  usb_->gintsts = USB_CURMOD_INT_M | USB_NPTXFEMP_M | USB_GINNAKEFF_M |
+                  USB_GOUTNAKEFF | USB_ISOOUTDROP_M | USB_EOPF_M | USB_EPMIS_M |
+                  USB_INCOMPISOIN_M | USB_INCOMPIP_M | USB_FETSUSP_M |
+                  USB_PRTLNT_M | USB_HCHLNT_M | USB_PTXFEMP_M |
+                  USB_CONIDSTSCHNG_M | USB_SESSREQINT_M;
   DBG_ISR_LOG("USB interrupt 0x%02" PRIx32 " done", int_status);
 }
 
@@ -1001,30 +1044,20 @@ void Esp32Device::intr_out_endpoint(uint8_t epnum) {
   }
 }
 
-void Esp32Device::intr_in_endpoint(uint8_t epnum) {
-  ESP_EARLY_LOGI(LogTag, "USB IN interrupt: EP%u", epnum);
+void Esp32Device::intr_in_endpoint(uint8_t endpoint_num) {
+  const auto diepint = usb_->in_ep_reg[endpoint_num].diepint;
+  ESP_EARLY_LOGI(LogTag, "USB IN interrupt: EP%u DIEPINT=%" PRIx32,
+                 endpoint_num, diepint);
 
-  // IN transfer complete
-  if (usb_->in_ep_reg[epnum].diepint & USB_D_XFERCOMPL0_M) {
-    ESP_EARLY_LOGI(LogTag, "USB: IN transfer complete on EP%u", epnum);
-    usb_->in_ep_reg[epnum].diepint = USB_D_XFERCOMPL0_M;
-    send_event_from_isr<InXferCompleteEvent>(epnum);
+  // If the TX FIFO is empty, clear the interrupt mask to stop receiving this
+  // interrupt until we re-enable it.
+  if (diepint & USB_D_TXFEMP0_M) {
+    clear_bits(usb_->dtknqr4_fifoemptymsk, 1 << endpoint_num);
   }
-
-  // FIFO empty
-  if (usb_->in_ep_reg[epnum].diepint & USB_D_TXFEMP0_M) {
-    ESP_EARLY_LOGI(LogTag, "USB IN FIFO empty: EP%u", epnum);
-    clear_bits(usb_->dtknqr4_fifoemptymsk, 1 << epnum);
-    usb_->in_ep_reg[epnum].diepint = USB_D_TXFEMP0_M;
-    send_event_from_isr<InFifoSpaceAvailable>(epnum);
-  }
-
-  // Transfer timeout
-  if (usb_->in_ep_reg[epnum].diepint & USB_D_TIMEOUT0_M) {
-    ESP_EARLY_LOGW(LogTag, "USB IN transfer timeout on EP%u", epnum);
-    usb_->in_ep_reg[epnum].diepint = USB_D_TIMEOUT0_M;
-    send_event_from_isr<InXferFailedEvent>(epnum);
-  }
+  // Clear all of the interrupt flags we handle
+  set_bits(usb_->in_ep_reg[endpoint_num].diepint,
+           diepint & (USB_D_XFERCOMPL0_M | USB_D_TXFEMP0_M | USB_D_TIMEOUT0_M));
+  send_event_from_isr<InEndpointInterrupt>(endpoint_num, diepint);
 }
 
 void Esp32Device::intr_receive_pkt(uint8_t endpoint_num, uint16_t packet_size) {

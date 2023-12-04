@@ -5,6 +5,7 @@
 
 namespace ausb {
 
+#define AUSB_LOGD(arg, ...) ESP_LOGD("ausb", arg, ##__VA_ARGS__)
 #define AUSB_LOGI(arg, ...) ESP_LOGI("ausb", arg, ##__VA_ARGS__)
 #define AUSB_LOGW(arg, ...) ESP_LOGW("ausb", arg, ##__VA_ARGS__)
 #define AUSB_LOGE(arg, ...) ESP_LOGE("ausb", arg, ##__VA_ARGS__)
