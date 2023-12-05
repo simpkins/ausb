@@ -14,10 +14,16 @@
 
 #define AUSB_VERBOSE_LOGGING
 
+// ESP_LOGx level aren't checked when using ESP_EARLY_LOGI() during
+// interrupt context.  Provide our own log macro so we can have some
+// debug log statements that are normally disabled but that can be enabled
+// when desired for debugging and development.
 #ifdef AUSB_VERBOSE_LOGGING
-#define DBG_ISR_LOG(arg, ...) ESP_EARLY_LOGI(LogTag, arg, ##__VA_ARGS__)
+#define ISR_LOGD(arg, ...) ESP_EARLY_LOGI(LogTag, arg, ##__VA_ARGS__)
+#define ISR_LOGV(arg, ...) ESP_EARLY_LOGI(LogTag, arg, ##__VA_ARGS__)
 #else
-#define DBG_ISR_LOG(arg, ...) (static_cast<void>(0))
+#define ISR_LOGD(arg, ...) (static_cast<void>(0))
+#define ISR_LOGV(arg, ...) (static_cast<void>(0))
 #endif
 
 namespace {
@@ -184,33 +190,23 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
 
 DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
                                                   uint32_t doepint) {
-  // Setup packet receipt done
+
+  // If the XFERCOMPL and SETUP flags are both set, the most likely scenario is
+  // that we just finished an OUT transfer that was the status phase of a
+  // control IN transfer, and then we received a new SETUP packet to start a
+  // new transfer.
   //
-  // The hardware generates this event after we pop the SetupComplete event
-  // from the RX FIFO.
+  // Process the XFERCOMPL first, since we generally want to inform the caller
+  // of the previous transfer finishing before we tell them about the new SETUP
+  // packet.
   //
-  // Note that when this interrupt occurs the hardware will reset the packet
-  // count and byte size to 0 in the doeptsiz register, and will clear the
-  // endpoint enable flag in doepctl.  These always need to be explicitly
-  // updated to enable OUT transfer receipt after a SETUP packet.
-  if ((doepint & USB_SETUP0_M)) {
-    ESP_LOGD(LogTag, "USB OUT: SETUP receive complete on EP%u", endpoint_num);
-
-    // If XFERCOMPL was also set (should be unlikely?), add an event back to
-    // the front of the queue to process this flag the next time
-    // wait_for_event() is called.
-    if (doepint & USB_XFERCOMPL0_M) {
-      pending_event_ =
-          OutEndpointInterrupt(endpoint_num, doepint & ~USB_SETUP0_M);
-    }
-
-    // Inform the application of the SETUP packet
-    return SetupPacket(setup_packet_.setup);
-  }
-
-  // OUT transfer complete
+  // TODO: maybe don't update doeptsiz to enable receipt of new setup packets
+  // until the out transfer completes?
   if (doepint & USB_XFERCOMPL0_M) {
-    ESP_LOGD(LogTag, "USB: OUT transaction complete on EP%u", endpoint_num);
+    if (doepint & USB_SETUP0_M) {
+      pending_event_ =
+          OutEndpointInterrupt(endpoint_num, doepint & ~USB_XFERCOMPL0_M);
+    }
 
     auto &xfer = out_transfers_[endpoint_num];
     if (xfer.status != OutEPStatus::Busy) {
@@ -244,6 +240,30 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
       set_bits(usb_->out_ep_reg[epnum].doepctl, USB_EPENA0_M | USB_CNAK0_M);
     }
 #endif
+  }
+
+  // Setup packet receipt done
+  //
+  // The hardware generates this event after we pop the SetupComplete event
+  // from the RX FIFO.
+  //
+  // Note that when this interrupt occurs the hardware will reset the packet
+  // count and byte size to 0 in the doeptsiz register, and will clear the
+  // endpoint enable flag in doepctl.  These always need to be explicitly
+  // updated to enable OUT transfer receipt after a SETUP packet.
+  if ((doepint & USB_SETUP0_M)) {
+    ESP_LOGD(LogTag, "USB OUT: SETUP receive complete on EP%u", endpoint_num);
+
+    // If XFERCOMPL was also set (should be unlikely?), add an event back to
+    // the front of the queue to process this flag the next time
+    // wait_for_event() is called.
+    if (doepint & USB_XFERCOMPL0_M) {
+      pending_event_ =
+          OutEndpointInterrupt(endpoint_num, doepint & ~USB_SETUP0_M);
+    }
+
+    // Inform the application of the SETUP packet
+    return SetupPacket(setup_packet_.setup);
   }
 
   // FIXME
@@ -926,7 +946,7 @@ void Esp32Device::static_interrupt_handler(void *arg) {
 void Esp32Device::intr_main() {
   const uint32_t mask = usb_->gintmsk;
   const uint32_t int_status = (usb_->gintsts & mask);
-  DBG_ISR_LOG("USB interrupt: 0x%02" PRIx32 " 0x%02" PRIx32, mask, int_status);
+  ISR_LOGD("USB interrupt: 0x%02" PRIx32 " 0x%02" PRIx32, mask, int_status);
 
   // Check int_status for all of the interrupt bits that we need to handle.
   // As we process each interrupt, set that bit in gintsts to clear the
@@ -950,7 +970,7 @@ void Esp32Device::intr_main() {
   }
 
   if (int_status & USB_ERLYSUSP_M) {
-    DBG_ISR_LOG("USB int: early suspend");
+    ISR_LOGV("USB int: early suspend");
     // TODO: might need to check for USB_ERRTICERR in the dsts register?
     // According to some of the STM docs it looks like erratic errors can
     // trigger an early suspend interrupt with the erratic error status flag
@@ -959,20 +979,20 @@ void Esp32Device::intr_main() {
   }
 
   if (int_status & USB_USBSUSP_M) {
-    DBG_ISR_LOG("USB int: suspend");
+    ISR_LOGV("USB int: suspend");
     usb_->gintsts = USB_USBSUSP_M;
     send_event_from_isr<SuspendEvent>();
   }
 
   if (int_status & USB_WKUPINT_M) {
-    DBG_ISR_LOG("USB int: resume");
+    ISR_LOGV("USB int: resume");
     usb_->gintsts = USB_WKUPINT_M;
     send_event_from_isr<ResumeEvent>();
   }
 
   if (int_status & USB_DISCONNINT_M) {
     usb_->gintsts = USB_DISCONNINT_M;
-    DBG_ISR_LOG("USB disconnect");
+    ISR_LOGV("USB disconnect");
   }
 
   if (int_status & USB_SOF_M) {
@@ -981,14 +1001,14 @@ void Esp32Device::intr_main() {
     // We only enable SOF interupts to detect when the bus has resumed after we
     // have triggered a remote wakeup.  Re-disable SOF interrupts, and then
     // send a resume event to the main event handler.
-    DBG_ISR_LOG("USB int: start of frame");
+    ISR_LOGV("USB int: start of frame");
     usb_->gintsts = USB_SOF_M;
     clear_bits(usb_->gintmsk, USB_SOFMSK_M);
     send_event_from_isr<ResumeEvent>();
   }
 
   if (int_status & USB_RXFLVI_M) {
-    DBG_ISR_LOG("USB int: RX FIFO level");
+    ISR_LOGV("USB int: RX FIFO level");
     // No need to update usb_->gintsts to indicate we have handled the
     // interrupt; this will be cleared when we read from the fifo.
 
@@ -1000,7 +1020,7 @@ void Esp32Device::intr_main() {
 
   if (int_status & USB_OEPINT_M) {
     // OUT endpoint interrupt
-    DBG_ISR_LOG("USB int: OUT endpoint");
+    ISR_LOGV("USB int: OUT endpoint");
     // No need to update usb_->gintsts to indicate we have handled the
     // interrupt; intr_out_endpoint() will update the endpoint doepint
     // register instead.
@@ -1009,7 +1029,7 @@ void Esp32Device::intr_main() {
 
   if (int_status & USB_IEPINT_M) {
     // IN endpoint interrupt
-    DBG_ISR_LOG("USB int: IN endpoint");
+    ISR_LOGV("USB int: IN endpoint");
     // No need to update usb_->gintsts to indicate we have handled the
     // interrupt; intr_in_endpoint() will update the endpoint diepint
     // register instead.
@@ -1019,13 +1039,13 @@ void Esp32Device::intr_main() {
   if (int_status & USB_MODEMIS_M) {
     // This interrupt means we tried to access a host-mode-only register
     // while in device mode.  This should only happen if we have a bug.
+    ISR_LOGD("bug: USB_MODEMIS_M interrupt fired");
     usb_->gintsts = USB_MODEMIS_M;
-    ESP_EARLY_LOGE(LogTag, "bug: USB_MODEMIS_M interrupt fired");
   }
 
   if (int_status & USB_OTGINT_M) {
     usb_->gintsts = USB_OTGINT_M;
-    ESP_EARLY_LOGI(LogTag, "USB OTG interrupt");
+    ISR_LOGD("USB OTG interrupt");
   }
 
   // Clear other interrupt bits that we do not handle.
@@ -1035,11 +1055,11 @@ void Esp32Device::intr_main() {
                   USB_INCOMPISOIN_M | USB_INCOMPIP_M | USB_FETSUSP_M |
                   USB_PRTLNT_M | USB_HCHLNT_M | USB_PTXFEMP_M |
                   USB_CONIDSTSCHNG_M | USB_SESSREQINT_M;
-  DBG_ISR_LOG("USB interrupt 0x%02" PRIx32 " done", int_status);
+  ISR_LOGV("USB interrupt 0x%02" PRIx32 " done", int_status);
 }
 
 void Esp32Device::intr_bus_reset() {
-  DBG_ISR_LOG("USB int: reset");
+  ISR_LOGV("USB int: reset");
   // Configure all endpoints to NAK any new packets
   all_endpoints_nak();
   // Clear the device address
@@ -1059,7 +1079,7 @@ void Esp32Device::intr_enum_done() {
   // are connected to a host that only supports low speed we could see
   // Speed::Low6Mhz.
   uint32_t enum_spd = (usb_->dsts >> USB_ENUMSPD_S) & (USB_ENUMSPD_V);
-  DBG_ISR_LOG("USB int: enumeration done; speed=%d", enum_spd);
+  ISR_LOGV("USB int: enumeration done; speed=%d", enum_spd);
 
   UsbSpeed speed;
   if (enum_spd == Speed::Full48Mhz) {
@@ -1208,8 +1228,7 @@ void Esp32Device::intr_in_endpoint_main() {
 
 void Esp32Device::intr_out_endpoint(uint8_t endpoint_num) {
   const auto doepint = usb_->out_ep_reg[endpoint_num].doepint;
-  DBG_ISR_LOG("USB OUT interrupt: EP%u DOEPINT=%" PRIx32, endpoint_num,
-              doepint);
+  ISR_LOGD("USB OUT interrupt: EP%u DOEPINT=%" PRIx32, endpoint_num, doepint);
 
   // Clear all of the interrupt flags we handle
   set_bits(usb_->out_ep_reg[endpoint_num].doepint,
@@ -1219,7 +1238,7 @@ void Esp32Device::intr_out_endpoint(uint8_t endpoint_num) {
 
 void Esp32Device::intr_in_endpoint(uint8_t endpoint_num) {
   const auto diepint = usb_->in_ep_reg[endpoint_num].diepint;
-  DBG_ISR_LOG("USB IN interrupt: EP%u DIEPINT=%" PRIx32, endpoint_num, diepint);
+  ISR_LOGD("USB IN interrupt: EP%u DIEPINT=%" PRIx32, endpoint_num, diepint);
 
   // If the TX FIFO is empty, clear the interrupt mask to stop receiving this
   // interrupt until we re-enable it.
