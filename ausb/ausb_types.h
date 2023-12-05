@@ -13,6 +13,10 @@ enum class XferCancelReason {
   ProtocolError,
   // The UsbDevice object was destroyed.
   UsbDeviceDestroyed,
+  // The local software invoked a method when in the wrong state (e.g., trying
+  // to write data during an OUT transfer).  This generally shouldn't happen
+  // unless there is a software bug.
+  SoftwareError,
 };
 
 enum class XferStartResult {

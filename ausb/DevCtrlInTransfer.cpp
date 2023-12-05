@@ -6,7 +6,9 @@
 namespace ausb {
 
 void DevCtrlInTransfer::send_full(const void* data, size_t size) {
-  device_->send_ctrl_in_xfer(data, size);
+  device_->start_ctrl_in_write(data, size);
 }
+
+void DevCtrlInTransfer::error() { device_->stall_ctrl_in_transfer(); }
 
 } // namespace ausb

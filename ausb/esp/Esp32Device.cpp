@@ -118,11 +118,11 @@ DeviceEvent Esp32Device::process_event(Esp32DeviceEvent event) {
 void Esp32Device::process_bus_reset() {
   for (size_t endpoint_num = 0; endpoint_num < in_transfers_.size();
        ++endpoint_num) {
-    in_transfers_[endpoint_num].reset();
+    in_transfers_[endpoint_num].unconfigure();
   }
   for (size_t endpoint_num = 0; endpoint_num < out_transfers_.size();
        ++endpoint_num) {
-    out_transfers_[endpoint_num].reset();
+    out_transfers_[endpoint_num].unconfigure();
   }
 }
 
@@ -158,7 +158,7 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
   if (diepint & USB_D_XFERCOMPL0_M) {
     ESP_LOGD(LogTag, "USB: IN transfer complete on EP%u", endpoint_num);
     if (xfer.cur_xfer_end == xfer.size) {
-      in_transfers_[endpoint_num].reset();
+      xfer.reset();
       return InXferCompleteEvent(endpoint_num);
     } else {
       initiate_next_write_xfer(endpoint_num);
@@ -418,6 +418,13 @@ esp_err_t Esp32Device::enable_interrupts() {
                         &interrupt_handle_);
 }
 
+void Esp32Device::set_address(uint8_t address) {
+  auto dcfg = usb_->dcfg;
+  dcfg &= ~USB_DEVADDR_M;
+  dcfg |= ((address & USB_DEVADDR_V) << USB_DEVADDR_S);
+  usb_->dcfg = dcfg;
+}
+
 bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
   ESP_LOGI(LogTag, "configure EP0, MPS=%u", max_packet_size);
   // This method should only be called when EP0 is disabled and has not yet
@@ -598,7 +605,7 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
     // This should only ever happen for the first and only call o
     // a 0-length tranfer.
     assert(xfer.size == 0);
-    pkts_to_send = 0;
+    pkts_to_send = 1;
     bytes_to_send = 0;
   } else {
     uint16_t max_pkt_size;

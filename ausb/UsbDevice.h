@@ -36,7 +36,31 @@ public:
    * This method should only be invoked by the current DevCtrlInTransfer
    * object.
    */
-  XferStartResult send_ctrl_in_xfer(const void *data, size_t size);
+  void start_ctrl_in_write(const void *data, size_t size);
+
+  /**
+   * Fail the current control IN transfer with a STALL error.
+   *
+   * This method should only be invoked by the current DevCtrlInTransfer
+   * object.
+   */
+  void stall_ctrl_in_transfer();
+
+  /**
+   * Begin receiving data for the current control OUT transfer.
+   *
+   * This method should only be invoked by the current DevCtrlOutTransfer
+   * object.
+   */
+  void start_ctrl_out_read(void *data, size_t size);
+
+  /**
+   * Fail the current control OUT transfer with a STALL error.
+   *
+   * This method should only be invoked by the current DevCtrlOutTransfer
+   * object.
+   */
+  void stall_ctrl_out_transfer();
 
 private:
   // Figure 9-1 in the USB 2.0 spec lists the various device states.
@@ -62,7 +86,7 @@ private:
     // No control transfer in progress
     Idle,
     // We have received a SETUP packet for an OUT transfer,
-    // but have not yet received any OUT data packets.
+    // but have not begun accepting OUT data packets.
     OutSetupReceived,
 
     // We received a SETUP packet for an OUT transfer,
@@ -111,6 +135,11 @@ private:
                               static_cast<uint8_t>(mask));
   }
 
+  // Handlers for some standard control requests
+  // These are defined as nested classes mostly since that makes it easy for
+  // them to access the private state of UsbDevice.
+  class SetAddressXfer;
+
   UsbDevice(UsbDevice const &) = delete;
   UsbDevice &operator=(UsbDevice const &) = delete;
 
@@ -123,11 +152,18 @@ private:
   void on_ep0_in_xfer_complete();
   void on_in_xfer_failed(uint8_t endpoint_num);
 
-  void process_ctrl_out_setup(const SetupPacket &packet);
+  std::unique_ptr<DevCtrlOutTransfer>
+  process_ctrl_out_setup(const SetupPacket &packet);
   std::unique_ptr<DevCtrlInTransfer>
   process_ctrl_in_setup(const SetupPacket &packet);
   void fail_control_transfer(XferCancelReason reason);
-  void stall_ctrl_transfer();
+
+  void stall_ep0();
+
+  std::unique_ptr<DevCtrlOutTransfer>
+  process_std_device_out_ctrl(const SetupPacket &packet);
+  std::unique_ptr<DevCtrlInTransfer>
+  process_std_device_in_ctrl(const SetupPacket &packet);
 
   State state_ = State::Uninit;
   uint8_t config_id_ = 0;

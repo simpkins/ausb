@@ -99,6 +99,14 @@ public:
   QueueHandle_t event_queue() const { return event_queue_; }
 
   /**
+   * Set the device address.
+   *
+   * This should be called on receipt of a SET_ADDRESS setup packet
+   * on endpoint 0.
+   */
+  void set_address(uint8_t address);
+
+  /**
    * Configure endpoint 0.
    *
    * This should be called in response to a BusEnumDone event.
@@ -257,8 +265,10 @@ private:
   };
 
   struct InTransfer {
-    void reset() {
-      status = InEPStatus::Unconfigured;
+    void unconfigure() { reset(InEPStatus::Unconfigured); }
+    void reset() { reset(InEPStatus::Idle); }
+    void reset(InEPStatus st) {
+      status = st;
       data = nullptr;
       size = 0;
       cur_xfer_end = 0;
@@ -288,8 +298,10 @@ private:
   };
 
   struct OutTransfer {
-    void reset() {
-      status = OutEPStatus::Unconfigured;
+    void unconfigure() { reset(OutEPStatus::Unconfigured); }
+    void reset() { reset(OutEPStatus::Idle); }
+    void reset(OutEPStatus st) {
+      status = st;
       data = nullptr;
       capacity = 0;
       bytes_read = 0;

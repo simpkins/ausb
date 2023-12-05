@@ -3,50 +3,61 @@
 
 #include "ausb/ausb_types.h"
 
+#include <cstddef>
+#include <cstdint>
+
 namespace ausb {
 
+class SetupPacket;
 class UsbDevice;
 
 /**
  * A class for implementing endpoint 0 control OUT transfers in device mode.
  *
- * Thread safety:
+ * Note that this class (and UsbDevice in general) is not thread safe.
+ *
  * not thread safe.  ack() and error() should only be called from the main USB
  * task.  Similarly, destructor may only be called from main USB task.
  *
  * If the caller does processing on another task, they should use custom events
  * to trigger the final ack() or error() calls.
- *
- * could implement a thread-safe version:
- * - destructor:
- *   - may need to trigger error() if it was not called.
- *     generally bad if caller does not call ack() or error() first,
- *     since a call to xfer_cancelled() can race with the destructor.
- *
- * - ack() and error():
- *   - generate a
- *
- * - RxDataReference destructor:
- *   - inform the device more buffer space is available from any task
- *
- * - xfer_cancelled() may be called in the USB task while ack() or error()
- *   are running in another task
- *
- * - UsbDevice destructor:
- *   - needs to call xfer_cancelled() on this object
- *     - also needs to wait for RxDataReference objects to be freed :-(
- *
- * -----
- * optimizations:
- * - many CtrlOut transfers complete immediately, with no actual OUT packets
- *   (SET_ADDRESS, SET_CONFIGURATION, SET_FEATURE).
- *   could avoid creating a DevCtrlOutTransfer object in these cases.
  */
 class DevCtrlOutTransfer {
 public:
-  explicit DevCtrlOutTransfer(UsbDevice *device);
+  explicit DevCtrlOutTransfer(UsbDevice *device) : device_(device) {}
 
-  virtual ~DevCtrlOutTransfer();
+  virtual ~DevCtrlOutTransfer() {}
+
+  UsbDevice *usb() const { return device_; }
+
+  /**
+   * Begin processing this transfer.
+   *
+   * This will be called by UsbDevice to start processing the transfer.
+   * The implementation should usually call start_read() to begin reading the
+   * OUT data from the host (if the setup length is non-zero).
+   */
+  virtual void start(const SetupPacket& packet) = 0;
+
+  /**
+   * Start reading data from the host.
+   *
+   * This method simply initiates the read request.  out_data_received() will
+   * be called when the read operation is complete.
+   *
+   * size should normally be the length field from the SetupPacket in order to
+   * read the full transfer data.  That said, it is possible to read the data
+   * in smaller chunks if desired, but those chunks must be in multiples of the
+   * endpoint 0 maximum packet size.  start_read() can be called with less than
+   * the full transfer length as long as size is a multiple of the maximum
+   * packet size for endpoint 0.  In this case, out_data_received() will be
+   * invoked once the specified size has been received, and you can call
+   * start_read() again to read the next set of OUT packets from the transfer.
+   * Only a single start_read() call can be in progress at a time--a new
+   * start_read() attempt cannot be initiated until out_data_received() has
+   * been invoked for the previous read.
+   */
+  void start_read(void *data, uint32_t size);
 
   /**
    * Send an acknowledgement to the host, indicating that the transfer was
@@ -57,32 +68,20 @@ public:
   void ack();
 
   /**
-   * Send an acknowledgement to the host, indicating that the transfer was
-   * successful.
-   *
-   * This should only be called after all OUT data has been received.
+   * Send a STALL error to the host, indicating that the transfer failed.
    */
   void error();
 
-#if 0
   /**
-   * out_data_available will be called when OUT data is received from the host.
+   * After start_read() has been called, out_data_received() will be invoked
+   * once the data has been received and placed into the buffer that was given
+   * to start_read().
    *
-   * This method will always be invoked on the main USB task.
-   *
-   * The RxDataReference will point to packet data that has been received in
-   * the endpoint's RX buffer.  is_last will be set to true if this contains
-   * the final data for the transfer, or true if we still expect to receive
-   * more data from the host.
-   *
-   * The DevCtrlOutTransfer implementation should generally process this data
-   * and destroy the RxDataReference object as soon as possible, to free the RX
-   * buffer space.  The RX buffer space may need to be freed before more data
-   * can be received from the host, in cases where the entire OUT transfer is
-   * too large to fit in the endpoint's RX buffer.
+   * The bytes_received parameter will indicate the amount of data received
+   * from the host.  This may be less than the amount requested in start_read()
+   * if the host signaled the end the transfer by sending a short packet.
    */
-  virtual void out_data_available(RxDataReference data, bool is_last) = 0;
-#endif
+  virtual void out_data_received(uint32_t bytes_received) = 0;
 
   /**
    * xfer_cancelled() will be called if the transfer is cancelled.

@@ -40,7 +40,7 @@ public:
     AUSB_LOGI("GET_DESCRIPTOR xfer acked");
   }
   void xfer_failed() override {
-    AUSB_LOGI("GET_DESCRIPTOR xfer failed");
+    AUSB_LOGW("GET_DESCRIPTOR xfer failed");
   }
 
 private:

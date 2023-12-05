@@ -8,9 +8,19 @@
 
 namespace ausb {
 
-class UsbDevice;
 class SetupPacket;
+class UsbDevice;
 
+/**
+ * A class for implementing endpoint 0 control IN transfers in device mode.
+ *
+ * Note that this class (and UsbDevice in general) is not thread safe.  When
+ * the UsbDevice class invokes methods on this class, it will always be done
+ * from the main USB task.
+ *
+ * When an implementor of DevCtrlInTransfer invokes any methods, like
+ * send_full(), this must also be done from the main USB task.
+ */
 class DevCtrlInTransfer {
 public:
   explicit DevCtrlInTransfer(UsbDevice *device) : device_(device) {}
@@ -24,6 +34,15 @@ public:
    */
   virtual ~DevCtrlInTransfer() {}
 
+  UsbDevice *usb() const { return device_; }
+
+  /**
+   * Begin processing this transfer.
+   *
+   * This will be called by UsbDevice to start processing the transfer.
+   * The implementation should usually call send_full() to send the desired IN
+   * data to the host.
+   */
   virtual void start(const SetupPacket& packet) = 0;
   virtual void xfer_cancelled(XferCancelReason reason) = 0;
 
@@ -31,11 +50,16 @@ public:
    * Provide the full response to send to the host.
    *
    * The caller must ensure that the data buffer remains valid until
-   * send_buffer_released() is called.
+   * the DevCtrlInTransfer object is destroyed.
    *
    * This method may only be invoked from the USB task.
    */
   void send_full(const void* data, size_t size);
+
+  /**
+   * Send a STALL error to the host, indicating that the transfer failed.
+   */
+  void error();
 
   /*
    * TODO: in the future we could implement a send_partial() API to allow
@@ -44,19 +68,6 @@ public:
    * the endpoint max packet size.
    */
   // void send_partial(const void* data, size_t size);
-
-  /**
-   * send_buffer_released() will be called once the buffer provided to
-   * send_full() is no longer required (once it has been copied into hardware
-   * buffers to transmit).
-   *
-   * Note that send_buffer_released() may be called from inside the invocation to
-   * send_full(), before send_full() returns.
-   *
-   * DevCtrlInTransfer implementations may ignore this call if the buffer they
-   * provide will be valid for the lifetime of the DevCtrlInTransfer object.
-   */
-  virtual void send_buffer_released() {}
 
   /**
    * xfer_acked() will be called once the host has received and ACKed the
