@@ -10,7 +10,6 @@
 
 #include "ausb/DevCtrlOutTransfer.h"
 #include "ausb/DevCtrlInTransfer.h"
-#include "ausb/RxBuffer.h"
 // TODO: create a separate header for HWDevice
 #include "ausb/esp/Esp32Device.h"
 namespace ausb { using HWDevice = Esp32Device; }
@@ -37,7 +36,7 @@ public:
    * This method should only be invoked by the current DevCtrlInTransfer
    * object.
    */
-  TxStartResult send_ctrl_in_xfer(const void *data, size_t size);
+  XferStartResult send_ctrl_in_xfer(const void *data, size_t size);
 
 private:
   // Figure 9-1 in the USB 2.0 spec lists the various device states.
@@ -121,6 +120,7 @@ private:
   void on_enum_done(UsbSpeed speed);
   void on_setup_received(const SetupPacket &packet);
   void on_in_xfer_complete(uint8_t endpoint_num);
+  void on_ep0_in_xfer_complete();
   void on_in_xfer_failed(uint8_t endpoint_num);
 
   void process_ctrl_out_setup(const SetupPacket &packet);
@@ -135,7 +135,6 @@ private:
 
   CtrlXferStatus ctrl_status_ = CtrlXferStatus::Idle;
 
-  RxBuffer ep0_rx_buffer_;
   HWDevice* hw_ = nullptr;
   union CtrlXfer {
     constexpr CtrlXfer() : idle(nullptr) {}

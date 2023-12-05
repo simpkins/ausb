@@ -86,12 +86,10 @@ void UsbDevice::on_enum_done(UsbSpeed speed) {
   // - Must be 8 when low speed
   // - Must be 64 when full speed
   // - May be 8, 16, 32, or 64 when high speed
-  uint16_t max_packet_size = (speed == UsbSpeed::Low) ? 8 : 64;
+  uint8_t max_packet_size = (speed == UsbSpeed::Low) ? 8 : 64;
   dev_descriptor_.set_max_pkt_size0(max_packet_size);
 
-  ep0_rx_buffer_ = hw_->create_rx_buffer(/*endpoint_num=*/0, max_packet_size,
-                                         /*num_packets=*/2);
-  hw_->configure_ep0(&ep0_rx_buffer_);
+  hw_->configure_ep0(max_packet_size);
 
 #if 0
   callbacks_->on_enumerated(max_ep0_packet_size);
@@ -167,6 +165,14 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
 }
 
 void UsbDevice::on_in_xfer_complete(uint8_t endpoint_num) {
+  if (endpoint_num == 0) {
+    on_ep0_in_xfer_complete();
+  } else {
+    AUSB_LOGE("TODO: on_in_xfer_complete");
+  }
+}
+
+void UsbDevice::on_ep0_in_xfer_complete() {
   switch (ctrl_status_) {
   case CtrlXferStatus::Idle:
   case CtrlXferStatus::OutSetupReceived:
@@ -179,8 +185,9 @@ void UsbDevice::on_in_xfer_complete(uint8_t endpoint_num) {
               static_cast<int>(ctrl_status_));
     return;
   case CtrlXferStatus::InSendData:
-    AUSB_LOGD("control IN transfer complete");
+    AUSB_LOGD("control IN write complete");
     ctrl_status_ = CtrlXferStatus::InStatus;
+    (void)hw_->ack_ctrl_in();
     return;
   }
 
@@ -223,13 +230,13 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   return nullptr;
 }
 
-TxStartResult UsbDevice::send_ctrl_in_xfer(const void *data, size_t size) {
+XferStartResult UsbDevice::send_ctrl_in_xfer(const void *data, size_t size) {
   if (ctrl_status_ == CtrlXferStatus::InSetupReceived) [[likely]] {
     ctrl_status_ = CtrlXferStatus::InSendData;
   } else if (ctrl_status_ != CtrlXferStatus::InSendData) [[unlikely]] {
     AUSB_LOGE("send_ctrl_in_xfer invoked in bad ctrl state %d",
               static_cast<int>(ctrl_status_));
-    return TxStartResult::Busy;
+    return XferStartResult::Busy;
   }
 
   return hw_->start_write(/*endpoint_num=*/0, data, size);

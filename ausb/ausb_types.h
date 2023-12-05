@@ -15,7 +15,7 @@ enum class XferCancelReason {
   UsbDeviceDestroyed,
 };
 
-enum class TxStartResult {
+enum class XferStartResult {
   Ok,
   Busy, // An existing write is already in progress for this endpoint
   EndpointNotConfigured,

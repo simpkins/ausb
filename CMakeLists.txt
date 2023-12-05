@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(
     srcs
     "ausb/DevCtrlInTransfer.cpp"
-    "ausb/RxBuffer.cpp"
     "ausb/UsbDevice.cpp"
 )
 

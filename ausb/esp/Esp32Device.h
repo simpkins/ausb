@@ -26,8 +26,6 @@ enum class EspPhyType {
   External,
 };
 
-class RxBuffer;
-
 /**
  * A USB device implementation for ESP32-S2 and ESP32-S3 chips.
  *
@@ -100,28 +98,19 @@ public:
    */
   QueueHandle_t event_queue() const { return event_queue_; }
 
-  RxBuffer create_rx_buffer(uint8_t endpoint, uint16_t max_packet_size,
-                            uint8_t num_packets);
-
   /**
    * Configure endpoint 0.
    *
    * This should be called in response to a BusEnumDone event.
    *
-   * The Esp32Device will store a pointer to this RxBuffer, but does not own
-   * it.  The caller is responsible for ensuring that the RxBuffer object is
-   * valid until the Esp32Device object is destroyed, or until the next bus
-   * reset event (either initiated by the host or locally with a reset() call).
-   *
-   * It is the caller's responsibility to set the maximum packet size correctly
-   * in the RxBuffer.  The packet size must be valid for the USB speed that was
-   * negotiated in the BusEnumDone event.  (MPS must be 8 for low speed and 64
-   * for full speed.)
+   * It is the caller's responsibility to ensure that the maximum packet size
+   * is valid for the USB speed that was negotiated in the BusEnumDone event.
+   * (MPS must be 8 for low speed and 64 for full speed.)
    *
    * Returns true on success, or false if called in an invalid state or with
    * bad arguments.
    */
-  bool configure_ep0(RxBuffer* buffer);
+  bool configure_ep0(uint8_t max_packet_size);
 
   /**
    * Configure Endpoint 0 to STALL the next IN or OUT token it receives.
@@ -158,12 +147,12 @@ public:
    * Write data to an IN endpoint.
    *
    * An WriteComplete event will be generated when the write has finished.
-   * The caller must ensure the data buffer is available until the
-   * WriteComplete event is generated.  stall_in_endpoint() may be called to
-   * abort the write operation early if an error occurs.
+   * The caller must ensure the data buffer is available until the write is
+   * finished.  stall_in_endpoint() may be called to abort the write operation
+   * early if an error occurs.
    *
    * - Only one write may be in progress at a time for a given endpoint.
-   *   TxStartResult::Busy will be returned if there is already a write in
+   *   XferStartResult::Busy will be returned if there is already a write in
    *   progress for this endpoint.
    *
    * - The size argument may be 0 to transmit a 0-length packet to the host.
@@ -180,9 +169,64 @@ public:
    *   if desired.  In this case it is the caller's responsibility to ensure
    *   that all start_write() calls except the final one use a size that is a
    *   multiple of the endpoint's maximum packet size.
+   *
+   * The device will signal the end of the write transfer with one of the
+   * following events:
+   * - InXferCompleteEvent
+   * - InXferFailedEvent
+   * - BusResetEvent (aborts all transfers on all endpoints)
    */
-  [[nodiscard]] TxStartResult start_write(uint8_t endpoint, const void *data,
-                                          uint32_t size);
+  [[nodiscard]] XferStartResult start_write(uint8_t endpoint, const void *data,
+                                            uint32_t size);
+
+  /**
+   * Start reading data from an OUT endpoint.
+   *
+   * This will cause the device to begin accepting OUT packets from the host.
+   *
+   * The transfer will complete when:
+   * - The host has transmitted exactly the amount of bytes requested in the
+   *   size argument.
+   * - The host transmits a smaller than maximum-packet-size packet for this
+   *   endpoint (indicating the end of a transfer).
+   * - The bus is reset.
+   *
+   * Notes regarding the size argument:
+   * - If the size argument is not a multiple of the maximum packet size,
+   *   we will still attempt to receive a final OUT packet even when the buffer
+   *   does not contain room for a full OUT packet from the host.  If the host
+   *   sends more data in the final packet than fits in the buffer, a
+   *   BufferOverrun error will be returned to the application and the extra
+   *   unexpected data sent by the host will be discarded.
+   *
+   *   This behavior can be useful if the application knows ahead of time how
+   *   much data it expects the host to transfer, and has a buffer available
+   *   with exactly that size.  If it will be an error for the host to send
+   *   more data than expected, the application can provide only the buffer
+   *   space required, and then handle the BufferOverrun error just as it would
+   *   if process bad data contents received from the host.
+   *
+   *   If you wish to avoid BufferOverrun errors, always provide a size
+   *   argument that is a multiple of the endpoint's maximum packet size.
+   *
+   * - If the size argument is 0, we will attempt to receive a single OUT
+   *   packet that is expected to be 0 length.  If the host sends a non-zero
+   *   length OUT packet, a BufferOverrun error will be generated.
+   *
+   * The device will signal the end of the write transfer with one of the
+   * following events:
+   * - OutXferCompleteEvent
+   * - OutXferFailedEvent
+   * - BusResetEvent (aborts all transfers on all endpoints)
+   */
+  [[nodiscard]] XferStartResult start_read(uint8_t endpoint, void *data,
+                                           uint32_t size);
+
+  /**
+   * Acknowledge a control IN transfer on endpoint 0, by ACK'ing the next
+   * 0-length OUT token from the host.
+   */
+  [[nodiscard]] XferStartResult ack_ctrl_in();
 
 private:
   // Speed bits used by the dcfg and dsts registers.
@@ -206,11 +250,15 @@ private:
     Idle,
     Busy,
   };
+  enum class OutEPStatus : uint8_t {
+    Unconfigured,
+    Idle,
+    Busy,
+  };
 
   struct InTransfer {
     void reset() {
       status = InEPStatus::Unconfigured;
-      max_packet_size = 0;
       data = nullptr;
       size = 0;
       cur_xfer_end = 0;
@@ -226,7 +274,6 @@ private:
     }
 
     InEPStatus status = InEPStatus::Unconfigured;
-    uint16_t max_packet_size = 0;
     const void *data = nullptr;
     uint32_t size = 0;
     // How much data we have told the hardware to transfer so far (in the
@@ -238,6 +285,33 @@ private:
     // This should always be smaller than cur_xfer_end, as we have to update
     // DIEPTSIZE before pushing data into the FIFO..
     uint32_t cur_fifo_ptr = 0;
+  };
+
+  struct OutTransfer {
+    void reset() {
+      status = OutEPStatus::Unconfigured;
+      data = nullptr;
+      capacity = 0;
+      bytes_read = 0;
+    }
+    void start(void* buf, uint16_t len) {
+      assert(status == OutEPStatus::Idle);
+      status = OutEPStatus::Busy;
+      data = buf;
+      capacity = len;
+      bytes_read = 0;
+    }
+
+    OutEPStatus status = OutEPStatus::Unconfigured;
+    void *data = nullptr;
+    uint32_t capacity = 0;
+    // How much data has been read from the endpoint.
+    // Note that bytes_read may exceed capacity if the capacity was not a
+    // multiple of the max packet size, and the final packet sent by the host
+    // contained more data than the buffer had capacity for.  We will advance
+    // bytes_read to indicate this, even though not all data fit into the
+    // buffer.
+    uint32_t bytes_read = 0;
   };
 
   struct InEndpointInterrupt {
@@ -279,7 +353,14 @@ private:
   [[nodiscard]] esp_err_t enable_interrupts();
   static void static_interrupt_handler(void *arg);
 
-  // Methods invoked from interrupt context
+  // Methods invoked from interrupt context.
+  // All interrupt context methods have names starting with intr_*()
+  //
+  // For the most part we attempt to do as little work as possible in interrupt
+  // context.  The interrupt handler mostly just sends events to the main USB
+  // task, which get processed when wait_for_event() is called.  This makes
+  // concurrency and synchronization much easier to reason about, since most
+  // state is only manipulated by the USB task.
   void intr_main();
   void intr_bus_reset();
   void intr_enum_done();
@@ -288,17 +369,21 @@ private:
   void intr_out_endpoint(uint8_t endpoint_num);
   void intr_in_endpoint(uint8_t endpoint_num);
 
-  DeviceEvent preprocess_event(Esp32DeviceEvent event);
+  DeviceEvent process_event(Esp32DeviceEvent event);
   void process_bus_reset();
   DeviceEvent process_in_ep_interrupt(uint8_t endpoint_num, uint32_t diepint);
   void initiate_next_write_xfer(uint8_t endpoint_num);
   void write_to_fifo(uint8_t endpoint_num);
   void copy_pkt_to_fifo(uint8_t fifo_num, const void *data, uint16_t pkt_size);
+  void initiate_next_read_xfer(uint8_t endpoint_num);
   DeviceEvent process_rx_fifo();
   DeviceEvent process_one_rx_entry(uint32_t ctrl_word);
   void receive_packet(uint8_t endpoint_num, uint16_t packet_size);
 
   DeviceEvent process_out_ep_interrupt(uint8_t endpoint_num, uint32_t doepint);
+
+  static uint16_t get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl);
+  static uint8_t get_ep0_max_packet_size(EP0MaxPktSize mps_bits);
 
   static constexpr uint8_t kMaxEventQueueSize = 32;
 
@@ -317,12 +402,8 @@ private:
 
   Esp32DeviceEvent pending_event_ = NoEvent(NoEventReason::Timeout);
 
-  // A pointer to the (software) RX buffer for the control endpoint.
-  // Note that this object is not owned by us.  Our user is responsible
-  // for ensuring it remains valid until the bus is reset.
-  RxBuffer* ep0_rx_buffer_ = nullptr;
-
   std::array<InTransfer, USB_IN_EP_NUM> in_transfers_;
+  std::array<OutTransfer, USB_OUT_EP_NUM> out_transfers_;
 };
 
 } // namespace ausb

@@ -1,8 +1,6 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/esp/Esp32Device.h"
 
-#include "ausb/RxBuffer.h"
-
 #include <esp_check.h>
 #include <esp_log.h>
 #include <hal/usb_hal.h>
@@ -12,48 +10,7 @@
 
 #include <atomic>
 #include <cinttypes>
-
-/*
- * Some notes on concurrency and synchronization:
- *
- * In general we try to perform relatively little in the interrupt context,
- * and do most work in the main USB task.
- *
- * - Endpoint configuration:
- *   Most manipulation of the doepctl and diepctl registers happens in the main
- *   USB task.
- *
- * - Manipulation of the doepctl and doeptsiz registers for OUT transfer
- *   receive operations:
- *   - These registers are initially set in the main USB task when the RX
- *     buffer for and endpoint is first initialized.
- *   - After receiving data, an interrupt handler may wish to update these
- *     registers to allow receiving more data.
- *   - The application may wish to change the RX buffer, or turn on NAK for the
- *     endpoint.  These operations probably need to block and wait for any
- *     currently running interrupt handler to finish.
- *
- *   - When the application releases an RX buffer, we need to check if receives
- *     need to be re-enabled.  If they are currently disabled, it is safe to
- *     re-enable them.
- *
- *   - When the interrupt handler finishes a receive, it may need to disable
- *     receives if the RX buffer is now full.
- *
- *     Need to properly handle interrupt handler racing with a buffer free.
- *     - after interrupt receive:
- *       - if not full -> enable receipt of more data
- *       - if full -> notify main task of data, and that RX buffer is full
- *
- *     - after main task notification of receive:
- *       - if full -> check if we are still full
- *         - if still full, record that we are full for next buffer release
- *         - if no longer full, re-enable RX, clear full notification
- *
- *     - after buffer release (must happen on main task):
- *       - if we never received a full notification, nothing to do
- *       - if full notif received, re-enable RX
- */
+#include <cstring>
 
 #define AUSB_VERBOSE_LOGGING
 
@@ -94,6 +51,16 @@ constexpr uint32_t Correct_USB_D_XFERSIZE1_V = 0x7FFFF;
 constexpr uint32_t Correct_USB_D_XFERSIZE1_M =
     (Correct_USB_D_XFERSIZE1_V << USB_D_XFERSIZE1_S);
 
+constexpr uint32_t Correct_USB_MPS1_V = 0x7FF;
+constexpr uint32_t Correct_USB_MPS1_M =
+    (Correct_USB_MPS1_V << USB_MPS1_S);
+constexpr uint32_t Correct_USB_PKTCNT1_V = 0x3FF;
+constexpr uint32_t Correct_USB_PKTCNT1_M =
+    (Correct_USB_PKTCNT1_V << USB_PKTCNT1_S);
+constexpr uint32_t Correct_USB_XFERSIZE1_V = 0x7FFFF;
+constexpr uint32_t Correct_USB_XFERSIZE1_M =
+    (Correct_USB_XFERSIZE1_V << USB_XFERSIZE1_S);
+
 } // unnamed namespace
 
 namespace ausb {
@@ -109,23 +76,23 @@ DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
     const auto evt = pending_event_;
     pending_event_ = NoEvent(NoEventReason::Timeout);
     ESP_LOGV(LogTag, "USB wait_for_event() processing existing pending event");
-    // If preprocess_event() returns NoEvent we could potentially fall through 
+    // If process_event() returns NoEvent we could potentially fall through
     // and process an event from the queue.  However, for now it's simpler to
     // just return back to the caller and let them call wait_for_event() again
     // on the next loop.
-    return preprocess_event(evt);
+    return process_event(evt);
   }
 
   TickType_t max_wait = pdMS_TO_TICKS(timeout.count());
   Esp32DeviceEvent event(NoEvent(NoEventReason::Timeout));
   if (xQueueReceive(event_queue_, &event, max_wait) == pdTRUE) {
-    return preprocess_event(event);
+    return process_event(event);
   } else {
     return NoEvent(NoEventReason::Timeout);
   }
 }
 
-DeviceEvent Esp32Device::preprocess_event(Esp32DeviceEvent event) {
+DeviceEvent Esp32Device::process_event(Esp32DeviceEvent event) {
   return std::visit(
       overloaded{[this](const NoEvent &ev) -> DeviceEvent { return ev; },
                  [this](const BusResetEvent &ev) -> DeviceEvent {
@@ -152,6 +119,10 @@ void Esp32Device::process_bus_reset() {
   for (size_t endpoint_num = 0; endpoint_num < in_transfers_.size();
        ++endpoint_num) {
     in_transfers_[endpoint_num].reset();
+  }
+  for (size_t endpoint_num = 0; endpoint_num < out_transfers_.size();
+       ++endpoint_num) {
+    out_transfers_[endpoint_num].reset();
   }
 }
 
@@ -214,22 +185,51 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
 DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
                                                   uint32_t doepint) {
   // Setup packet receipt done
-  // This should presumably only happen for endpoint 0.
+  //
+  // The hardware generates this event after we pop the SetupComplete event
+  // from the RX FIFO.
+  //
+  // Note that when this interrupt occurs the hardware will reset the packet
+  // count and byte size to 0 in the doeptsiz register, and will clear the
+  // endpoint enable flag in doepctl.  These always need to be explicitly
+  // updated to enable OUT transfer receipt after a SETUP packet.
   if ((doepint & USB_SETUP0_M)) {
     ESP_LOGD(LogTag, "USB OUT: SETUP receive complete on EP%u", endpoint_num);
 
-    // TODO: move this up to generic logic at the start of this function
+    // If XFERCOMPL was also set (should be unlikely?), add an event back to
+    // the front of the queue to process this flag the next time
+    // wait_for_event() is called.
     if (doepint & USB_XFERCOMPL0_M) {
       pending_event_ =
           OutEndpointInterrupt(endpoint_num, doepint & ~USB_SETUP0_M);
     }
 
+    // Inform the application of the SETUP packet
     return SetupPacket(setup_packet_.setup);
   }
 
-  // OUT transaction complete (one packet received)
+  // OUT transfer complete
   if (doepint & USB_XFERCOMPL0_M) {
     ESP_LOGD(LogTag, "USB: OUT transaction complete on EP%u", endpoint_num);
+
+    auto &xfer = out_transfers_[endpoint_num];
+    if (xfer.status != OutEPStatus::Busy) {
+      // It's possible that this could happen if we recently processed
+      // application-initiated request to abort the transfer and this raced
+      // with us receiving the interrupt.
+      ESP_LOGD(LogTag,
+               "OUT xfer complete interrupt on endpoint %d, but transfer "
+               "was no longer in progress",
+               endpoint_num);
+      return NoEvent(NoEventReason::HwProcessing);
+    }
+
+    // TODO:
+    // - if we read all data requested, or if the transfer ended due to a short
+    //   packet, generate an event for the application
+    // - if the HW transfer read all data requested but the SW transfer still
+    //   has more data to read, call initiate_next_read_xfer() to start another
+    //   HW transfer
 
 #if 0
     auto &xfer = xfer_status_[epnum].out;
@@ -354,6 +354,14 @@ void Esp32Device::reset() {
   // TODO: flush RX FIFO
   // TODO: flush all TX FIFOs
   pending_event_ = NoEvent(NoEventReason::Timeout);
+  for (size_t endpoint_num = 0; endpoint_num < in_transfers_.size();
+       ++endpoint_num) {
+    in_transfers_[endpoint_num].reset();
+  }
+  for (size_t endpoint_num = 0; endpoint_num < out_transfers_.size();
+       ++endpoint_num) {
+    out_transfers_[endpoint_num].reset();
+  }
 
   if (interrupt_handle_) {
     // esp_intr_free() will wait for any in-progress interrupt handlers to
@@ -410,14 +418,8 @@ esp_err_t Esp32Device::enable_interrupts() {
                         &interrupt_handle_);
 }
 
-RxBuffer
-Esp32Device::create_rx_buffer(uint8_t endpoint, uint16_t max_packet_size,
-                              uint8_t num_packets) {
-  return RxBuffer::create(endpoint, max_packet_size, num_packets);
-}
-
-bool Esp32Device::configure_ep0(RxBuffer* buffer) {
-  ESP_LOGI(LogTag, "configure EP0 RX buffer");
+bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
+  ESP_LOGI(LogTag, "configure EP0, MPS=%u", max_packet_size);
   // This method should only be called when EP0 is disabled and has not yet
   // been configured.  (e.g., after a bus reset)
   if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
@@ -425,8 +427,8 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
              "configure_ep0() called when endpoint 0 was already configured");
     return false;
   }
-  ep0_rx_buffer_ = buffer;
   assert(in_transfers_[0].status == InEPStatus::Unconfigured);
+  assert(out_transfers_[0].status == OutEPStatus::Unconfigured);
 
   // Configure FIFO sizes
   // Configure the receive FIFO size.
@@ -439,107 +441,50 @@ bool Esp32Device::configure_ep0(RxBuffer* buffer) {
   usb_->gnptxfsiz = (16 << USB_NPTXFDEP_S) | (usb_->grxfsiz & 0x0000ffffUL);
 
   // Compute bits to set in the doepctl and diepctl registers
-  const auto mps = buffer->max_packet_size();
   EP0MaxPktSize mps_bits;
-  if (mps == 64) {
+  if (max_packet_size == 64) {
     mps_bits = EP0MaxPktSize::Mps64;
-  } else if (mps == 32) {
+  } else if (max_packet_size == 32) {
     mps_bits = EP0MaxPktSize::Mps32;
-  } else if (mps == 16) {
+  } else if (max_packet_size == 16) {
     mps_bits = EP0MaxPktSize::Mps16;
-  } else if (mps == 8) {
+  } else if (max_packet_size == 8) {
     mps_bits = EP0MaxPktSize::Mps8;
   } else {
     ESP_LOGE(LogTag, "configure_ep0() called with invalid max packet size %d",
-             mps);
+             max_packet_size);
     return false;
   }
   constexpr int endpoint_num = 0;
 
   in_transfers_[endpoint_num].status = InEPStatus::Idle;
-  in_transfers_[endpoint_num].max_packet_size = mps;
+  out_transfers_[endpoint_num].status = OutEPStatus::Idle;
 
-  // USB_DOEPCTL0_REG fields:
-  // - USB_MPS0: Maximum packet size
-  // - USB_USBACTEP0: comments in soc/usb_reg.h appear to indicate that this
-  //   bit is unnecessary as EP0 is always active.
-  // - USB_NAKSTS0: NAK status.  I'm assuming this is read-only, and write is
-  //   done via the USB_CNAK0 and USB_DO_SNAK0 fields.
-  // - USB_EPTYPE0: endpoint type.  Always 0 (control) for EP0.
-  // - USB_SNP0: reserved
-  // - USB_STALL0: set to trigger STALL response to SETUP handshake
-  // - USB_CNAK0 and USB_DO_SNAK0: control NAK responses to OUT data packets.
-  //   We set this below based on whether we have OUT buffer space.
-  // - USB_EPDIS0: disable endpoint
-  // - USB_EPENA0: enable endpoint
+  // Set the doeptsiz register to enable receipt of SETUP packets
+  set_bits(usb_->out_ep_reg[0].doeptsiz, USB_SUPCNT0_M);
+
+  // Update doepctl
+  // - Set the max packet size
+  // - Enable NAK'ing any received OUT packets.  (It might be nice if we could
+  //   tell the hardware to immediately start accepting OUT data as well, to
+  //   avoid possibly NAK'ing the host's first OUT packet after a SETUP packet.
+  //   However, even if we disable NAK'ing OUT packets here, the hardware
+  //   automatically re-enables this flag after receipt of a SETUP packet, so
+  //   there is no point in us trying to set it here.)
+  // - We don't set USB_USBACTEP0; according to the comments in soc/usb_reg.h
+  //   this flag appears unnecessary for EP0, as EP0 is always active.
   uint32_t doepctl = usb_->out_ep_reg[endpoint_num].doepctl;
   doepctl &= ~USB_MPS0_M;
-  doepctl |= (mps_bits << USB_MPS0_S);
-  // USB_DIEPCTL0_REG fields:
-  // - USB_D_MPS0: Maximum packet size
-  // - USB_D_USBACTEP0: comments in soc/usb_reg.h appear to indicate that this
-  //   bit is unnecessary as EP0 is always active.
-  // - USB_D_NAKSTS0: NAK status
-  // - USB_D_EPTYPE0: endpoint type.  Always 0 (control) for EP0.
-  // - USB_D_STALL0: set to trigger STALL response
-  // - USB_D_TXFNUM0: TX FIFO number.  We always use FIFO 0 for EP0.
-  // - USB_D_CNAK0 and USB_DI_SNAK0: clear or set the NAK bit for responding to
-  //   IN packets
-  // - USB_D_EPDIS0: disable endpoint
-  // - USB_D_EPENA0: enable endpoint
-  //
-  // TODO: According to the comments in soc/usb_reg.h we probably don't really
-  // need to clear USB_D_STALL0_M.  It sounds like this is cleared by the HW
-  // and ignored if SW tries to clear it.
+  usb_->out_ep_reg[endpoint_num].doepctl =
+      doepctl | (mps_bits << USB_MPS0_S) | USB_DO_SNAK0_M;
+
+  // Update diepctl
+  // - Set the max packet size
+  // - Set the TX FIFO number to 0
+  // - Clear the STALL bit
   uint32_t diepctl = usb_->in_ep_reg[endpoint_num].diepctl;
   diepctl &= ~(USB_D_MPS0_M | USB_D_TXFNUM0_M | USB_D_STALL0_M);
-  diepctl |= (mps_bits << USB_D_MPS0_S);
-
-  // TODO: perhaps update doepctl and diepctl now,
-  // and move the free_packets logic below to a separate helper function that
-  // we all any time the RxBuffer goes from full to space available.
-
-  const auto free_packets = buffer->num_free_pkts();
-  uint32_t doeptsiz = usb_->out_ep_reg[0].doeptsiz;
-  // Enable receipt of setup packets
-  doeptsiz |= USB_SUPCNT0_M;
-  if (free_packets > 0) {
-    // Indicate how much data we can receive.
-    // Note that USB_PKTCNT0_V is 1 on ESP32-S2 and ESP32-S3, so it only
-    // allows receiving a single packet at a time.
-    //
-    // Also note that USB_XFERSIZE0_V is only 127 bytes.  With full speed USB,
-    // the max packet size is only 64 bytes for control, interrupt, and bulk
-    // endpoints.  However, the USB spec allows isochronous endpoints to have a
-    // max packet size of up to 1023 bytes, and the USB_MPS1 register field
-    // seems to support max packet sizes larger than 127 bytes.  I haven't
-    // tested how receive behaves if the max packet size is larger than 127
-    // bytes.  (Do we need to increase the xfer size register after reading
-    // data in the RXFLVI interrupt?)
-    const uint32_t max_recv_pkts =
-        std::min(static_cast<int>(free_packets), USB_PKTCNT0_V);
-    const uint32_t max_recv_bytes = std::max(
-        buffer->max_packet_size(), static_cast<uint16_t>(USB_XFERSIZE0_V));
-    ESP_LOGD(LogTag,
-             "enable EP0 to receive up to %" PRIu32 " packets, %" PRIu32
-             " bytes",
-             max_recv_pkts, max_recv_bytes);
-    doeptsiz |=
-        (max_recv_pkts << USB_PKTCNT0_S) | (max_recv_bytes << USB_XFERSIZE0_S);
-
-    // Enable the OUT endpoint, and clear the NAK flag.
-    doepctl |= (USB_EPENA0_M | USB_CNAK0_M);
-  } else {
-    // Set the NAK flag
-    ESP_LOGD(LogTag,
-             "EP0 currently set to NAK out packets, no RX buffer space");
-    doepctl |= USB_DO_SNAK0_M;
-  }
-
-  // Now actually set the doeptsiz, doepctl and diepctl registers
-  usb_->out_ep_reg[endpoint_num].doeptsiz = doeptsiz;
-  usb_->out_ep_reg[endpoint_num].doepctl = doepctl;
-  usb_->in_ep_reg[endpoint_num].diepctl = diepctl;
+  usb_->in_ep_reg[endpoint_num].diepctl = diepctl | (mps_bits << USB_D_MPS0_S);
 
   // Enable receipt of endpoint IN and OUT interrupts
   set_bits(usb_->gintmsk, USB_IEPINTMSK_M | USB_OEPINTMSK_M);
@@ -556,8 +501,8 @@ void Esp32Device::stall_ep0() {
   flush_tx_fifo(0);
 }
 
-TxStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
-                                          uint32_t size) {
+XferStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
+                                         uint32_t size) {
   ESP_LOGD(LogTag, "start_write() %" PRIu32 " bytes on endpoint %d", size,
            endpoint);
   const auto ep_status = in_transfers_[endpoint].status;
@@ -568,18 +513,53 @@ TxStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
           "start_write called on endpoint %d while an existing transfer is "
           "still in progress",
           endpoint);
-      return TxStartResult::Busy;
+      return XferStartResult::Busy;
     }
     ESP_LOGW(LogTag, "start_write called on endpoint %d in bad state %d",
              endpoint, static_cast<int>(in_transfers_[endpoint].status));
-    return TxStartResult::EndpointNotConfigured;
+    return XferStartResult::EndpointNotConfigured;
   }
 
   // Record the transfer information in in_transfers_[endpoint]
   in_transfers_[endpoint].start(data, size);
 
   initiate_next_write_xfer(endpoint);
-  return TxStartResult::Ok;
+  return XferStartResult::Ok;
+}
+
+XferStartResult Esp32Device::start_read(uint8_t endpoint, void *data,
+                                        uint32_t size) {
+  ESP_LOGD(LogTag, "start_read() up to %" PRIu32 " bytes on endpoint %d", size,
+           endpoint);
+  const auto ep_status = out_transfers_[endpoint].status;
+  if (ep_status != OutEPStatus::Idle) {
+    if (ep_status == OutEPStatus::Busy) {
+      ESP_LOGW(
+          LogTag,
+          "start_read called on endpoint %d while an existing transfer is "
+          "still in progress",
+          endpoint);
+      return XferStartResult::Busy;
+    }
+    ESP_LOGW(LogTag, "start_read called on endpoint %d in bad state %d",
+             endpoint, static_cast<int>(out_transfers_[endpoint].status));
+    return XferStartResult::EndpointNotConfigured;
+  }
+
+  // Record the transfer information in out_transfers_[endpoint]
+  out_transfers_[endpoint].start(data, size);
+
+  initiate_next_read_xfer(endpoint);
+  return XferStartResult::Ok;
+}
+
+XferStartResult Esp32Device::ack_ctrl_in() {
+  // TODO: Suppress the InXferCompleteEvent / InXferFailedEvent that occurs
+  // when this OUT transfer is complete.  We mainly do this to be more similar
+  // to other USB implementations like the MAX3420 which have a dedicated
+  // register for ACK'ing control transfers, and which do not provide
+  // notification of completion.
+  return start_read(0, nullptr, 0);
 }
 
 /*
@@ -626,9 +606,10 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
     uint32_t max_xfer_size;
     if (endpoint_num == 0) {
       // EP0 uses a different encoding for the MPS in diepctl than other
-      // endpoints.  Rather than convert it's enum field back to an integer,
-      // just read the max packet size from ep0_rx_buffer_.
-      max_pkt_size = ep0_rx_buffer_->max_packet_size();
+      // endpoints.
+      const auto mps_bits =
+          static_cast<EP0MaxPktSize>((diepctl >> USB_D_MPS0_S) & USB_D_MPS0_V);
+      max_pkt_size = get_ep0_max_packet_size(mps_bits);
       max_pkt_cnt = USB_D_PKTCNT0_V;
       max_xfer_size = USB_D_XFERSIZE1_V;
     } else {
@@ -667,6 +648,97 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
   }
 }
 
+void Esp32Device::initiate_next_read_xfer(uint8_t endpoint_num) {
+  usb_out_endpoint_t *const out_ep = &(usb_->out_ep_reg[endpoint_num]);
+  uint32_t doepctl = out_ep->doepctl;
+  auto& xfer = out_transfers_[endpoint_num];
+
+  assert(xfer.status == OutEPStatus::Busy);
+  // We should only invoke initiate_next_write_xfer() when the hardware
+  // is not currently performing a transfer and is ready to start a new
+  // transfer.  Our own tracking of the endpoint status should ensure this.
+  assert((doepctl & USB_EPENA1_M) == 0);
+
+  uint16_t max_pkt_size;
+  uint16_t max_pkt_cnt;
+  uint32_t max_xfer_size;
+  if (endpoint_num == 0) {
+    // EP0 uses a different encoding for the MPS in doepctl than other
+    // endpoints.
+    const auto mps_bits =
+        static_cast<EP0MaxPktSize>((doepctl >> USB_MPS0_S) & USB_MPS0_V);
+    max_pkt_size = get_ep0_max_packet_size(mps_bits);
+    max_pkt_cnt = USB_PKTCNT0_V;
+    max_xfer_size = USB_XFERSIZE0_V;
+  } else {
+    max_pkt_size = ((doepctl >> USB_MPS1_S) & Correct_USB_MPS1_V);
+    max_pkt_cnt = Correct_USB_PKTCNT1_V;
+    max_xfer_size = Correct_USB_XFERSIZE1_V;
+  }
+
+  // If max_pkt_size is not a multiple of 4, it needs to be rounded up since
+  // data is written into the FIFO in whole words.
+  uint16_t fifo_pkt_size = (max_pkt_size + static_cast<uint16_t>(3)) & 0xfffc;
+
+  // Compute the number of packets to ask the hardware to receive
+  uint32_t pkts_to_read;
+  const auto size_remaining = xfer.capacity - xfer.bytes_read;
+  if (size_remaining == 0) {
+    // This should only ever happen for the first and only call o
+    // a 0-length tranfer.
+    assert(xfer.capacity == 0);
+    pkts_to_read = 1;
+  } else {
+    // Adjust max_pkt_cnt to ensure our full transfer cannot exceed
+    // max_xfer_size if we transferred this many full packets.
+    max_pkt_cnt = static_cast<uint16_t>(std::min(
+        static_cast<uint32_t>(max_pkt_cnt), max_xfer_size / fifo_pkt_size));
+
+    pkts_to_read = (size_remaining + max_pkt_size - 1) / max_pkt_size;
+    if (pkts_to_read > max_pkt_cnt) {
+      pkts_to_read = max_pkt_cnt;
+    }
+  }
+  const uint32_t bytes_to_read = pkts_to_read * fifo_pkt_size;
+
+  ESP_LOGV(LogTag,
+           "start OUT XFER on endpoint %d: up to %" PRIu32 " packets, %" PRIu32
+           " bytes",
+           endpoint_num, pkts_to_read, bytes_to_read);
+
+  // Now set doeptsiz and doepctl to ask the hardware to
+  // start accepting OUT packets
+  set_bits(out_ep->doeptsiz, (pkts_to_read << USB_PKTCNT1_S) |
+                                 (bytes_to_read << USB_XFERSIZE1_S));
+  set_bits(out_ep->doepctl, USB_EPENA0_M | USB_CNAK0_M);
+}
+
+uint16_t Esp32Device::get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl) {
+  if (endpoint_num == 0) {
+    const auto mps_bits =
+        static_cast<EP0MaxPktSize>((diepctl >> USB_D_MPS0_S) & USB_D_MPS0_V);
+    return get_ep0_max_packet_size(mps_bits);
+  } else {
+    return ((diepctl >> USB_D_MPS1_S) & Correct_USB_D_MPS1_V);
+  }
+}
+
+uint8_t Esp32Device::get_ep0_max_packet_size(EP0MaxPktSize mps_bits) {
+  switch (mps_bits) {
+  case EP0MaxPktSize::Mps64:
+    return 64;
+  case EP0MaxPktSize::Mps32:
+    return 32;
+  case EP0MaxPktSize::Mps16:
+    return 16;
+  case EP0MaxPktSize::Mps8:
+    return 8;
+  }
+
+  // Shouldn't really be possible to reach here.
+  return 64;
+}
+
 /*
  * Write more data from the current in_transfers_[endpoint_num] to the FIFO.
  *
@@ -685,6 +757,7 @@ void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
 
   assert((diepctl & USB_D_EPENA1_M) != 0);
   uint8_t const fifo_num = ((diepctl >> USB_D_TXFNUM1_S) & USB_D_TXFNUM1_V);
+  const auto max_packet_size = get_max_in_pkt_size(endpoint_num, diepctl);
   const auto tx_words_avail =
       (in_ep->dtxfsts & USB_D_INEPTXFSPCAVAIL0_M) >> USB_D_INEPTXFSPCAVAIL0_S;
   auto tx_space_avail = tx_words_avail * 4;
@@ -697,7 +770,7 @@ void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
       break;
     }
     const uint16_t pkt_size =
-        std::min(bytes_left, static_cast<uint32_t>(xfer.max_packet_size));
+        std::min(bytes_left, static_cast<uint32_t>(max_packet_size));
 
     if (tx_space_avail < pkt_size) {
       // We have more data to send, but no more room in the FIFO at the moment.
@@ -1047,12 +1120,20 @@ DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
     ESP_LOGD(LogTag, "USB RX: OUT packet received on EP%u; size=%u",
              endpoint_num, byte_count);
     receive_packet(endpoint_num, byte_count);
-    break;
+    return NoEvent(NoEventReason::HwProcessing);
   }
   case Pktsts::SetupComplete: {
-    // Setup OUT packet received.  After this we should receive an OUT endpoint
-    // interrupt with the SETUP bit set.  We generate an event to handle the
-    // SetupPacket there.
+    // SetupComplete is generated by the HW after the SETUP phase is done.
+    // From reading the documentation, it sounds like the HW may wait to see
+    // and NAK the first IN or OUT token from the host before generating this
+    // interrupt, but it isn't 100% clear about this.  It seems like the HW was
+    // designed this way in order to make it easier for the software to detect
+    // and discard duplicate SETUP packets that were retransmitted due to the
+    // host thinking there may have been a transmission error.
+    //
+    // Many other USB HW implementations don't behave this way, so our higher
+    // level application code still needs to explicitly handle retransmitted
+    // SETUP packets on other hardware.
     uint8_t const endpoint_num = (ctrl_word & USB_CHNUM_M) >> USB_CHNUM_S;
     ESP_LOGD(LogTag, "USB RX: setup done EP%d", endpoint_num);
 
@@ -1069,11 +1150,19 @@ DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
     // of receipt, we simply overwrite the data from previous packets.
     //
     // We should receive a SetupComplete interrupt after SetupReceived, follwed
-    // by an OUT interrupt with the USB_SETUP0_M flag set.  We wait to inform
-    // the main task of the SETUP packet until we get the final OUT interrupt.
-    // (I'm not really sure why the HW generates 3 separate interrupts for each
-    // SETUP transaction.)
+    // by an OUT interrupt with the USB_SETUP0_M flag set.
+    //
+    // We wait to inform the main USB task of the SETUP packet until we get the
+    // final OUT interrupt.  We don't want to inform the software yet, since
+    // the HW will reset doeptsiz and doepctl when the setup OUT interrupt is
+    // generated, and we don't want the software to attempt to start its own
+    // new out transfer before we have finished processing the out interrupt
+    // for this setup event.
     volatile uint32_t *rx_fifo = usb_->fifo[0];
+
+    // assert that the byte count is exactly the length of a SETUP packet.
+    assert(((ctrl_word & USB_BCNT_M) >> USB_BCNT_S) == 8);
+
     setup_packet_.u32[0] = (*rx_fifo);
     setup_packet_.u32[1] = (*rx_fifo);
     ESP_LOGD(LogTag, "USB RX: setup packet: 0x%08" PRIx32" 0x%08" PRIx32,
@@ -1145,48 +1234,74 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   // documentation for DMA functionality is somewhat limited and I haven't
   // spent much time playing around with it.
 
-  DBG_ISR_LOG("todo: receive OUT packet");
-#if 0
-  auto *xfer = &xfer_status_[endpoint_num].out;
   // All RX transfers are performed using FIFO 0.
   volatile uint32_t *rx_fifo = usb_->fifo[0];
 
-  // We can read up to the smaller of:
-  // - the remaining size until the buffer is full
-  // - the maximum transfer size for this endpoint
-  // - or the packet_size argument
-  //
-  // TODO: If bufsize_left is less than packet_size, the host may have sent a
-  // full packet but we are not able to read all of it.  I haven't played
-  // around with how the ESP32 behaves in this case, but I think it will mess
-  // up the current code's detection of end of transmission.  We probably
-  // should require that start_out_read() always be called with a buffer size
-  // that is a multiple of the maximum endpoint packet size.
-  const uint16_t bufsize_left = xfer->buffer_size - xfer->received_bytes;
-  uint16_t read_size =
-      std::min(std::min(bufsize_left, xfer->max_size), packet_size);
-
-  uint8_t *out_ptr = (xfer->buffer + xfer->received_bytes);
-  uint8_t *const end = out_ptr + read_size;
-  // Read 32-bit words at a time from the FIFO
-  // Copy into out_ptr with memcmp, since out_ptr may not be word-aligned.
-  while (out_ptr + 4 < end) {
-    const uint32_t tmp = (*rx_fifo);
-    memcpy(out_ptr, &tmp, 4);
-    out_ptr += 4;
-  }
-  if (out_ptr < end) {
-    const uint32_t tmp = (*rx_fifo);
-    memcpy(out_ptr, &tmp, end - out_ptr);
+  auto &xfer = out_transfers_[endpoint_num];
+  if (xfer.status != OutEPStatus::Busy) {
+    // It's possible that this could happen if we recently processed
+    // application-initiated request to abort the transfer and this raced
+    // with us receiving the interrupt.
+    ESP_LOGD(LogTag,
+             "OUT data available endpoint %d (%" PRIu16 " bytes), but transfer "
+             "is no longer in progress",
+             endpoint_num, packet_size);
+    // Read and discard the data
+    for (size_t n = 0; n < packet_size; n += sizeof(uint32_t)) {
+      const uint32_t ignored = (*rx_fifo);
+      static_cast<void>(ignored);
+    }
+    return;
   }
 
-  xfer->received_bytes = end - xfer->buffer;
+  const auto words_in_fifo =
+      (packet_size + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  auto capacity_left = xfer.capacity - xfer.bytes_read;
 
-  // An OUT packet with a length less than the maximum endpoint packet size
-  // always indicates the end of a transfer.
-  xfer->recv_complete = (packet_size < xfer->max_size) ||
-                        (xfer->received_bytes == xfer->buffer_size);
-#endif
+  // Read as many full words as are available and fit in the destination buffer
+  const uint32_t full_words_to_copy =
+      std::min(static_cast<uint32_t>(packet_size), capacity_left) /
+      sizeof(uint32_t);
+  ESP_LOGV(LogTag, "EP%d out: copy %" PRIu32 " full words", endpoint_num,
+           full_words_to_copy);
+  auto* buf = static_cast<uint8_t*>(xfer.data) + xfer.bytes_read;
+  xfer.bytes_read += packet_size;
+  for (uint32_t n = 0; n < full_words_to_copy; ++n) {
+    const uint32_t word = (*rx_fifo);
+    // Use memcpy() since buf may not be word-aligned.
+    // Compilers should be smart about optimizing small fixed-size memcpy()
+    // calls into direct memory accesses when possible calls these days.
+    memcpy(buf, &word, sizeof(uint32_t));
+    buf += sizeof(uint32_t);
+  }
+
+  // Return now if we have read everything from the FIFO
+  if (full_words_to_copy == words_in_fifo) {
+    assert(packet_size % sizeof(uint32_t) == 0);
+    return;
+  }
+  const auto bytes_left = packet_size - (full_words_to_copy * sizeof(uint32_t));
+  assert(bytes_left > 0);
+  capacity_left -= sizeof(uint32_t) * full_words_to_copy;
+
+  // We may have more capacity for a partial packet
+  auto words_read = full_words_to_copy;
+  if (capacity_left > 0) {
+    ESP_LOGV(LogTag, "EP%d out: copy partial word of %" PRIu32 " bytes",
+             endpoint_num, std::min(capacity_left, bytes_left));
+    assert(capacity_left < sizeof(uint32_t));
+    const uint32_t word = (*rx_fifo);
+    memcpy(buf, &word, std::min(capacity_left, bytes_left));
+    ++words_read;
+  }
+
+  // Read and discard any remaining words in the FIFO if we have a buffer
+  // overrun
+  while (words_read < words_in_fifo) {
+    assert(xfer.bytes_read > xfer.capacity);
+    const uint32_t word = (*rx_fifo);
+    static_cast<void>(word);
+  }
 }
 
 } // namespace ausb
