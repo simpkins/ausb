@@ -9,6 +9,9 @@
 namespace ausb {
 
 class SetupPacket;
+
+namespace device {
+
 class UsbDevice;
 
 /**
@@ -22,11 +25,11 @@ class UsbDevice;
  * If the caller does processing on another task, they should use custom events
  * to trigger the final ack() or error() calls.
  */
-class DevCtrlOutTransfer {
+class CtrlOutXfer {
 public:
-  explicit DevCtrlOutTransfer(UsbDevice *device) : device_(device) {}
+  explicit CtrlOutXfer(UsbDevice *device) : device_(device) {}
 
-  virtual ~DevCtrlOutTransfer() {}
+  virtual ~CtrlOutXfer() {}
 
   UsbDevice *usb() const { return device_; }
 
@@ -88,10 +91,10 @@ public:
    *
    * This method will always be invoked on the main USB task.
    *
-   * The DevCtrlOutTransfer implementation should cancel any processing
-   * they are doing.  It is not necessary to call ack() or error() (doing so
-   * will be a no-op).  The DevCtrlOutTransfer destructor will be called
-   * immediately after xfer_cancelled() returns.
+   * The CtrlOutXfer implementation should cancel any processing they are
+   * doing.  It is not necessary to call ack() or error() (doing so will be a
+   * no-op).  The CtrlOutXfer destructor will be called immediately after
+   * xfer_cancelled() returns.
    */
   virtual void xfer_cancelled(XferCancelReason reason) = 0;
 
@@ -109,8 +112,8 @@ private:
     Cancelled,
   };
 
-  DevCtrlOutTransfer(DevCtrlOutTransfer const &) = delete;
-  DevCtrlOutTransfer &operator=(DevCtrlOutTransfer const &) = delete;
+  CtrlOutXfer(CtrlOutXfer const &) = delete;
+  CtrlOutXfer &operator=(CtrlOutXfer const &) = delete;
 
   friend class UsbDevice;
   void invoke_xfer_cancelled(XferCancelReason reason) {
@@ -130,4 +133,5 @@ private:
   UsbDevice *device_{nullptr};
 };
 
+} // namespace device
 } // namespace ausb

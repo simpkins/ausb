@@ -9,6 +9,7 @@
 #include "ausb/esp/Esp32Device.h"
 
 using namespace ausb;
+using namespace ausb::device;
 using namespace std::chrono_literals;
 
 namespace {

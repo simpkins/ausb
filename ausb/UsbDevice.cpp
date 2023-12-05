@@ -9,11 +9,11 @@ template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 }
 
-namespace ausb {
+namespace ausb::device {
 
-class UsbDevice::SetAddressXfer : public DevCtrlOutTransfer {
+class UsbDevice::SetAddressXfer : public CtrlOutXfer {
 public:
-  using DevCtrlOutTransfer::DevCtrlOutTransfer;
+  using CtrlOutXfer::CtrlOutXfer;
 
   void start(const SetupPacket &packet) override {
     if (packet.length > 0) {
@@ -35,25 +35,26 @@ public:
 };
 
 void UsbDevice::handle_event(const DeviceEvent &event) {
-  std::visit(overloaded{
-                 [this](const NoEvent &) {
-                   // Nothing to do.  NoEvent can be returned if
-                   // wait_for_event() was called with a timeout and the timeout
-                   // expired before an event occured.
-                 },
-                 [this](const BusResetEvent &) { on_bus_reset(); },
-                 [this](const SuspendEvent &) { on_suspend(); },
-                 [this](const ResumeEvent &) { on_resume(); },
-                 [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
-                 [this](const SetupPacket &pkt) { on_setup_received(pkt); },
-                 [this](const InXferCompleteEvent &ev) {
-                   on_in_xfer_complete(ev.endpoint_num);
-                 },
-                 [this](const InXferFailedEvent &ev) {
-                   on_in_xfer_failed(ev.endpoint_num);
-                 },
-             },
-             event);
+  std::visit(
+      overloaded{
+          [this](const NoEvent &) {
+            // Nothing to do.  NoEvent can be returned if
+            // wait_for_event() was called with a timeout and the timeout
+            // expired before an event occured.
+          },
+          [this](const BusResetEvent &) { on_bus_reset(); },
+          [this](const SuspendEvent &) { on_suspend(); },
+          [this](const ResumeEvent &) { on_resume(); },
+          [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
+          [this](const SetupPacketEvent &ev) { on_setup_received(ev.pkt); },
+          [this](const InXferCompleteEvent &ev) {
+            on_in_xfer_complete(ev.endpoint_num);
+          },
+          [this](const InXferFailedEvent &ev) {
+            on_in_xfer_failed(ev.endpoint_num);
+          },
+      },
+      event);
 }
 
 void UsbDevice::on_bus_reset() {
@@ -134,6 +135,7 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
   // Handle receipt of a new SETUP packet if we think that we are currently
   // still processing an existing control transfer.
   if (ctrl_status_ != CtrlXferStatus::Idle) [[unlikely]] {
+#if 0
     // The host is allowed to retransmit SETUP packets in case it thinks thee
     // was an error with the transmission.  If this packet is identical to the
     // last SETUP packet and we haven't seen any other packets since then,
@@ -165,6 +167,7 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
         return;
       }
     }
+#endif
 
     // In any other state it is unexpected for us to get a new SETUP packet
     // while we are still processing an existing transfer.  Fail the
@@ -177,13 +180,15 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
   }
 
   // Process the control request
+#if 0
   current_ctrl_transfer_ = packet;
+#endif
   if (packet.get_direction() == Direction::Out) {
     ctrl_status_ = CtrlXferStatus::OutSetupReceived;
     new (&ctrl_xfer_.in)
-        std::unique_ptr<DevCtrlOutTransfer>(process_ctrl_out_setup(packet));
+        std::unique_ptr<CtrlOutXfer>(process_ctrl_out_setup(packet));
     if (ctrl_xfer_.out) {
-      ctrl_xfer_.out->start(current_ctrl_transfer_);
+      ctrl_xfer_.out->start(packet);
     } else {
       ctrl_xfer_.out.~unique_ptr();
       ctrl_status_ = CtrlXferStatus::Idle;
@@ -192,9 +197,9 @@ void UsbDevice::on_setup_received(const SetupPacket &packet) {
   } else {
     ctrl_status_ = CtrlXferStatus::InSetupReceived;
     new (&ctrl_xfer_.in)
-        std::unique_ptr<DevCtrlInTransfer>(process_ctrl_in_setup(packet));
+        std::unique_ptr<CtrlInXfer>(process_ctrl_in_setup(packet));
     if (ctrl_xfer_.in) {
-      ctrl_xfer_.in->start(current_ctrl_transfer_);
+      ctrl_xfer_.in->start(packet);
     } else {
       ctrl_xfer_.in.~unique_ptr();
       ctrl_status_ = CtrlXferStatus::Idle;
@@ -249,7 +254,7 @@ void UsbDevice::on_in_xfer_failed(uint8_t endpoint_num) {
   AUSB_LOGE("TODO: on_in_xfer_failed");
 }
 
-std::unique_ptr<DevCtrlOutTransfer>
+std::unique_ptr<CtrlOutXfer>
 UsbDevice::process_ctrl_out_setup(const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::Out, SetupRecipient::Device,
@@ -263,7 +268,7 @@ UsbDevice::process_ctrl_out_setup(const SetupPacket &packet) {
   return nullptr;
 }
 
-std::unique_ptr<DevCtrlInTransfer>
+std::unique_ptr<CtrlInXfer>
 UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
@@ -275,7 +280,7 @@ UsbDevice::process_ctrl_in_setup(const SetupPacket &packet) {
   return nullptr;
 }
 
-std::unique_ptr<DevCtrlOutTransfer>
+std::unique_ptr<CtrlOutXfer>
 UsbDevice::process_std_device_out_ctrl(const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
@@ -286,7 +291,7 @@ UsbDevice::process_std_device_out_ctrl(const SetupPacket &packet) {
   return nullptr;
 }
 
-std::unique_ptr<DevCtrlInTransfer>
+std::unique_ptr<CtrlInXfer>
 UsbDevice::process_std_device_in_ctrl(const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::GetDescriptor) {
@@ -433,4 +438,4 @@ void UsbDevice::on_ep0_out_data(void* arg) {
 }
 #endif
 
-} // namespace ausb
+} // namespace ausb::device

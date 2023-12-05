@@ -9,6 +9,9 @@
 namespace ausb {
 
 class SetupPacket;
+
+namespace device {
+
 class UsbDevice;
 
 /**
@@ -18,21 +21,21 @@ class UsbDevice;
  * the UsbDevice class invokes methods on this class, it will always be done
  * from the main USB task.
  *
- * When an implementor of DevCtrlInTransfer invokes any methods, like
- * send_full(), this must also be done from the main USB task.
+ * When an implementor of CtrlInXfer invokes any methods, like send_full(),
+ * this must also be done from the main USB task.
  */
-class DevCtrlInTransfer {
+class CtrlInXfer {
 public:
-  explicit DevCtrlInTransfer(UsbDevice *device) : device_(device) {}
+  explicit CtrlInXfer(UsbDevice *device) : device_(device) {}
 
   /**
-   * The lifetime of the DevCtrlInTransfer object is controlled by the
+   * The lifetime of the CtrlInXfer object is controlled by the
    * UsbDevice, and the object will be destroyed when it is no longer needed.
    *
    * One of xfer_cancelled(), xfer_acked(), or xfer_failed() will be called
    * before the object is destroyed.
    */
-  virtual ~DevCtrlInTransfer() {}
+  virtual ~CtrlInXfer() {}
 
   UsbDevice *usb() const { return device_; }
 
@@ -50,7 +53,7 @@ public:
    * Provide the full response to send to the host.
    *
    * The caller must ensure that the data buffer remains valid until
-   * the DevCtrlInTransfer object is destroyed.
+   * the CtrlInXfer object is destroyed.
    *
    * This method may only be invoked from the USB task.
    */
@@ -82,8 +85,8 @@ public:
   virtual void xfer_failed() = 0;
 
 private:
-  DevCtrlInTransfer(DevCtrlInTransfer const &) = delete;
-  DevCtrlInTransfer &operator=(DevCtrlInTransfer const &) = delete;
+  CtrlInXfer(CtrlInXfer const &) = delete;
+  CtrlInXfer &operator=(CtrlInXfer const &) = delete;
 
   friend class UsbDevice;
   void invoke_xfer_cancelled(XferCancelReason reason) {
@@ -94,4 +97,5 @@ private:
   UsbDevice *device_{nullptr};
 };
 
+} // namespace device
 } // namespace ausb

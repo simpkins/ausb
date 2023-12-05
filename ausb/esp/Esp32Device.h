@@ -344,7 +344,7 @@ private:
 
   using Esp32DeviceEvent =
       std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent,
-                   BusEnumDone, SetupPacket, InEndpointInterrupt,
+                   BusEnumDone, SetupPacketEvent, InEndpointInterrupt,
                    OutEndpointInterrupt, RxFifoNonEmpty>;
   static_assert(std::is_trivially_copyable_v<Esp32DeviceEvent>,
                 "Esp32DeviceEvent must be trivially copyable");

@@ -8,13 +8,13 @@
 #include <cstdint>
 #include <memory>
 
-#include "ausb/DevCtrlOutTransfer.h"
-#include "ausb/DevCtrlInTransfer.h"
+#include "ausb/CtrlInXfer.h"
+#include "ausb/CtrlOutXfer.h"
 // TODO: create a separate header for HWDevice
 #include "ausb/esp/Esp32Device.h"
 namespace ausb { using HWDevice = Esp32Device; }
 
-namespace ausb {
+namespace ausb::device {
 
 class UsbDevice {
 public:
@@ -33,32 +33,28 @@ public:
   /**
    * Send data for the current control IN transfer.
    *
-   * This method should only be invoked by the current DevCtrlInTransfer
-   * object.
+   * This method should only be invoked by the current CtrlInXfer object.
    */
   void start_ctrl_in_write(const void *data, size_t size);
 
   /**
    * Fail the current control IN transfer with a STALL error.
    *
-   * This method should only be invoked by the current DevCtrlInTransfer
-   * object.
+   * This method should only be invoked by the current CtrlInXfer object.
    */
   void stall_ctrl_in_transfer();
 
   /**
    * Begin receiving data for the current control OUT transfer.
    *
-   * This method should only be invoked by the current DevCtrlOutTransfer
-   * object.
+   * This method should only be invoked by the current CtrlOutXfer object.
    */
   void start_ctrl_out_read(void *data, size_t size);
 
   /**
    * Fail the current control OUT transfer with a STALL error.
    *
-   * This method should only be invoked by the current DevCtrlOutTransfer
-   * object.
+   * This method should only be invoked by the current CtrlOutXfer object.
    */
   void stall_ctrl_out_transfer();
 
@@ -152,17 +148,17 @@ private:
   void on_ep0_in_xfer_complete();
   void on_in_xfer_failed(uint8_t endpoint_num);
 
-  std::unique_ptr<DevCtrlOutTransfer>
+  std::unique_ptr<CtrlOutXfer>
   process_ctrl_out_setup(const SetupPacket &packet);
-  std::unique_ptr<DevCtrlInTransfer>
+  std::unique_ptr<CtrlInXfer>
   process_ctrl_in_setup(const SetupPacket &packet);
   void fail_control_transfer(XferCancelReason reason);
 
   void stall_ep0();
 
-  std::unique_ptr<DevCtrlOutTransfer>
+  std::unique_ptr<CtrlOutXfer>
   process_std_device_out_ctrl(const SetupPacket &packet);
-  std::unique_ptr<DevCtrlInTransfer>
+  std::unique_ptr<CtrlInXfer>
   process_std_device_in_ctrl(const SetupPacket &packet);
 
   State state_ = State::Uninit;
@@ -179,17 +175,19 @@ private:
     // Idle is set when ctrl_status_ is Idle
     void* idle;
     // Out is set during OutRecvData and OutStatus states
-    std::unique_ptr<DevCtrlOutTransfer> out;
+    std::unique_ptr<CtrlOutXfer> out;
     // Out is set during InSendData and InStatus states
-    std::unique_ptr<DevCtrlInTransfer> in;
+    std::unique_ptr<CtrlInXfer> in;
   } ctrl_xfer_;
 
+#if 0
   // A copy of the SETUP packet for the control transfer currently being
   // processed.  We keep this mainly so we can detect SETUP packet
   // retransmissions, and avoid unnecessarily aborting an then restarting a
   // transfer on SETUP retransmission.
   SetupPacket current_ctrl_transfer_;
+#endif
   DeviceDescriptor dev_descriptor_;
 };
 
-} // namespace ausb
+} // namespace ausb::device

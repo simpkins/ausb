@@ -100,24 +100,25 @@ DeviceEvent Esp32Device::wait_for_event(std::chrono::milliseconds timeout) {
 
 DeviceEvent Esp32Device::process_event(Esp32DeviceEvent event) {
   return std::visit(
-      overloaded{[this](const NoEvent &ev) -> DeviceEvent { return ev; },
-                 [this](const BusResetEvent &ev) -> DeviceEvent {
-                   process_bus_reset();
-                   return ev;
-                 },
-                 [this](const SuspendEvent &ev) -> DeviceEvent { return ev; },
-                 [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
-                 [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
-                 [this](const SetupPacket &pkt) -> DeviceEvent { return pkt; },
-                 [this](const InEndpointInterrupt &ev) -> DeviceEvent {
-                   return process_in_ep_interrupt(ev.endpoint_num, ev.diepint);
-                 },
-                 [this](const OutEndpointInterrupt &ev) -> DeviceEvent {
-                   return process_out_ep_interrupt(ev.endpoint_num, ev.doepint);
-                 },
-                 [this](const RxFifoNonEmpty &) -> DeviceEvent {
-                   return process_rx_fifo();
-                 }},
+      overloaded{
+          [this](const NoEvent &ev) -> DeviceEvent { return ev; },
+          [this](const BusResetEvent &ev) -> DeviceEvent {
+            process_bus_reset();
+            return ev;
+          },
+          [this](const SuspendEvent &ev) -> DeviceEvent { return ev; },
+          [this](const ResumeEvent &ev) -> DeviceEvent { return ev; },
+          [this](const BusEnumDone &ev) -> DeviceEvent { return ev; },
+          [this](const SetupPacketEvent &ev) -> DeviceEvent { return ev; },
+          [this](const InEndpointInterrupt &ev) -> DeviceEvent {
+            return process_in_ep_interrupt(ev.endpoint_num, ev.diepint);
+          },
+          [this](const OutEndpointInterrupt &ev) -> DeviceEvent {
+            return process_out_ep_interrupt(ev.endpoint_num, ev.doepint);
+          },
+          [this](const RxFifoNonEmpty &) -> DeviceEvent {
+            return process_rx_fifo();
+          }},
       event);
 }
 
@@ -263,7 +264,7 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
     }
 
     // Inform the application of the SETUP packet
-    return SetupPacket(setup_packet_.setup);
+    return SetupPacketEvent(setup_packet_.setup);
   }
 
   // FIXME
