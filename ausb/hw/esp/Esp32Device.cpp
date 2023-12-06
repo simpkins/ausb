@@ -274,9 +274,11 @@ DeviceEvent Esp32Device::process_out_xfer_complete(uint8_t endpoint_num) {
   if (xfer.bytes_read > xfer.capacity) {
     // Buffer overrun.  The software asked for a partial packet amount, and
     // the host sent more than was expected.
+    xfer.reset();
     return OutXferFailedEvent(endpoint_num, XferFailReason::BufferOverrun);
   }
 
+  xfer.reset();
   return OutXferCompleteEvent(endpoint_num, xfer.bytes_read);
 }
 
