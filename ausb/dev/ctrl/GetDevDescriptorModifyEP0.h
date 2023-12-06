@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/CtrlInXfer.h"
 #include "ausb/desc/DeviceDescriptor.h"
+#include "ausb/dev/CtrlInXfer.h"
 
 #include <string_view>
 

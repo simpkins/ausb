@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/CtrlOutXfer.h"
+#include "ausb/dev/CtrlOutXfer.h"
 
 namespace ausb::device {
 

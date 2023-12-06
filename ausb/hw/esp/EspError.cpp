@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/esp/EspError.h"
+#include "ausb/hw/esp/EspError.h"
 
 #include <cstring>
 

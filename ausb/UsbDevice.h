@@ -1,17 +1,14 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/DeviceEvent.h"
 #include "ausb/ausb_types.h"
+#include "ausb/dev/ControlEndpoint.h"
+#include "ausb/dev/DeviceEvent.h"
+#include "ausb/hw/HWDevice.h"
 
 #include <cstdint>
 #include <memory>
 #include <system_error>
-
-#include "ausb/ControlEndpoint.h"
-// TODO: create a separate header for HWDevice
-#include "ausb/esp/Esp32Device.h"
-namespace ausb { using HWDevice = Esp32Device; }
 
 namespace ausb::device {
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/esp/Esp32Device.h"
+#include "ausb/hw/esp/Esp32Device.h"
 
-#include "ausb/esp/EspError.h"
+#include "ausb/hw/esp/EspError.h"
 
 #include <esp_check.h>
 #include <esp_log.h>

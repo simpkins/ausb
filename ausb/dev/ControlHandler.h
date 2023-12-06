@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/ControlEndpoint.h"
 #include "ausb/desc/DescriptorMap.h"
+#include "ausb/dev/ControlEndpoint.h"
 
 namespace ausb::device {
 

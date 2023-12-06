@@ -4,13 +4,13 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include "ausb/ControlHandler.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/ConfigDescriptor.h"
-#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/DeviceDescriptor.h"
+#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
-#include "ausb/esp/Esp32Device.h"
+#include "ausb/dev/ControlHandler.h"
+#include "ausb/hw/esp/Esp32Device.h"
 
 using namespace ausb;
 using namespace ausb::device;

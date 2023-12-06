@@ -1,9 +1,9 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/DeviceEvent.h"
-#include "ausb/usb_types.h"
 #include "ausb/ausb_types.h"
+#include "ausb/dev/DeviceEvent.h"
+#include "ausb/usb_types.h"
 
 #include <esp_err.h>
 #include <esp_private/usb_phy.h>

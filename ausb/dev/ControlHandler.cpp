@@ -1,12 +1,12 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/ControlHandler.h"
+#include "ausb/dev/ControlHandler.h"
 
-#include "ausb/CtrlInXfer.h"
-#include "ausb/CtrlOutXfer.h"
 #include "ausb/SetupPacket.h"
 #include "ausb/desc/DeviceDescriptor.h"
-#include "ausb/dev/ctrl/GetStaticDescriptor.h"
+#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/dev/CtrlOutXfer.h"
 #include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
+#include "ausb/dev/ctrl/GetStaticDescriptor.h"
 #include "ausb/dev/ctrl/SetAddress.h"
 #include "ausb/dev/ctrl/StallCtrlIn.h"
 #include "ausb/log.h"

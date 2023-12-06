@@ -4,12 +4,12 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(
     srcs
-    "ausb/ControlEndpoint.cpp"
-    "ausb/ControlHandler.cpp"
-    "ausb/CtrlInXfer.cpp"
-    "ausb/CtrlOutXfer.cpp"
     "ausb/UsbDevice.cpp"
     "ausb/desc/StaticDescriptorMapUtils.cpp"
+    "ausb/dev/ControlEndpoint.cpp"
+    "ausb/dev/ControlHandler.cpp"
+    "ausb/dev/CtrlInXfer.cpp"
+    "ausb/dev/CtrlOutXfer.cpp"
     "ausb/dev/ctrl/GetDevDescriptorModifyEP0.cpp"
     "ausb/dev/ctrl/GetStaticDescriptor.cpp"
     "ausb/dev/ctrl/SetAddress.cpp"

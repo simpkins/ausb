@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/CtrlInXfer.h"
+#include "ausb/dev/CtrlInXfer.h"
 
-#include "ausb/ControlEndpoint.h"
+#include "ausb/dev/ControlEndpoint.h"
 
 namespace ausb::device {
 

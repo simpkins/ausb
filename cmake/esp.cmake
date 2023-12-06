@@ -1,7 +1,7 @@
 set(
     esp_srcs
-    "ausb/esp/Esp32Device.cpp"
-    "ausb/esp/EspError.cpp"
+    "ausb/hw/esp/Esp32Device.cpp"
+    "ausb/hw/esp/EspError.cpp"
 )
 
 idf_component_register(

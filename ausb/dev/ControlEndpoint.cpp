@@ -1,10 +1,10 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/ControlEndpoint.h"
+#include "ausb/dev/ControlEndpoint.h"
 
-#include "ausb/CtrlInXfer.h"
-#include "ausb/CtrlOutXfer.h"
 #include "ausb/SetupPacket.h"
 #include "ausb/UsbDevice.h"
+#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/dev/CtrlOutXfer.h"
 #include "ausb/log.h"
 
 namespace ausb::device {
