@@ -11,6 +11,8 @@ namespace ausb::device {
 
 ControlEndpoint::~ControlEndpoint() = default;
 
+void ControlEndpoint::on_init() { callback_->set_endpoint(this); }
+
 void ControlEndpoint::on_reset(XferFailReason reason) {
   status_ = Status::Idle;
   invoke_xfer_failed(reason);
@@ -57,11 +59,16 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   setup_rxmit_detector_.on_setup(packet);
   if (packet.get_direction() == Direction::Out) {
     status_ = Status::OutXfer;
-    new (&xfer_.in)
+    new (&xfer_.out)
         std::unique_ptr<CtrlOutXfer>(callback_->process_out_setup(packet));
     if (xfer_.out) {
       xfer_.out->start(packet);
     } else {
+      AUSB_LOGE(
+          "unhandled SETUP OUT packet: request_type=0x%02x request=0x%02x "
+          "value=0x%04x index=0x%04x length=0x%04x",
+          packet.request_type, packet.request, packet.value, packet.index,
+          packet.length);
       status_ = Status::Idle;
       xfer_.out.~unique_ptr();
       usb_->stall_control_endpoint(endpoint_num_);
@@ -73,6 +80,10 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
     if (xfer_.in) {
       xfer_.in->start(packet);
     } else {
+      AUSB_LOGE("unhandled SETUP IN packet: request_type=0x%02x request=0x%02x "
+                "value=0x%04x index=0x%04x length=0x%04x",
+                packet.request_type, packet.request, packet.value, packet.index,
+                packet.length);
       status_ = Status::Idle;
       xfer_.in.~unique_ptr();
       usb_->stall_control_endpoint(endpoint_num_);
@@ -82,11 +93,11 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
 
 void ControlEndpoint::on_in_xfer_complete() {
   switch (status_) {
-  case Status::InSendData:
+  case Status::InSendPartial:
+    xfer_.in->partial_write_complete();
+    return;
+  case Status::InSendFinal:
     AUSB_LOGD("control IN write complete");
-    // TODO: If we support partial writes in the future we will need to detect
-    // partial vs full write done.  For now we always write all data at once,
-    // so once the transfer is finished we move on to the status stage.
     status_ = Status::InStatus;
     // Wait for the host to acknowledge our data with a 0-length OUT packet.
     usb_->start_ctrl_in_ack(this);
@@ -99,18 +110,18 @@ void ControlEndpoint::on_in_xfer_complete() {
   case Status::OutXfer:
   case Status::InSetupReceived:
   case Status::InStatus:
-    AUSB_LOGE("on_ep0_in_xfer_complete() received in unexpected state %d",
-              static_cast<int>(status_));
-    return;
+    // Continue to failure handling below
+    break;
   }
 
-  AUSB_LOGE("unexpected ctrl xfer state %d in on_ep0_in_xfer_complete()",
-            static_cast<int>(status_));
+  AUSB_LOGE("control EP%u received IN xfer complete in unexpected state %d",
+            endpoint_num_, static_cast<int>(status_));
+  fail_current_xfer(XferFailReason::SoftwareError);
 }
 
 void ControlEndpoint::on_in_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
-  // in Status::InSendData, or Status::OutAck.
+  // in Status::InSendPartial, Status::InSendFinal, or Status::OutAck.
   AUSB_LOGW("control IN failure: status=%d, reason%d",
             static_cast<int>(status_), static_cast<int>(reason));
 
@@ -118,13 +129,31 @@ void ControlEndpoint::on_in_xfer_failed(XferFailReason reason) {
   usb_->stall_control_endpoint(endpoint_num_);
 }
 
-#if 0
-void ControlEndpoint::on_out_xfer_complete();
-#endif
+void ControlEndpoint::on_out_xfer_complete(uint32_t bytes_read) {
+  switch (status_) {
+  case Status::OutXfer:
+    xfer_.out->out_data_received(bytes_read);
+    return;
+  case Status::InStatus:
+    AUSB_LOGD("control IN status successfully ACKed");
+    extract_in_xfer()->xfer_acked();
+    return;
+  case Status::Idle:
+  case Status::OutAck:
+  case Status::InSetupReceived:
+  case Status::InSendPartial:
+  case Status::InSendFinal:
+    // Continue to failure handling below
+    break;
+  }
+  AUSB_LOGE("control EP%u received OUT xfer complete in unexpected state %d",
+            endpoint_num_, static_cast<int>(status_));
+  fail_current_xfer(XferFailReason::SoftwareError);
+}
 
 void ControlEndpoint::on_out_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
-  // in Status::InSendData, or Status::OutAck.
+  // in Status::InStatus, or Status::OutXfer.
   AUSB_LOGW("control OUT failure: status=%d, reason%d",
             static_cast<int>(status_), static_cast<int>(reason));
 
@@ -132,8 +161,19 @@ void ControlEndpoint::on_out_xfer_failed(XferFailReason reason) {
   usb_->stall_control_endpoint(endpoint_num_);
 }
 
+void ControlEndpoint::start_out_read(void *data, size_t size) {
+  if (status_ != Status::OutXfer) [[unlikely]] {
+    AUSB_LOGE("start_out_read() called in unexpected state %d",
+              static_cast<int>(status_));
+    fail_current_xfer(XferFailReason::SoftwareError);
+    return;
+  }
+
+  usb_->start_ctrl_out_read(this, data, size);
+}
+
 void ControlEndpoint::ack_out_xfer() {
-  if (status_ != Status::OutXfer) {
+  if (status_ != Status::OutXfer) [[unlikely]] {
     AUSB_LOGE("ack_out_xfer() called in unexpected state %d",
               static_cast<int>(status_));
     fail_current_xfer(XferFailReason::SoftwareError);
@@ -142,6 +182,44 @@ void ControlEndpoint::ack_out_xfer() {
 
   status_ = Status::OutAck;
   usb_->start_ctrl_out_ack(this);
+}
+
+void ControlEndpoint::fail_out_xfer() {
+  if (status_ != Status::OutXfer) [[unlikely]] {
+    AUSB_LOGE("fail_out_xfer() called in unexpected state %d",
+              static_cast<int>(status_));
+    fail_current_xfer(XferFailReason::SoftwareError);
+    return;
+  }
+
+  extract_out_xfer();
+  usb_->stall_control_endpoint(endpoint_num_);
+}
+
+void ControlEndpoint::start_in_write(const void *data, size_t size, bool is_final) {
+  if (status_ != Status::InSetupReceived && status_ != Status::InSendPartial)
+      [[unlikely]] {
+    AUSB_LOGE("start_in_write() called in unexpected state %d",
+              static_cast<int>(status_));
+    fail_current_xfer(XferFailReason::SoftwareError);
+    return;
+  }
+
+  status_ = is_final ? Status::InSendFinal : Status::InSendPartial;
+  usb_->start_ctrl_in_write(this, data, size);
+}
+
+void ControlEndpoint::fail_in_xfer() {
+  if (status_ != Status::InSetupReceived && status_ != Status::InSendPartial)
+      [[unlikely]] {
+    AUSB_LOGE("fail_in_xfer() called in unexpected state %d",
+              static_cast<int>(status_));
+    fail_current_xfer(XferFailReason::SoftwareError);
+    return;
+  }
+
+  extract_in_xfer();
+  usb_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::fail_current_xfer(XferFailReason reason) {
@@ -168,7 +246,8 @@ void ControlEndpoint::invoke_xfer_failed(XferFailReason reason) {
     extract_out_xfer()->invoke_xfer_failed(reason);
     return;
   case Status::InSetupReceived:
-  case Status::InSendData:
+  case Status::InSendPartial:
+  case Status::InSendFinal:
   case Status::InStatus:
     extract_in_xfer()->invoke_xfer_failed(reason);
     return;
@@ -179,7 +258,8 @@ void ControlEndpoint::invoke_xfer_failed(XferFailReason reason) {
 }
 
 std::unique_ptr<CtrlInXfer> ControlEndpoint::extract_in_xfer() {
-  assert(status_ == Status::InSetupReceived || status_ == Status::InSendData ||
+  assert(status_ == Status::InSetupReceived ||
+         status_ == Status::InSendPartial || status_ == Status::InSendFinal ||
          status_ == Status::InStatus);
   std::unique_ptr<CtrlInXfer> result = std::move(xfer_.in);
   status_ = Status::Idle;

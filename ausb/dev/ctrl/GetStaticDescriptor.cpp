@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev_ctrl/GetStaticDescriptor.h"
+#include "ausb/dev/ctrl/GetStaticDescriptor.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/log.h"

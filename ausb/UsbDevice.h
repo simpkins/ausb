@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <system_error>
 
 #include "ausb/ControlEndpoint.h"
 // TODO: create a separate header for HWDevice
@@ -21,6 +22,11 @@ public:
       : hw_(hw), ep0_(this, ep0_handler) {}
 
   /**
+   * Initialize the USB device.
+   */
+  std::error_code init();
+
+  /**
    * Reset and de-initialize the USB device.
    */
   void reset();
@@ -30,6 +36,14 @@ public:
    * another task).
    */
   void handle_event(const DeviceEvent &event);
+
+  /**
+   * Set the device address.
+   *
+   * This should generally only be invoked when handling a SET_ADDRESS request
+   * on endpoint 0.
+   */
+  void set_address(uint8_t address);
 
   /**
    * Configure a control endpoint to respond to any future IN or OUT tokens
@@ -165,7 +179,9 @@ private:
   void on_enum_done(UsbSpeed speed);
   void on_setup_received(const SetupPacketEvent &packet);
   void on_in_xfer_complete(uint8_t endpoint_num);
-  void on_in_xfer_failed(uint8_t endpoint_num);
+  void on_in_xfer_failed(uint8_t endpoint_num, XferFailReason reason);
+  void on_out_xfer_complete(uint8_t endpoint_num, uint32_t bytes_read);
+  void on_out_xfer_failed(uint8_t endpoint_num, XferFailReason reason);
 
   State state_ = State::Uninit;
   uint8_t config_id_ = 0;

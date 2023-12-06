@@ -2,12 +2,14 @@
 #pragma once
 
 #include "ausb/ControlEndpoint.h"
+#include "ausb/desc/DeviceDescriptor.h"
 
 namespace ausb::device {
 
 class ControlHandler : public ControlEndpointCallback {
 public:
-  ControlHandler() = default;
+  constexpr ControlHandler(const DeviceDescriptor& dev_desc)
+      : dev_descriptor_(dev_desc) {}
 
   void on_enum_done(uint8_t max_packet_size) override;
 
@@ -19,6 +21,12 @@ public:
 private:
   ControlHandler(ControlHandler const &) = delete;
   ControlHandler &operator=(ControlHandler const &) = delete;
+
+  std::unique_ptr<CtrlOutXfer>
+  process_std_device_out(const SetupPacket &packet);
+  std::unique_ptr<CtrlInXfer> process_std_device_in(const SetupPacket &packet);
+
+  DeviceDescriptor dev_descriptor_;
 };
 
 } // namespace ausb::device

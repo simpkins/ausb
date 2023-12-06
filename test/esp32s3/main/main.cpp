@@ -23,14 +23,18 @@ constexpr DeviceDescriptor make_device_descriptor() {
 }
 
 static constinit Esp32Device dev;
-ControlHandler ctrl_handler;
+ControlHandler ctrl_handler(make_device_descriptor());
 static constinit UsbDevice usb(&dev, &ctrl_handler);
 const char *LogTag = "ausb.test";
 }
 
-[[nodiscard]] esp_err_t run_test() {
+[[nodiscard]] std::error_code run_test() {
   ESP_LOGI(LogTag, "Starting USB initialization...");
-  ESP_RETURN_ON_ERROR(dev.init(), LogTag, "Error initializing USB device.");
+  const auto init_err = usb.init();
+  if (init_err) {
+      ESP_LOGE(LogTag, "Error initializing USB device.");
+      return init_err;
+  }
   ESP_LOGI(LogTag, "USB initialization complete.");
 
   size_t n = 0;
@@ -45,7 +49,7 @@ const char *LogTag = "ausb.test";
     }
   }
 
-  return ESP_OK;
+  return std::error_code();
 }
 
 extern "C" void app_main() {
@@ -54,11 +58,11 @@ extern "C" void app_main() {
   esp_log_level_set("ausb.test", ESP_LOG_VERBOSE);
 
   const auto err = run_test();
-  if (err != ESP_OK) {
+  if (err) {
     // We could abort here, but for now it seems better to just wait rather
     // than resetting and probably just entering an error reset loop.
     while (true) {
-      ESP_LOGE(LogTag, "error occurred: %d", err);
+      ESP_LOGE(LogTag, "error occurred: %s", err.message().c_str());
       vTaskDelay(pdMS_TO_TICKS(1000));
     }
   }

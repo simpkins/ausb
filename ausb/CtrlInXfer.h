@@ -52,19 +52,40 @@ public:
    * Provide the full response to send to the host.
    *
    * The caller must ensure that the data buffer remains valid until
-   * the CtrlInXfer object is destroyed.
+   * xfer_acked() has been called (or until the CtrlInXfer object is destroyed).
    *
    * This method may only be invoked from the USB task.
    */
-  void send_full(const void* data, size_t size);
+  void send_full(const void *data, size_t size) { send_final(data, size); }
 
-  /*
-   * TODO: in the future we could implement a send_partial() API to allow
-   * providing just some packets to send without having all data ready at once.
-   * This API would require that the partial data size be an exact multiple of
-   * the endpoint max packet size.
+  /**
+   * Provide partial response data to send to the host.
+   *
+   * The size must be an exact multiple of the control endpoint's maximum
+   * packet size.  After a call to send_partial(), partial_write_complete()
+   * will be called by the endpoint once the data has been transmitted.  Only a
+   * single write attempt may be in progress at a time: no new send_partial()
+   * or send_final() call can be made until partial_write_complete() has been
+   * invoked.
+   *
+   * The caller must ensure that the data buffer remains valid until
+   * partial_write_complete() has been invoked.
+   *
+   * send_final() should be used to send the final portion of the data to the
+   * host.
    */
-  // void send_partial(const void* data, size_t size);
+  void send_partial(const void* data, size_t size);
+
+  /**
+   * Provide the final chunk of the response data to send to the host.
+   *
+   * After send_partial() has been used to send partial chunks of data to the
+   * host, send_final() can be used to send the final portion of data.
+   *
+   * The caller must ensure that the data buffer remains valid until
+   * xfer_acked() has been called (or until the CtrlInXfer object is destroyed).
+   */
+  void send_final(const void* data, size_t size);
 
   /**
    * Send a STALL error to the host, indicating that the transfer failed.
@@ -75,7 +96,7 @@ public:
    * xfer_acked() will be called once the host has received and ACKed the
    * transfer.
    */
-  virtual void xfer_acked() = 0;
+  virtual void xfer_acked() {}
 
   /**
    * xfer_failed() will be called if the transfer fails for any reason outside
@@ -89,6 +110,12 @@ public:
    * xfer_failed() returns.
    */
   virtual void xfer_failed(XferFailReason reason) = 0;
+
+  /**
+   * After send_partial() has been invoked, partial_write_complete() will be
+   * invoked when this partial write has finished.
+   */
+  virtual void partial_write_complete() {}
 
 private:
   CtrlInXfer(CtrlInXfer const &) = delete;

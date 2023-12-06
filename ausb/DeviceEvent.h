@@ -53,6 +53,22 @@ struct InXferFailedEvent {
   XferFailReason reason;
 };
 
+struct OutXferCompleteEvent {
+  explicit constexpr OutXferCompleteEvent(uint8_t epnum, uint32_t size)
+      : endpoint_num(epnum), bytes_read(size) {}
+
+  uint8_t endpoint_num{0};
+  uint32_t bytes_read{0};
+};
+
+struct OutXferFailedEvent {
+  explicit constexpr OutXferFailedEvent(uint8_t epnum, XferFailReason rsn)
+      : endpoint_num(epnum), reason(rsn) {}
+
+  uint8_t endpoint_num{0};
+  XferFailReason reason;
+};
+
 /*
  * A note about SETUP packet events:
  *
@@ -90,7 +106,8 @@ struct SetupPacketEvent {
 
 using DeviceEvent =
     std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent, BusEnumDone,
-                 SetupPacketEvent, InXferCompleteEvent, InXferFailedEvent>;
+                 SetupPacketEvent, InXferCompleteEvent, InXferFailedEvent,
+                 OutXferCompleteEvent, OutXferFailedEvent>;
 static_assert(std::is_trivially_copyable_v<DeviceEvent>,
               "DeviceEvent must be trivially copyable");
 

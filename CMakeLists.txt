@@ -9,7 +9,8 @@ set(
     "ausb/CtrlInXfer.cpp"
     "ausb/CtrlOutXfer.cpp"
     "ausb/UsbDevice.cpp"
-    "ausb/dev_ctrl/GetStaticDescriptor.cpp"
+    "ausb/dev/ctrl/GetStaticDescriptor.cpp"
+    "ausb/dev/ctrl/SetAddress.cpp"
 )
 
 if(ESP_PLATFORM)

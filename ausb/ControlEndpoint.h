@@ -15,9 +15,16 @@ namespace device {
 class CtrlInXfer;
 class CtrlOutXfer;
 class UsbDevice;
+class ControlEndpoint;
 
 class ControlEndpointCallback {
 public:
+  /**
+   * set_endpoint() will be called during device initialization, before any
+   * other callback methods are invoked.
+   */
+  void set_endpoint(ControlEndpoint *ep) { endpoint_ = ep; }
+
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
 
@@ -25,6 +32,9 @@ public:
   process_out_setup(const SetupPacket &packet) = 0;
   virtual std::unique_ptr<CtrlInXfer>
   process_in_setup(const SetupPacket &packet) = 0;
+
+protected:
+  ControlEndpoint* endpoint_ = nullptr;
 };
 
 /**
@@ -50,14 +60,15 @@ public:
     // We have completed processing an OUT transfer are sending the final
     // 0-length IN transaction to acknowledge the transfer.
     OutAck,
-
     // We have received a SETUP packet for an IN transfer,
     // but have not yet prepared IN data to send to the host.
     InSetupReceived,
-
+    // We received a SETUP packet for an IN transfer, and are currently sending
+    // data, but more data remains to be sent after the current write.
+    InSendPartial,
     // We received a SETUP packet for an IN transfer,
-    // and are currently sending data.
-    InSendData,
+    // and are currently sending the last portion of data.
+    InSendFinal,
     // We have sent all data for an IN transfer, and are waiting for the host
     // to acknowledge the transfer.
     InStatus,
@@ -75,6 +86,8 @@ public:
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by UsbDevice to inform us of events
   ////////////////////////////////////////////////////////////////////
+
+  void on_init();
 
   /**
    * on_enum_done() will be called by the UsbDevice after the device is
@@ -104,7 +117,7 @@ public:
   void on_in_xfer_complete();
   void on_in_xfer_failed(XferFailReason reason);
 
-  void on_out_xfer_complete();
+  void on_out_xfer_complete(uint32_t bytes_read);
   void on_out_xfer_failed(XferFailReason reason);
 
   ////////////////////////////////////////////////////////////////////
@@ -130,6 +143,7 @@ public:
    * Fail an OUT transfer by returning a STALL error to the host.
    *
    * This method should only be invoked by the current CtrlOutXfer object.
+   * Note that this method will immediately destroy the CtrlOutXfer.
    */
   void fail_out_xfer();
 
@@ -137,13 +151,21 @@ public:
    * Begin receiving data for the current control IN transfer.
    *
    * This method should only be invoked by the current CtrlInXfer object.
+   *
+   * is_final should be true if this data completes the data to send as part of
+   * this SETUP transfer.  is_final should be false if there is more data to
+   * send after this. If is_final is false, size must be an exact multiple of
+   * the endpoint maximum packet size.  Once the partial write is complete
+   * CtrlInXfer::partial_write_complete() will be invoked.  If is_final is true
+   * then xfer_acked() is invoked instead once the host acknowledges the data.
    */
-  void start_in_write(const void *data, size_t size);
+  void start_in_write(const void *data, size_t size, bool is_final = true);
 
   /**
    * Fail an IN transfer by returning a STALL error to the host.
    *
    * This method should only be invoked by the current CtrlInXfer object.
+   * Note that this method will immediately destroy the CtrlInXfer.
    */
   void fail_in_xfer();
 
@@ -171,7 +193,9 @@ private:
   void invoke_xfer_failed(XferFailReason reason);
   void stall();
 
+  // Return the current CtrlInXfer, and reset the state to Idle
   std::unique_ptr<CtrlInXfer> extract_in_xfer();
+  // Return the current CtrlOutXfer, and reset the state to Idle
   std::unique_ptr<CtrlOutXfer> extract_out_xfer();
 
   UsbDevice* const usb_ = nullptr;

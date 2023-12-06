@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <system_error>
 
 namespace ausb {
 
@@ -73,7 +74,7 @@ public:
    * divider must be used.  For bus-powered devices, the vbus_monitor parameter
    * may be set to std::nullopt.
    */
-  [[nodiscard]] esp_err_t
+  [[nodiscard]] std::error_code
   init(EspPhyType phy_type = EspPhyType::Internal,
        std::optional<gpio_num_t> vbus_monitor = std::nullopt);
 
@@ -363,6 +364,8 @@ private:
     send_event_from_isr(e);
   }
 
+  [[nodiscard]] esp_err_t esp_init(EspPhyType phy_type,
+                                   std::optional<gpio_num_t> vbus_monitor);
   [[nodiscard]] esp_err_t init_phy(EspPhyType phy_type,
                                    std::optional<gpio_num_t> vbus_monitor);
   void all_endpoints_nak();
@@ -397,6 +400,7 @@ private:
   void receive_packet(uint8_t endpoint_num, uint16_t packet_size);
 
   DeviceEvent process_out_ep_interrupt(uint8_t endpoint_num, uint32_t doepint);
+  DeviceEvent process_out_xfer_complete(uint8_t endpoint_num);
 
   static uint16_t get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl);
   static uint8_t get_ep0_max_packet_size(EP0MaxPktSize mps_bits);

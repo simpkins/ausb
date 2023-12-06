@@ -1,6 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/esp/Esp32Device.h"
 
+#include "ausb/esp/EspError.h"
+
 #include <esp_check.h>
 #include <esp_log.h>
 #include <hal/usb_hal.h>
@@ -192,7 +194,6 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
 
 DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
                                                   uint32_t doepint) {
-
   // If the XFERCOMPL and SETUP flags are both set, the most likely scenario is
   // that we just finished an OUT transfer that was the status phase of a
   // control IN transfer, and then we received a new SETUP packet to start a
@@ -201,47 +202,18 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
   // Process the XFERCOMPL first, since we generally want to inform the caller
   // of the previous transfer finishing before we tell them about the new SETUP
   // packet.
-  //
-  // TODO: maybe don't update doeptsiz to enable receipt of new setup packets
-  // until the out transfer completes?
   if (doepint & USB_XFERCOMPL0_M) {
-    if (doepint & USB_SETUP0_M) {
-      pending_event_ =
-          OutEndpointInterrupt(endpoint_num, doepint & ~USB_XFERCOMPL0_M);
+    ESP_LOGD(LogTag, "EP%u OUT: transfer complete", endpoint_num);
+    auto event = process_out_xfer_complete(endpoint_num);
+    if (!std::holds_alternative<NoEvent>(event)) {
+      // If USB_SETUP0_M was also set, remember that event so we can process it
+      // the next time wait_for_event() is called.
+      if (doepint & USB_SETUP0_M) {
+        pending_event_ =
+            OutEndpointInterrupt(endpoint_num, doepint & ~USB_XFERCOMPL0_M);
+      }
+      return event;
     }
-
-    auto &xfer = out_transfers_[endpoint_num];
-    if (xfer.status != OutEPStatus::Busy) {
-      // It's possible that this could happen if we recently processed
-      // application-initiated request to abort the transfer and this raced
-      // with us receiving the interrupt.
-      ESP_LOGD(LogTag,
-               "OUT xfer complete interrupt on endpoint %d, but transfer "
-               "was no longer in progress",
-               endpoint_num);
-      return NoEvent(NoEventReason::HwProcessing);
-    }
-
-    // TODO:
-    // - if we read all data requested, or if the transfer ended due to a short
-    //   packet, generate an event for the application
-    // - if the HW transfer read all data requested but the SW transfer still
-    //   has more data to read, call initiate_next_read_xfer() to start another
-    //   HW transfer
-
-#if 0
-    auto &xfer = xfer_status_[epnum].out;
-    // Transfer complete if short packet or total length is received
-    if (xfer.recv_complete) {
-      send_event_from_isr<OutXferCompleteEvent>(epnum, xfer.received_bytes);
-    } else {
-      // Enable receiving another packet on this endpoint
-      set_bits(usb_->out_ep_reg[epnum].doeptsiz,
-               USB_PKTCNT0_M |
-                   ((xfer.max_size & USB_XFERSIZE0_V) << USB_XFERSIZE0_S));
-      set_bits(usb_->out_ep_reg[epnum].doepctl, USB_EPENA0_M | USB_CNAK0_M);
-    }
-#endif
   }
 
   // Setup packet receipt done
@@ -254,7 +226,7 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
   // endpoint enable flag in doepctl.  These always need to be explicitly
   // updated to enable OUT transfer receipt after a SETUP packet.
   if ((doepint & USB_SETUP0_M)) {
-    ESP_LOGD(LogTag, "USB OUT: SETUP receive complete on EP%u", endpoint_num);
+    ESP_LOGD(LogTag, "EP%u OUT: SETUP receive complete", endpoint_num);
 
     // If XFERCOMPL was also set (should be unlikely?), add an event back to
     // the front of the queue to process this flag the next time
@@ -268,8 +240,44 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
     return SetupPacketEvent(endpoint_num, setup_packet_.setup);
   }
 
-  // FIXME
   return NoEvent(NoEventReason::HwProcessing);
+}
+
+DeviceEvent Esp32Device::process_out_xfer_complete(uint8_t endpoint_num) {
+  auto &xfer = out_transfers_[endpoint_num];
+  if (xfer.status != OutEPStatus::Busy) {
+    // It's possible that this could happen if we recently processed
+    // application-initiated request to abort the transfer and this raced
+    // with us receiving the interrupt.
+    ESP_LOGD(LogTag,
+             "OUT xfer complete interrupt on endpoint %d, but transfer "
+             "was no longer in progress",
+             endpoint_num);
+    // Fall through to continue processing other interrupt flags
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+
+  // If we the transfer ended before we read all requested data,
+  // this means the host sent a short byte, which ends the transfer.
+  // Otherwise, we received all data requested, and if the software-initiated
+  // transfer still wants more data, then start a new hardware transfer.
+  const auto doeptsiz = usb_->out_ep_reg[endpoint_num].doeptsiz;
+  const uint32_t pkts_left = (doeptsiz >> USB_PKTCNT0_S) & USB_PKTCNT0_V;
+  const uint32_t bytes_left = (doeptsiz >> USB_XFERSIZE0_S) & USB_XFERSIZE0_V;
+  if (pkts_left == 0 && bytes_left == 0 && xfer.bytes_read < xfer.capacity) {
+    // Start the next HW transfer
+    initiate_next_read_xfer(endpoint_num);
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+
+  // The overall software transfer is now complete
+  if (xfer.bytes_read > xfer.capacity) {
+    // Buffer overrun.  The software asked for a partial packet amount, and
+    // the host sent more than was expected.
+    return OutXferFailedEvent(endpoint_num, XferFailReason::BufferOverrun);
+  }
+
+  return OutXferCompleteEvent(endpoint_num, xfer.bytes_read);
 }
 
 void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
@@ -291,7 +299,13 @@ void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
   }
 }
 
-esp_err_t Esp32Device::init(EspPhyType phy_type,
+std::error_code Esp32Device::init(EspPhyType phy_type,
+                            std::optional<gpio_num_t> vbus_monitor) {
+  const auto esp_err = esp_init(phy_type, vbus_monitor);
+  return make_esp_error(esp_err);
+}
+
+esp_err_t Esp32Device::esp_init(EspPhyType phy_type,
                             std::optional<gpio_num_t> vbus_monitor) {
   ESP_LOGI(LogTag, "USB device init");
 
@@ -1205,7 +1219,16 @@ DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
     ESP_LOGD(LogTag, "USB RX: Global OUT NAK effective");
     break;
   case Pktsts::TxComplete:
-    ESP_LOGD(LogTag, "USB RX: OUT packet done");
+    // This signals that all data for a single OUT transfer was read.
+    // This will occur when either
+    // - We read exactly as many packets and bytes specified in doeptsiz
+    // - The host sent a short packet, indicating end of transfer
+    //
+    // Now that we have popped this entry off the RX FIFO, an out endpoint
+    // interrupt will be generated with the USB_XFERCOMPL flag set.
+    // We don't do any other processing here, and we wait until that interrupt
+    // to handle the transfer completion.
+    ESP_LOGD(LogTag, "USB RX: OUT transfer done");
     break;
   default:
     ESP_LOGE(LogTag, "USB RX: unexpected pktsts value: %x", pktsts);
