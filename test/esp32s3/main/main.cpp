@@ -49,6 +49,54 @@ static constinit Esp32Device dev;
 ControlHandler ctrl_handler(&kDescriptors);
 static constinit UsbDevice usb(&dev, &ctrl_handler);
 const char *LogTag = "ausb.test";
+
+void dump_hex(const uint8_t* buf, uint16_t size) {
+  auto p = buf;
+  size_t bytes_left = size;
+  while (bytes_left > 8) {
+    printf("- %02x %02x %02x %02x %02x %02x %02x %02x\n",
+           p[0],
+           p[1],
+           p[2],
+           p[3],
+           p[4],
+           p[5],
+           p[6],
+           p[7]);
+    p += 8;
+    bytes_left -= 8;
+  }
+  if (bytes_left > 0) {
+    printf("-");
+    while (bytes_left > 0) {
+      printf(" %02x", p[0]);
+      ++p;
+      --bytes_left;
+    }
+    printf("\n");
+  }
+}
+
+void dump_desc(uint16_t value, uint16_t index) {
+  printf("Descriptor %#x  %#x:\n", value, index);
+  auto desc = kDescriptors.get_descriptor_with_setup_ids(value, index);
+  if (!desc.has_value()) {
+    printf("- none\n");
+    return;
+  }
+
+  printf("- size: %d\n", desc->size());
+  dump_hex(desc->data(), desc->size());
+}
+
+void dump_descriptors() {
+  printf("USB Descriptors:\n");
+  dump_desc(0x100, 0);
+  dump_desc(0x200, 0);
+  dump_desc(0x300, 0);
+  dump_desc(0x301, 0x0409);
+  dump_desc(0x302, 0x0409);
+  dump_desc(0x303, 0x0409);
 }
 
 [[nodiscard]] std::error_code run_test() {
@@ -75,6 +123,8 @@ const char *LogTag = "ausb.test";
   return std::error_code();
 }
 
+} // namespace
+
 extern "C" void app_main() {
   esp_log_level_set("ausb", ESP_LOG_VERBOSE);
   esp_log_level_set("ausb.esp32", ESP_LOG_VERBOSE);
@@ -82,8 +132,11 @@ extern "C" void app_main() {
 
   ESP_LOGI(LogTag, "test starting.  sizeof(kDescriptors)=%zu",
            sizeof(kDescriptors));
+
   const auto desc = kDescriptors.get_descriptor(DescriptorType::Device);
   ESP_LOGI(LogTag, "device descriptor size: %zu", desc ? desc->size() : 0);
+
+  dump_descriptors();
 
   const auto err = run_test();
   if (err) {

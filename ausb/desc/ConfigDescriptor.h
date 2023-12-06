@@ -188,16 +188,20 @@ private:
       : last_intf_offset_(last_intf_offset) {
     static_assert(TotalLength <= std::numeric_limits<uint16_t>::max(),
                   "config descriptor data is to large");
+    // Manually set the initial few bytes, since this includes the wTotalLength
+    // and bNumInterfaces fields which need to be updated.
+    data_[0] = other.data_[0];
+    data_[1] = other.data_[1];
+    data_[2] = kTotalLength & 0xff;
+    data_[3] = (kTotalLength >> 8) & 0xff;
+    data_[4] = kNumInterfaces;
     constexpr size_t other_size = TotalLength - InterfaceDescriptor::kSize;
-    for (size_t n = 0; n < other_size; ++n) {
+    for (size_t n = 5; n < other_size; ++n) {
       data_[n] = other.data_[n];
     }
     for (size_t n = 0; n < intf.data().size(); ++n) {
       data_[other_size + n] = intf.data()[n];
     }
-
-    // Increment the bNumInterfaces field by 1 compared to the old descriptor
-    data_[4] = num_interfaces() + 1;
   }
 
   // Constructor for appending an EndpointDescriptor to an existing
@@ -209,8 +213,12 @@ private:
       : last_intf_offset_(other.last_intf_offset_) {
     static_assert(TotalLength <= std::numeric_limits<uint16_t>::max(),
                   "config descriptor data is to large");
+    data_[0] = other.data_[0];
+    data_[1] = other.data_[1];
+    data_[2] = kTotalLength & 0xff;
+    data_[3] = (kTotalLength >> 8) & 0xff;
     constexpr size_t other_size = TotalLength - EndpointDescriptor::kSize;
-    for (size_t n = 0; n < other_size; ++n) {
+    for (size_t n = 4; n < other_size; ++n) {
       data_[n] = other.data_[n];
     }
     for (size_t n = 0; n < endpoint.data().size(); ++n) {
