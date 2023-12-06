@@ -6,6 +6,7 @@
 
 #include "ausb/ControlHandler.h"
 #include "ausb/UsbDevice.h"
+#include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/esp/Esp32Device.h"
@@ -21,14 +22,18 @@ constexpr auto make_descriptor_map() {
   dev.set_product(0x1235);
   dev.set_device_release(0, 1);
 
-  return StaticDescriptorMap<0, 0>()
+  auto cfg = ConfigDescriptor(1, ConfigAttr::RemoteWakeup)
+                 .add_interface(InterfaceDescriptor(UsbClass::Hid));
+
+  return StaticDescriptorMap()
       .add_device_descriptor(dev)
       .add_language_ids(Language::English_US)
       .add_string(dev.mfgr_str_idx(), "Adam Simpkins", Language::English_US)
       .add_string(dev.product_str_idx(), "AUSB Test Device",
                   Language::English_US)
       .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
-                  Language::English_US);
+                  Language::English_US)
+      .add_config_descriptor(cfg);
 }
 
 static constexpr auto kDescriptors = make_descriptor_map();

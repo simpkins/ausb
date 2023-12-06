@@ -25,7 +25,7 @@ namespace ausb {
  * be updated at runtime.  For instance, this can be used for the serial number
  * string, which may be computed and updated at runtime when the program starts.
  */
-template <uint16_t NumDescriptors, size_t DataLength>
+template <uint16_t NumDescriptors = 0, size_t DataLength = 0>
 class StaticDescriptorMap : public DescriptorMap {
 public:
   static constexpr uint16_t num_descriptors = NumDescriptors;
@@ -84,6 +84,25 @@ public:
     return add_descriptor(DescriptorType::String, desc);
   }
 
+  /**
+   * Add a configuration descriptor
+   */
+  template <size_t ConfigTotalLength, uint8_t NumInterfaces>
+  constexpr StaticDescriptorMap<NumDescriptors + 1,
+                                DataLength + ConfigTotalLength>
+  add_config_descriptor(
+      const ConfigDescriptor<ConfigTotalLength, NumInterfaces> cfg) {
+    return add_descriptor(DescriptorType::Config,
+                          count_num_config_descriptors(), cfg.data());
+  }
+  template <size_t ConfigTotalLength, uint8_t NumInterfaces>
+  constexpr StaticDescriptorMap<NumDescriptors + 1,
+                                DataLength + ConfigTotalLength>
+  add_config_descriptor(
+      uint8_t index,
+      const ConfigDescriptor<ConfigTotalLength, NumInterfaces> cfg) {
+    return add_descriptor(DescriptorType::Config, index, cfg.data());
+  }
 #if 0
   /**
    * Add a configuration descriptor, and its associated interface, endpoint,
