@@ -2,6 +2,7 @@
 #pragma once
 
 #include "ausb/desc/types.h"
+#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/InterfaceDescriptor.h"
 
 #include <array>
@@ -104,9 +105,23 @@ public:
                             NumInterfaces + 1>(*this, intf, 0);
   }
 
+  /**
+   * Return a new ConfigDescriptor object created by appending
+   * a new endpoint descriptor.
+   *
+   * Note that this method does not modify the current object, but instead
+   * returns a new, larger object.
+   */
+  constexpr ConfigDescriptor<TotalLength + EndpointDescriptor::kSize,
+                             NumInterfaces>
+  add_endpoint(const EndpointDescriptor &endpoint) {
+    return ConfigDescriptor<TotalLength + EndpointDescriptor::kSize,
+                            NumInterfaces>(*this, endpoint);
+  }
+
   constexpr uint16_t total_length() const {
-    return (static_cast<uint16_t>(data_[2]) << 8) |
-           static_cast<uint16_t>(data_[3]);
+    return (static_cast<uint16_t>(data_[3]) << 8) |
+           static_cast<uint16_t>(data_[2]);
   }
   constexpr uint8_t num_interfaces() const { return data_[4]; }
 
@@ -164,6 +179,8 @@ public:
 private:
   template <size_t X, uint8_t Y> friend class ConfigDescriptor;
 
+  // Constructor for appending an InterfaceDescriptor to an existing
+  // ConfigDescriptor
   constexpr ConfigDescriptor(
       const ConfigDescriptor<TotalLength - InterfaceDescriptor::kSize,
                              NumInterfaces - 1> &other,
@@ -181,6 +198,29 @@ private:
 
     // Increment the bNumInterfaces field by 1 compared to the old descriptor
     data_[4] = num_interfaces() + 1;
+  }
+
+  // Constructor for appending an EndpointDescriptor to an existing
+  // ConfigDescriptor
+  constexpr ConfigDescriptor(
+      const ConfigDescriptor<TotalLength - EndpointDescriptor::kSize,
+                             NumInterfaces> &other,
+      const EndpointDescriptor &endpoint)
+      : last_intf_offset_(other.last_intf_offset_) {
+    static_assert(TotalLength <= std::numeric_limits<uint16_t>::max(),
+                  "config descriptor data is to large");
+    constexpr size_t other_size = TotalLength - EndpointDescriptor::kSize;
+    for (size_t n = 0; n < other_size; ++n) {
+      data_[n] = other.data_[n];
+    }
+    for (size_t n = 0; n < endpoint.data().size(); ++n) {
+      data_[other_size + n] = endpoint.data()[n];
+    }
+
+    if (last_intf_offset_ != 0) {
+      // Increment the bNumEndpoints field in the interface descriptor
+      data_[last_intf_offset_ + 4] += 1;
+    }
   }
 
   std::array<uint8_t, TotalLength> data_ = {};

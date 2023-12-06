@@ -7,6 +7,7 @@
 #include "ausb/ControlHandler.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/ConfigDescriptor.h"
+#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/esp/Esp32Device.h"
@@ -22,8 +23,15 @@ constexpr auto make_descriptor_map() {
   dev.set_product(0x1235);
   dev.set_device_release(0, 1);
 
+  EndpointDescriptor ep1;
+  ep1.set_address(Direction::In, 1);
+  ep1.set_type(EndpointType::Interrupt);
+  ep1.set_interval(10);
+  ep1.set_max_packet_size(8);
+
   auto cfg = ConfigDescriptor(1, ConfigAttr::RemoteWakeup)
-                 .add_interface(InterfaceDescriptor(UsbClass::Hid));
+                 .add_interface(InterfaceDescriptor(UsbClass::Hid))
+                 .add_endpoint(ep1);
 
   return StaticDescriptorMap()
       .add_device_descriptor(dev)
