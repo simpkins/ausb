@@ -4,6 +4,8 @@
 #include "ausb/usb_types.h"
 
 #include <cstdint>
+#include <cstdlib>
+#include <type_traits>
 
 namespace ausb {
 
@@ -112,12 +114,20 @@ public:
   explicit constexpr UsbMilliamps(uint16_t milliamps)
       : value_((milliamps + 1) / 2) {
     if (milliamps >= (0xff * 2)) {
-      abort(); // "value too large to express"
+      if (std::is_constant_evaluated()) {
+        // We can generate a compile failure if called with bad data at compile
+        // time
+        abort(); // "value too large to express"
+      } else {
+        // If invoked with bad data at runtime, clamp the value to the max
+        value_ = 0xff;
+      }
     }
   }
 
-  constexpr uint8_t value_in_2ma() const {
-    return value_;
+  constexpr uint8_t value_in_2ma() const { return value_; }
+  constexpr uint16_t milliamps() const {
+    return static_cast<uint16_t>(value_) * 2;
   }
 
 private:

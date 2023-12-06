@@ -7,6 +7,7 @@
 #include "ausb/ControlHandler.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/DeviceDescriptor.h"
+#include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/esp/Esp32Device.h"
 
 using namespace ausb;
@@ -22,6 +23,23 @@ constexpr DeviceDescriptor make_device_descriptor() {
   return dev;
 }
 
+constexpr auto make_descriptor_map() {
+  DeviceDescriptor dev;
+  dev.set_vendor(0x6666); // Prototype product vendor ID
+  dev.set_product(0x1235);
+  dev.set_device_release(0, 1);
+
+  return StaticDescriptorMap<0, 0>()
+      .add_device_descriptor(dev)
+      .add_language_ids(Language::English_US)
+      .add_string(dev.mfgr_str_idx(), "Adam Simpkins", Language::English_US)
+      .add_string(dev.product_str_idx(), "AUSB Test Device",
+                  Language::English_US)
+      .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
+                  Language::English_US);
+}
+
+static constexpr auto kDescriptors = make_descriptor_map();
 static constinit Esp32Device dev;
 ControlHandler ctrl_handler(make_device_descriptor());
 static constinit UsbDevice usb(&dev, &ctrl_handler);
@@ -56,6 +74,11 @@ extern "C" void app_main() {
   esp_log_level_set("ausb", ESP_LOG_VERBOSE);
   esp_log_level_set("ausb.esp32", ESP_LOG_VERBOSE);
   esp_log_level_set("ausb.test", ESP_LOG_VERBOSE);
+
+  ESP_LOGI(LogTag, "test starting.  sizeof(kDescriptors)=%zu",
+           sizeof(kDescriptors));
+  const auto desc = kDescriptors.get_descriptor(DescriptorType::Device);
+  ESP_LOGI(LogTag, "device descriptor size: %zu", desc ? desc->size() : 0);
 
   const auto err = run_test();
   if (err) {
