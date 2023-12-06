@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/ausb_types.h"
 #include "ausb/SetupPacket.h"
 
 #include <type_traits>
@@ -45,9 +46,11 @@ struct InXferCompleteEvent {
 };
 
 struct InXferFailedEvent {
-  explicit constexpr InXferFailedEvent(uint8_t epnum) : endpoint_num(epnum) {}
+  explicit constexpr InXferFailedEvent(uint8_t epnum, XferFailReason rsn)
+      : endpoint_num(epnum), reason(rsn) {}
 
   uint8_t endpoint_num{0};
+  XferFailReason reason;
 };
 
 /*
@@ -78,9 +81,11 @@ struct InXferFailedEvent {
  * being cancelled and restarted when a retransmitted SETUP is received.
  */
 struct SetupPacketEvent {
-  explicit constexpr SetupPacketEvent(const SetupPacket &p) : pkt(p) {}
+  explicit constexpr SetupPacketEvent(uint8_t epnum, const SetupPacket &p)
+      : endpoint_num(epnum), packet(p) {}
 
-  SetupPacket pkt;
+  uint8_t endpoint_num = 0;
+  SetupPacket packet;
 };
 
 using DeviceEvent =

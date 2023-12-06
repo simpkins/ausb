@@ -4,6 +4,8 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(
     srcs
+    "ausb/ControlEndpoint.cpp"
+    "ausb/ControlHandler.cpp"
     "ausb/CtrlInXfer.cpp"
     "ausb/CtrlOutXfer.cpp"
     "ausb/UsbDevice.cpp"

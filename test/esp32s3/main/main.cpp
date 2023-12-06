@@ -4,6 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "ausb/ControlHandler.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/esp/Esp32Device.h"
@@ -22,7 +23,8 @@ constexpr DeviceDescriptor make_device_descriptor() {
 }
 
 static constinit Esp32Device dev;
-static constinit UsbDevice usb(&dev, make_device_descriptor());
+ControlHandler ctrl_handler;
+static constinit UsbDevice usb(&dev, &ctrl_handler);
 const char *LogTag = "ausb.test";
 }
 

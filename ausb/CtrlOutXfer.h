@@ -12,33 +12,44 @@ class SetupPacket;
 
 namespace device {
 
-class UsbDevice;
+class ControlEndpoint;
 
 /**
  * A class for implementing endpoint 0 control OUT transfers in device mode.
  *
  * Note that this class (and UsbDevice in general) is not thread safe.
+ * The implementation should only invoke methods on this class from the main
+ * USB task.  e.g.  start_read(), ack(), and error() may only be called
+ * from the main USB task.  When the UsbDevice invokes methods on this class,
+ * it will always be done from the main USB task.
  *
- * not thread safe.  ack() and error() should only be called from the main USB
- * task.  Similarly, destructor may only be called from main USB task.
- *
- * If the caller does processing on another task, they should use custom events
- * to trigger the final ack() or error() calls.
+ * If the implementation does any processing on another task, it should use
+ * custom events to trigger the final ack() or error() call to occur on the
+ * main USB task.
  */
 class CtrlOutXfer {
 public:
-  explicit CtrlOutXfer(UsbDevice *device) : device_(device) {}
+  explicit CtrlOutXfer(ControlEndpoint *endpoint) : endpoint_(endpoint) {}
 
+  /**
+   * The lifetime of the CtrlInXfer object is controlled by the
+   * ControlEndpoint, and the object will be destroyed when it is no longer
+   * needed.
+   *
+   * Unless the implementation has called ack() or error() to complete the
+   * transfer, xfer_failed() will be called before the object is destroyed.
+   */
   virtual ~CtrlOutXfer() {}
 
-  UsbDevice *usb() const { return device_; }
+  ControlEndpoint *endpoint() const { return endpoint_; }
 
   /**
    * Begin processing this transfer.
    *
-   * This will be called by UsbDevice to start processing the transfer.
-   * The implementation should usually call start_read() to begin reading the
-   * OUT data from the host (if the setup length is non-zero).
+   * This will be called to start processing the transfer shortly after the
+   * CtrlOutXfer has been created.  The implementation should usually call
+   * start_read() to begin reading the OUT data from the host (if the setup
+   * length is non-zero).
    */
   virtual void start(const SetupPacket& packet) = 0;
 
@@ -87,16 +98,19 @@ public:
   virtual void out_data_received(uint32_t bytes_received) = 0;
 
   /**
-   * xfer_cancelled() will be called if the transfer is cancelled.
+   * xfer_failed() will be called if the transfer fails for any reason outside
+   * of the transfer itself calling error().
    *
    * This method will always be invoked on the main USB task.
+   * Note that xfer_failed() may be invoked even after ack() has been called,
+   * if the host does not accept our acknowledgement packet.
    *
    * The CtrlOutXfer implementation should cancel any processing they are
    * doing.  It is not necessary to call ack() or error() (doing so will be a
    * no-op).  The CtrlOutXfer destructor will be called immediately after
-   * xfer_cancelled() returns.
+   * xfer_failed() returns.
    */
-  virtual void xfer_cancelled(XferCancelReason reason) = 0;
+  virtual void xfer_failed(XferFailReason reason) = 0;
 
 private:
   enum class State {
@@ -115,22 +129,17 @@ private:
   CtrlOutXfer(CtrlOutXfer const &) = delete;
   CtrlOutXfer &operator=(CtrlOutXfer const &) = delete;
 
-  friend class UsbDevice;
-  void invoke_xfer_cancelled(XferCancelReason reason) {
-      device_ = nullptr;
-      xfer_cancelled(reason);
+  friend class ControlEndpoint;
+  void invoke_xfer_failed(XferFailReason reason) {
+      endpoint_ = nullptr;
+      xfer_failed(reason);
   }
 
-  // Whether all OUT data has been received yet.
-  // This flag is set immediately before out_data_available() is called with
-  // the final data.  This flag is always set from the main USB task.
-  bool all_data_received_ = false;
-
-  // The pointer to the UsbDevice.
+  // The pointer to the ControlEndpoint.
   // This will be reset to null when the transfer is complete (by calling ack()
   // or error()), or once it has been cancelled, immediately before a
-  // xfer_cancelled() call.
-  UsbDevice *device_{nullptr};
+  // xfer_failed() call.
+  ControlEndpoint *endpoint_{nullptr};
 };
 
 } // namespace device

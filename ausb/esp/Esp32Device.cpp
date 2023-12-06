@@ -151,11 +151,12 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
   }
 
   // Transfer timeout
+  // This is only sent for control IN endpoints.
   if (diepint & USB_D_TIMEOUT0_M) {
     ESP_LOGW(LogTag, "USB IN transfer timeout on EP%u", endpoint_num);
-    // TODO: flush the TX FIFO and abort the write
+    flush_tx_fifo(0);
     xfer.reset();
-    return InXferFailedEvent(endpoint_num);
+    return InXferFailedEvent(endpoint_num, XferFailReason::Timeout);
   }
 
   // IN transfer complete
@@ -264,7 +265,7 @@ DeviceEvent Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
     }
 
     // Inform the application of the SETUP packet
-    return SetupPacketEvent(setup_packet_.setup);
+    return SetupPacketEvent(endpoint_num, setup_packet_.setup);
   }
 
   // FIXME
@@ -522,11 +523,15 @@ bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
   return true;
 }
 
-void Esp32Device::stall_ep0() {
-  // For EP0, we simply set the STALL flags, but leave the endpoint enabled
-  set_bits(usb_->out_ep_reg[0].doepctl, USB_STALL0_M);
-  set_bits(usb_->in_ep_reg[0].diepctl, USB_DI_SNAK1_M | USB_D_STALL1_M);
-  flush_tx_fifo(0);
+void Esp32Device::stall_control_endpoint(uint8_t endpoint_num) {
+  // Note that the EPENA / EPDIS flags are not used when stalling control
+  // endpoints, we just set the STALL flag.  (The docs explicitly mention that
+  // endpoint 0 cannot be disabled.  They are a little bit less clear about the
+  // behavior if any other endpoint is configured as a control endpoint type.)
+  set_bits(usb_->out_ep_reg[endpoint_num].doepctl, USB_STALL0_M);
+  set_bits(usb_->in_ep_reg[endpoint_num].diepctl,
+           USB_DI_SNAK0_M | USB_D_STALL0_M);
+  flush_tx_fifo(endpoint_num);
 }
 
 XferStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
@@ -900,8 +905,7 @@ void Esp32Device::flush_tx_fifo(uint8_t endpoint_num) {
   usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
   uint8_t const fifo_num =
       ((in_ep->diepctl >> USB_D_TXFNUM1_S) & USB_D_TXFNUM1_V);
-  set_bits(usb_->grstctl, fifo_num << USB_TXFNUM_S);
-  set_bits(usb_->grstctl, USB_TXFFLSH_M);
+  set_bits(usb_->grstctl, (fifo_num << USB_TXFNUM_S) | USB_TXFFLSH_M);
   while ((usb_->grstctl & USB_TXFFLSH_M) != 0) {
     // Busy loop until the FIFO has been cleared.
   }

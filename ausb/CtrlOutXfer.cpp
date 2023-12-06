@@ -1,16 +1,28 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/CtrlOutXfer.h"
 
-#include "ausb/UsbDevice.h"
+#include "ausb/ControlEndpoint.h"
 
 namespace ausb::device {
 
 void CtrlOutXfer::start_read(void *data, uint32_t size) {
-  device_->start_ctrl_out_read(data, size);
+  endpoint_->start_out_read(data, size);
 }
 
-void CtrlOutXfer::ack() { device_->start_ctrl_in_write(0, 0); }
+void CtrlOutXfer::ack() {
+  if (!endpoint_) {
+    // The transfer was already cancelled
+    return;
+  }
+  endpoint_->ack_out_xfer();
+}
 
-void CtrlOutXfer::error() { device_->stall_ctrl_out_transfer(); }
+void CtrlOutXfer::error() {
+  if (!endpoint_) {
+    // The transfer was already cancelled
+    return;
+  }
+  endpoint_->fail_out_xfer();
+}
 
 } // namespace ausb::device

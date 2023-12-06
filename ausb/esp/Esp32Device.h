@@ -121,9 +121,13 @@ public:
   bool configure_ep0(uint8_t max_packet_size);
 
   /**
-   * Configure Endpoint 0 to STALL the next IN or OUT token it receives.
+   * Configure a control endpoint to respond with a STALL error to IN and OUT
+   * tokens.
+   *
+   * The stall state will automatically be cleared the next time we receive a
+   * SETUP token, which starts a new control transfer.
    */
-  void stall_ep0();
+  void stall_control_endpoint(uint8_t endpoint_num);
 
   /**
    * Configure an OUT endpoint to respond to the next token with a STALL error.
