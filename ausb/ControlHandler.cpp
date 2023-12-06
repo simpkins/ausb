@@ -99,8 +99,8 @@ ControlHandler::process_get_descriptor(const SetupPacket &packet) {
   // use any more.)
   if (packet.value == desc_setup_value(DescriptorType::Device) &&
       packet.index == 0) {
-    if (desc->size() == DeviceDescriptor::kSize &&
-        (*desc)[7] != ep0_max_packet_size_) {
+    DeviceDescriptorParser dd(*desc);
+    if (dd.valid() && dd.ep0_max_pkt_size() != ep0_max_packet_size_) {
       AUSB_LOGI("GET_DESCRIPTOR explicitly modifying device descriptor to set "
                 "correct EP0 max packet size (%u -> %u)",
                 (*desc)[7], ep0_max_packet_size_);

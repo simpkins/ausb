@@ -14,7 +14,7 @@ GetDevDescriptorModifyEP0::GetDevDescriptorModifyEP0(ControlEndpoint *ep,
     : CtrlInXfer(ep) {
   assert(desc_.data().size() == buf.size());
   memcpy(desc_.data().data(), buf.data(), desc_.data().size());
-  desc_.set_max_pkt_size0(correct_ep0_mps);
+  desc_.set_ep0_max_pkt_size(correct_ep0_mps);
 }
 
 void GetDevDescriptorModifyEP0::start(const SetupPacket &packet) {

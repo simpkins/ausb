@@ -6,9 +6,13 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdlib>
+#include <string_view>
 #include <utility>
 
 namespace ausb {
+
+using buf_view = std::basic_string_view<uint8_t>;
 
 /**
  * A USB device descriptor.
@@ -83,8 +87,8 @@ public:
   constexpr void set_protocol(uint8_t subclass) { data_[6] = subclass; }
   constexpr uint8_t protocol() const { return data_[6]; }
 
-  constexpr void set_max_pkt_size0(uint8_t mps) { data_[7] = mps; }
-  constexpr uint8_t max_pkt_size0() const { return data_[7]; }
+  constexpr void set_ep0_max_pkt_size(uint8_t mps) { data_[7] = mps; }
+  constexpr uint8_t ep0_max_pkt_size() const { return data_[7]; }
 
   constexpr void set_vendor(uint16_t vendor) {
     data_[8] = static_cast<uint8_t>(vendor & 0xff);
@@ -151,6 +155,81 @@ public:
 
 private:
   std::array<uint8_t, kSize> data_ = {};
+};
+
+/**
+ * A class for parsing DeviceDescriptor data from an existing buffer.
+ *
+ * (This does unfortunately duplicate the accessor method code from
+ * DeviceDescriptor, but in this case simply duplicating the methods seems
+ * nicer to me than more complex alternatives that would avoid the
+ * duplication.)
+ */
+class DeviceDescriptorParser {
+public:
+  static constexpr size_t kSize = 18;
+
+  /**
+   * Create a DeviceDescriptorParser.
+   *
+   * If the caller attempts to create a DeviceDescriptorParser with a buffer of
+   * the incorrect size, the returned DeviceDescriptorParser will be invalid.
+   * If the caller has not already verified the buffer length, valid() must be
+   * called first before calling any other DeviceDescriptorParser methods.
+   */
+  constexpr DeviceDescriptorParser(const void *data, size_t size)
+      : data_(size == kSize ? static_cast<const uint8_t *>(data) : nullptr) {
+    if (std::is_constant_evaluated() && size != kSize) {
+      abort();
+    }
+  }
+  constexpr DeviceDescriptorParser(buf_view data)
+      : data_(data.size() == kSize ? data.data() : nullptr) {
+    if (std::is_constant_evaluated() && data.size() != kSize) {
+      abort();
+    }
+  }
+
+  constexpr bool valid() const { return data_ != nullptr; }
+  constexpr explicit operator bool() const { return data_ != nullptr; }
+
+  constexpr buf_view data() const { return buf_view(data_, kSize); }
+
+  constexpr uint8_t get_class() const { return data_[4]; }
+  constexpr uint8_t subclass() const { return data_[5]; }
+  constexpr uint8_t protocol() const { return data_[6]; }
+  constexpr uint8_t ep0_max_pkt_size() const { return data_[7]; }
+  constexpr uint16_t vendor() const {
+    return (static_cast<uint16_t>(data_[9]) << 8) |
+           static_cast<uint16_t>(data_[8]);
+  }
+  constexpr uint16_t product() const {
+    return (static_cast<uint16_t>(data_[11]) << 8) |
+           static_cast<uint16_t>(data_[10]);
+  }
+  constexpr uint16_t device_release_bcd() const {
+    return (static_cast<uint16_t>(data_[13]) << 8) |
+           static_cast<uint16_t>(data_[12]);
+  }
+  constexpr std::pair<uint8_t, uint8_t> device_release() const {
+    return {bcd_decode(data_[13]), bcd_decode(data_[12])};
+  }
+
+  constexpr uint8_t mfgr_str_idx() const { return data_[14]; }
+  constexpr uint8_t product_str_idx() const { return data_[15]; }
+  constexpr uint8_t serial_str_idx() const { return data_[16]; }
+
+  constexpr uint8_t num_configs() const { return data_[17]; }
+  constexpr uint16_t usb_version_bcd() const {
+    return (static_cast<uint16_t>(data_[3]) << 8) |
+           static_cast<uint16_t>(data_[2]);
+  }
+  constexpr std::pair<uint8_t, uint8_t> usb_version() const {
+    return {bcd_decode(data_[3]), bcd_decode(data_[2])};
+  }
+
+private:
+  const uint8_t* data_ = nullptr;
 };
 
 } // namespace ausb
