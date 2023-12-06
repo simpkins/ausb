@@ -57,6 +57,7 @@ public:
         }} {}
 
   constexpr const std::array<uint8_t, kSize> &data() const { return data_; }
+  constexpr std::array<uint8_t, kSize> &data() { return data_; }
 
   constexpr void set_class(UsbClass usb_class, uint8_t subclass,
                            uint8_t protocol) {

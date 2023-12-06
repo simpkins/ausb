@@ -15,14 +15,6 @@ using namespace ausb::device;
 using namespace std::chrono_literals;
 
 namespace {
-constexpr DeviceDescriptor make_device_descriptor() {
-  DeviceDescriptor dev;
-  dev.set_vendor(0x6666); // Prototype product vendor ID
-  dev.set_product(0x1235);
-  dev.set_device_release(0, 1);
-  return dev;
-}
-
 constexpr auto make_descriptor_map() {
   DeviceDescriptor dev;
   dev.set_vendor(0x6666); // Prototype product vendor ID
@@ -41,7 +33,7 @@ constexpr auto make_descriptor_map() {
 
 static constexpr auto kDescriptors = make_descriptor_map();
 static constinit Esp32Device dev;
-ControlHandler ctrl_handler(make_device_descriptor());
+ControlHandler ctrl_handler(&kDescriptors);
 static constinit UsbDevice usb(&dev, &ctrl_handler);
 const char *LogTag = "ausb.test";
 }

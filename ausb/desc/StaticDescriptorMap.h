@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/desc/DescriptorMap.h"
 #include "ausb/desc/StaticDescriptorMapUtils.h"
 
 namespace ausb {
@@ -25,7 +26,7 @@ namespace ausb {
  * string, which may be computed and updated at runtime when the program starts.
  */
 template <uint16_t NumDescriptors, size_t DataLength>
-class StaticDescriptorMap {
+class StaticDescriptorMap : public DescriptorMap {
 public:
   static constexpr uint16_t num_descriptors = NumDescriptors;
 
@@ -179,6 +180,14 @@ public:
     return get_descriptor_with_setup_ids(
         (static_cast<uint16_t>(DescriptorType::String) << 8) | index,
         static_cast<uint16_t>(language));
+  }
+
+  /*
+   * The implementation of the DescriptorMap interface
+   */
+  std::optional<buf_view>
+  get_descriptor_for_setup(uint16_t value, uint16_t index) const override {
+    return get_descriptor_with_setup_ids(value, index);
   }
 
 private:

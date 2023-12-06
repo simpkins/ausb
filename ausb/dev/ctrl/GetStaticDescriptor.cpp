@@ -20,11 +20,11 @@ void GetStaticDescriptor::start(const SetupPacket &packet) {
 }
 
 void GetStaticDescriptor::xfer_acked() {
-  AUSB_LOGI("GET_DESCRIPTOR xfer acked");
+  AUSB_LOGV("GET_DESCRIPTOR xfer acked");
 }
 
 void GetStaticDescriptor::xfer_failed(XferFailReason reason)  {
-  AUSB_LOGI("GET_DESCRIPTOR xfer failed: reason=%d", static_cast<int>(reason));
+  AUSB_LOGW("GET_DESCRIPTOR xfer failed: reason=%d", static_cast<int>(reason));
 }
 
 } // namespace ausb::device

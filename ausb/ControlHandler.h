@@ -2,14 +2,23 @@
 #pragma once
 
 #include "ausb/ControlEndpoint.h"
-#include "ausb/desc/DeviceDescriptor.h"
+#include "ausb/desc/DescriptorMap.h"
 
 namespace ausb::device {
 
 class ControlHandler : public ControlEndpointCallback {
 public:
-  constexpr ControlHandler(const DeviceDescriptor& dev_desc)
-      : dev_descriptor_(dev_desc) {}
+  /**
+   * Create a new ControlHandler.
+   *
+   * The ControlHandler stores a reference to the DescriptorMap, but does not
+   * own it.  It is the caller's responsibility to ensure that the
+   * DescriptorMap is valid for as long as the ControlHandler object is.
+   * (Typically the descriptor map is a global singleton, like the
+   * ControlHandler itself.)
+   */
+  constexpr ControlHandler(const DescriptorMap* descriptors)
+      : descriptors_(descriptors) {}
 
   void on_enum_done(uint8_t max_packet_size) override;
 
@@ -25,8 +34,10 @@ private:
   std::unique_ptr<CtrlOutXfer>
   process_std_device_out(const SetupPacket &packet);
   std::unique_ptr<CtrlInXfer> process_std_device_in(const SetupPacket &packet);
+  std::unique_ptr<CtrlInXfer> process_get_descriptor(const SetupPacket &packet);
 
-  DeviceDescriptor dev_descriptor_;
+  const DescriptorMap* descriptors_;
+  uint8_t ep0_max_packet_size_ = 64;
 };
 
 } // namespace ausb::device
