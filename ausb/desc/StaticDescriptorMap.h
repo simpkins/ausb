@@ -57,8 +57,8 @@ public:
   constexpr StaticDescriptorMap<NumDescriptors + 1, DataLength + DescLen>
   add_descriptor(DescriptorType type, uint8_t desc_index,
                  const std::array<uint8_t, DescLen> &desc) {
-    return add_descriptor_with_setup_ids(
-        (static_cast<uint16_t>(type) << 8) | desc_index, 0, desc);
+    return add_descriptor_with_setup_ids(desc_setup_value(type, desc_index), 0,
+                                         desc);
   }
 
   /**
@@ -117,9 +117,7 @@ public:
     config_desc.max_power = max_power;
     detail::serialize_descriptors(full_desc.data(), config_desc, sub...);
     return add_descriptor_with_setup_ids(
-        (static_cast<uint16_t>(DescriptorType::Config) << 8) | cfg_index,
-        0,
-        full_desc);
+        desc_setup_value(DescriptorType::Config, cfg_index), 0, full_desc);
   }
 #endif
 
@@ -133,8 +131,8 @@ public:
   constexpr StaticDescriptorMap<NumDescriptors + 1, DataLength + N * 2>
   add_string(uint8_t index, const char (&str)[N], Language language) {
     return add_descriptor_with_setup_ids(
-        (static_cast<uint16_t>(DescriptorType::String) << 8) | index,
-        static_cast<uint16_t>(language),
+        desc_setup_value(DescriptorType::String, index),
+        desc_setup_index(language),
         detail::make_string_descriptor<N>(str));
   }
 
@@ -165,8 +163,7 @@ public:
    */
   std::optional<buf_view> get_descriptor(DescriptorType type,
                                          uint8_t desc_index = 0) const {
-    return get_descriptor_with_setup_ids(
-        (static_cast<uint16_t>(type) << 8) | desc_index, 0);
+    return get_descriptor_with_setup_ids(desc_setup_value(type, desc_index), 0);
   }
 
   /**
@@ -178,8 +175,8 @@ public:
   std::optional<buf_view> get_string_descriptor(uint8_t index,
                                                 Language language) const {
     return get_descriptor_with_setup_ids(
-        (static_cast<uint16_t>(DescriptorType::String) << 8) | index,
-        static_cast<uint16_t>(language));
+        desc_setup_value(DescriptorType::String, index),
+        desc_setup_index(language));
   }
 
   /*

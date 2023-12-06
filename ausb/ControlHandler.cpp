@@ -97,7 +97,8 @@ ControlHandler::process_get_descriptor(const SetupPacket &packet) {
   // most cases.  Only if low speed was negotiated should we have to use a max
   // packet size of 8, and I expect there aren't many low speed hosts/hubs in
   // use any more.)
-  if (packet.value == 0x0100 && packet.index == 0) {
+  if (packet.value == desc_setup_value(DescriptorType::Device) &&
+      packet.index == 0) {
     if (desc->size() == DeviceDescriptor::kSize &&
         (*desc)[7] != ep0_max_packet_size_) {
       AUSB_LOGI("GET_DESCRIPTOR explicitly modifying device descriptor to set "

@@ -24,6 +24,14 @@ enum class DescriptorType : uint8_t {
   HidPhyDescriptor = 0x23,
 };
 
+/**
+ * Create the setup wValue field for a given descriptor type and descriptor
+ * index.
+ */
+constexpr uint16_t desc_setup_value(DescriptorType type, uint8_t index = 0) {
+  return (static_cast<uint16_t>(type) << 8) | index;
+}
+
 enum class UsbClass : uint8_t {
   PerInterface = 0x00,
   Audio = 0x01,
@@ -353,5 +361,12 @@ enum class Language : uint16_t {
   HID_Vendor_Defined_3 = 0xf8ff,
   HID_Vendor_Defined_4 = 0xfcff,
 };
+
+/**
+ * Create the setup wIndex field for a given descriptor language.
+ */
+constexpr uint16_t desc_setup_index(Language lang) {
+  return static_cast<uint16_t>(lang);
+}
 
 } // namespace ausb
