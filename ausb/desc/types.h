@@ -21,7 +21,7 @@ enum class DescriptorType : uint8_t {
 
   Hid = 0x21,
   HidReport = 0x22,
-  HidPhyDescriptor = 0x23,
+  HidPhysical = 0x23,
 };
 
 /**

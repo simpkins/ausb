@@ -3,6 +3,7 @@
 
 #include "ausb/bcd.h"
 #include "ausb/desc/types.h"
+#include "ausb/hid/types.h"
 
 #include <array>
 #include <cstdint>
@@ -20,6 +21,7 @@ using buf_view = std::basic_string_view<uint8_t>;
 class HidDescriptor {
 public:
   static constexpr size_t kSize = 9;
+  static constexpr size_t kTotalLength = kSize;
 
   constexpr HidDescriptor()
       : data_{{
@@ -37,11 +39,13 @@ public:
   constexpr const std::array<uint8_t, kSize> &data() const { return data_; }
   constexpr std::array<uint8_t, kSize> &data() { return data_; }
 
-  constexpr HidDescriptor &set_country(uint8_t idx) {
-    data_[4] = idx;
+  constexpr HidDescriptor &set_country(HidCountry country) {
+    data_[4] = static_cast<uint8_t>(country);
     return *this;
   }
-  constexpr uint8_t country() const { return data_[4]; }
+  constexpr HidCountry country() const {
+    return static_cast<HidCountry>(data_[4]);
+  }
 
   constexpr HidDescriptor &set_num_descriptors(uint8_t idx) {
     data_[5] = idx;
@@ -49,11 +53,13 @@ public:
   }
   constexpr uint8_t num_descriptors() const { return data_[5]; }
 
-  constexpr HidDescriptor &set_report_desc_type(uint8_t idx) {
-    data_[6] = idx;
+  constexpr HidDescriptor &set_report_descriptor_type(DescriptorType type) {
+    data_[6] = static_cast<uint8_t>(type);
     return *this;
   }
-  constexpr uint8_t report_descriptor_type() const { return data_[6]; }
+  constexpr DescriptorType report_descriptor_type() const {
+    return static_cast<DescriptorType>(data_[6]);
+  }
 
   constexpr HidDescriptor& set_report_descriptor_length(uint16_t length) {
     data_[7] = static_cast<uint8_t>(length & 0xff);

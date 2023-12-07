@@ -119,6 +119,25 @@ public:
                             NumInterfaces>(*this, endpoint);
   }
 
+  /**
+   * Return a new ConfigDescriptor object created by appending
+   * a new descriptor that is not an interface or endpoint descriptor.
+   *
+   * This can be used for adding HID descriptors, for instance.
+   *
+   * Note that this method does not modify the current object, but instead
+   * returns a new, larger object.
+   */
+  template <size_t N>
+  constexpr ConfigDescriptor<TotalLength + N, NumInterfaces>
+  add_descriptor(const std::array<uint8_t, N> &data) {
+    return ConfigDescriptor<TotalLength + N, NumInterfaces>(*this, data.data());
+  }
+  template <typename DescriptorType>
+  constexpr auto add_descriptor(const DescriptorType &desc) {
+    return add_descriptor(desc.data());
+  }
+
   constexpr uint16_t total_length() const {
     return (static_cast<uint16_t>(data_[3]) << 8) |
            static_cast<uint16_t>(data_[2]);
@@ -228,6 +247,28 @@ private:
     if (last_intf_offset_ != 0) {
       // Increment the bNumEndpoints field in the interface descriptor
       data_[last_intf_offset_ + 4] += 1;
+    }
+  }
+
+  // Constructor for appending a generic descriptor to an existing
+  // ConfigDescriptor
+  template <size_t OtherLength>
+  constexpr ConfigDescriptor(
+      const ConfigDescriptor<OtherLength, NumInterfaces> &other,
+      const uint8_t *data)
+      : last_intf_offset_(other.last_intf_offset_) {
+    static_assert(OtherLength <= TotalLength);
+    static_assert(TotalLength <= std::numeric_limits<uint16_t>::max(),
+                  "config descriptor data is to large");
+    data_[0] = other.data_[0];
+    data_[1] = other.data_[1];
+    data_[2] = kTotalLength & 0xff;
+    data_[3] = (kTotalLength >> 8) & 0xff;
+    for (size_t n = 4; n < OtherLength; ++n) {
+      data_[n] = other.data_[n];
+    }
+    for (size_t n = 0; OtherLength + n < TotalLength; ++n) {
+      data_[OtherLength + n] = data[n];
     }
   }
 

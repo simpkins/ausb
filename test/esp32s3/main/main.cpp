@@ -12,6 +12,9 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/dev/UsbDeviceExample.h" // just to ensure this header compiles
 #include "ausb/hid/HidDescriptor.h"
+#include "ausb/hid/HidReportDescriptor.h"
+#include "ausb/hid/key_codes.h"
+#include "ausb/hid/leds.h"
 #include "ausb/hid/types.h"
 #include "ausb/hw/esp/Esp32Device.h"
 
@@ -45,16 +48,12 @@ public:
   static constexpr auto make_descriptor_map() {
     DeviceDescriptor dev;
     dev.set_vendor(0x6666); // Prototype product vendor ID
-    dev.set_product(0x1235);
+    dev.set_product(0x1237);
     dev.set_device_release(0, 1);
 
-    // TODO: eventually we should also add a Boot Keyboard interface
-#if 0
-    InterfaceDescriptor boot_kbd_intf(UsbClass::Hid,
+    InterfaceDescriptor kbd_intf(UsbClass::Hid,
                                  static_cast<uint8_t>(HidSubclass::Boot),
                                  static_cast<uint8_t>(HidProtocol::Keyboard));
-#endif
-    InterfaceDescriptor kbd_intf(UsbClass::Hid);
 
     EndpointDescriptor ep1;
     ep1.set_address(Direction::In, 1);
@@ -62,10 +61,59 @@ public:
     ep1.set_interval(10);
     ep1.set_max_packet_size(8);
 
+    const auto max_key_code = hid::Key::ExSel;
+    auto kbd_report = hid::ReportDescriptor()
+                          .usage_page(hid::UsagePage::GenericDesktop)
+                          .usage(hid::GenericDesktopUsage::Keyboard)
+                          .collection(hid::CollectionType::Application)
+                          // Modifier flags (input)
+                          // 8 bits, each one representing a key code
+                          // starting from LeftControl to RightGui
+                          .report_size(1)
+                          .report_count(8)
+                          .usage_page(hid::UsagePage::KeyCodes)
+                          .usage_min(hid::Key::LeftControl)
+                          .usage_max(hid::Key::RightGui)
+                          .logical_min(0)
+                          .logical_max(1)
+                          .input(hid::Input().data().variable())
+                          // Reserved input byte
+                          .report_count(1)
+                          .report_size(8)
+                          .input(hid::Input().constant().variable())
+                          // LEDs (output, from host to device)
+                          // 5 bits, each one representing an LED code
+                          // starting from NumLock to Kana
+                          .report_count(5)
+                          .report_size(1)
+                          .usage_page(hid::UsagePage::LEDs)
+                          .usage_min(hid::Led::NumLock)
+                          .usage_max(hid::Led::Kana)
+                          .output(hid::Output().data().variable())
+                          // 3 padding bits after the LED bits
+                          .report_count(1)
+                          .report_size(3)
+                          .output(hid::Output().constant().variable())
+                          // Key codes
+                          // 6 bytes, each representing a key code.
+                          .report_count(6)
+                          .report_size(8)
+                          .logical_min(0)
+                          .logical_max_u8(static_cast<uint8_t>(max_key_code))
+                          .usage_page(hid::UsagePage::KeyCodes)
+                          .usage_min(hid::Key::None)
+                          .usage_max(max_key_code)
+                          .input(hid::Input().data().array())
+                          .end_collection();
+
     HidDescriptor kbd_hid_desc;
+    kbd_hid_desc.set_num_descriptors(1);
+    kbd_hid_desc.set_report_descriptor_type(DescriptorType::HidReport);
+    kbd_hid_desc.set_report_descriptor_length(kbd_report.kTotalLength);
 
     auto cfg = ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
                    .add_interface(kbd_intf)
+                   .add_descriptor(kbd_hid_desc)
                    .add_endpoint(ep1);
 
     return StaticDescriptorMap()
@@ -76,7 +124,8 @@ public:
                     Language::English_US)
         .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
                     Language::English_US)
-        .add_config_descriptor(cfg);
+        .add_config_descriptor(cfg)
+        .add_descriptor(DescriptorType::HidReport, kbd_report.data());
   }
 };
 
@@ -129,6 +178,7 @@ void dump_descriptors() {
   dump_desc(0x301, 0x0409);
   dump_desc(0x302, 0x0409);
   dump_desc(0x303, 0x0409);
+  dump_desc(0x2200, 0);
 }
 
 [[nodiscard]] std::error_code run_test() {
