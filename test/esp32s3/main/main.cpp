@@ -11,6 +11,8 @@
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/dev/UsbDeviceExample.h" // just to ensure this header compiles
+#include "ausb/hid/HidDescriptor.h"
+#include "ausb/hid/types.h"
 #include "ausb/hw/esp/Esp32Device.h"
 
 using namespace ausb;
@@ -46,14 +48,24 @@ public:
     dev.set_product(0x1235);
     dev.set_device_release(0, 1);
 
+    // TODO: eventually we should also add a Boot Keyboard interface
+#if 0
+    InterfaceDescriptor boot_kbd_intf(UsbClass::Hid,
+                                 static_cast<uint8_t>(HidSubclass::Boot),
+                                 static_cast<uint8_t>(HidProtocol::Keyboard));
+#endif
+    InterfaceDescriptor kbd_intf(UsbClass::Hid);
+
     EndpointDescriptor ep1;
     ep1.set_address(Direction::In, 1);
     ep1.set_type(EndpointType::Interrupt);
     ep1.set_interval(10);
     ep1.set_max_packet_size(8);
 
+    HidDescriptor kbd_hid_desc;
+
     auto cfg = ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
-                   .add_interface(InterfaceDescriptor(UsbClass::Hid))
+                   .add_interface(kbd_intf)
                    .add_endpoint(ep1);
 
     return StaticDescriptorMap()
