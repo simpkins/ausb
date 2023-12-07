@@ -17,11 +17,11 @@ class ControlEndpoint;
 /**
  * A class for implementing endpoint 0 control IN transfers in device mode.
  *
- * Note that this class (and UsbDevice in general) is not thread safe. 
- * The implementation should only invoke methods on this class from the main
- * USB task.  e.g.  send_full() and error() may only be called from the main
- * USB task.  When the UsbDevice invokes methods on this class, it will always
- * be done from the main USB task.
+ * Note that this class (and all of the USB device code in general) is not
+ * thread safe.  The implementation should only invoke methods on this class
+ * from the main USB task.  e.g.  send_full() and error() may only be called
+ * from the main USB task.  When methods are invoked on this class due to
+ * hardware events, it will always be done from the main USB task.
  */
 class CtrlInXfer {
 public:

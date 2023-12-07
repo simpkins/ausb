@@ -50,6 +50,8 @@ ControlHandler::process_std_device_out(const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
     return make_unique<SetAddress>(endpoint_);
+  } else if (std_req_type == StdRequestType::SetConfiguration) {
+    // TODO
   }
 
   AUSB_LOGE("TODO: unhandled OUT std device setup packet");

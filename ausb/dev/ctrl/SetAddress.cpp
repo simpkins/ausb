@@ -2,7 +2,7 @@
 #include "ausb/dev/ctrl/SetAddress.h"
 
 #include "ausb/SetupPacket.h"
-#include "ausb/UsbDevice.h"
+#include "ausb/dev/EndpointManager.h"
 #include "ausb/log.h"
 
 namespace ausb::device {
@@ -13,8 +13,7 @@ void SetAddress::start(const SetupPacket &packet) {
   }
   const uint8_t address = packet.value;
   AUSB_LOGI("SET_ADDRESS: %u", packet.value);
-  UsbDevice *usb = endpoint()->usb();
-  usb->set_address(address);
+  endpoint()->manager()->set_address(address);
   ack();
 }
 

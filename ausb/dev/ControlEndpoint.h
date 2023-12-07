@@ -12,10 +12,10 @@ class SetupPacket;
 
 namespace device {
 
+class ControlEndpoint;
 class CtrlInXfer;
 class CtrlOutXfer;
-class UsbDevice;
-class ControlEndpoint;
+class EndpointManager;
 
 class ControlEndpointCallback {
 public:
@@ -74,23 +74,24 @@ public:
     InStatus,
   };
 
-  constexpr ControlEndpoint(UsbDevice *usb, ControlEndpointCallback *callback,
+  constexpr ControlEndpoint(EndpointManager *mgr,
+                            ControlEndpointCallback *callback,
                             uint8_t endpoint_num = 0)
-      : usb_(usb), endpoint_num_(endpoint_num), callback_(callback) {}
+      : manager_(mgr), endpoint_num_(endpoint_num), callback_(callback) {}
   ~ControlEndpoint();
 
-  UsbDevice* usb() const { return usb_; }
+  EndpointManager* manager() const { return manager_; }
   uint8_t number() const { return endpoint_num_; }
   Status status() const { return status_; }
 
   ////////////////////////////////////////////////////////////////////
-  // Methods to be invoked by UsbDevice to inform us of events
+  // Methods to be invoked by EndpointManager to inform us of events
   ////////////////////////////////////////////////////////////////////
 
   void on_init();
 
   /**
-   * on_enum_done() will be called by the UsbDevice after the device is
+   * on_enum_done() will be called by the EndpointManager after the device is
    * enumerated on the bus.
    *
    * max_packet_size will be the maximum packet size chosen for this endpoint.
@@ -98,21 +99,21 @@ public:
   void on_enum_done(uint8_t max_packet_size);
 
   /**
-   * on_reset() should be called by the UsbDevice when the bus is reset.
+   * on_reset() should be called by the EndpointManager when the bus is reset.
    *
    * reason should generally be either BusReset or LocalReset.
    */
   void on_reset(XferFailReason reason);
 
   /**
-   * on_setup_received() should be called by the UsbDevice when a SETUP packet is
-   * received.
+   * on_setup_received() should be called by the EndpointManager when a SETUP
+   * packet is received.
    */
   void on_setup_received(const SetupPacket &packet);
 
   /**
-   * on_in_xfer_complete() should be called by the UsbDevice when a IN transfer
-   * started with UsbDevice::start_ctrl_in_write() has finished.
+   * on_in_xfer_complete() should be called by the EndpointManager when a IN
+   * transfer started with EndpointManager::start_ctrl_in_write() has finished.
    */
   void on_in_xfer_complete();
   void on_in_xfer_failed(XferFailReason reason);
@@ -198,7 +199,7 @@ private:
   // Return the current CtrlOutXfer, and reset the state to Idle
   std::unique_ptr<CtrlOutXfer> extract_out_xfer();
 
-  UsbDevice* const usb_ = nullptr;
+  EndpointManager* const manager_ = nullptr;
 
   /**
    * The endpoint number is pretty much always 0.

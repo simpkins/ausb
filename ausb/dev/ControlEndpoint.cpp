@@ -2,9 +2,9 @@
 #include "ausb/dev/ControlEndpoint.h"
 
 #include "ausb/SetupPacket.h"
-#include "ausb/UsbDevice.h"
 #include "ausb/dev/CtrlInXfer.h"
 #include "ausb/dev/CtrlOutXfer.h"
+#include "ausb/dev/EndpointManager.h"
 #include "ausb/log.h"
 
 namespace ausb::device {
@@ -71,7 +71,7 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
           packet.length);
       status_ = Status::Idle;
       xfer_.out.~unique_ptr();
-      usb_->stall_control_endpoint(endpoint_num_);
+      manager_->stall_control_endpoint(endpoint_num_);
     }
   } else {
     status_ = Status::InSetupReceived;
@@ -86,7 +86,7 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
                 packet.length);
       status_ = Status::Idle;
       xfer_.in.~unique_ptr();
-      usb_->stall_control_endpoint(endpoint_num_);
+      manager_->stall_control_endpoint(endpoint_num_);
     }
   }
 }
@@ -100,7 +100,7 @@ void ControlEndpoint::on_in_xfer_complete() {
     AUSB_LOGD("control IN write complete");
     status_ = Status::InStatus;
     // Wait for the host to acknowledge our data with a 0-length OUT packet.
-    usb_->start_ctrl_in_ack(this);
+    manager_->start_ctrl_in_ack(this);
     return;
   case Status::OutAck:
     AUSB_LOGD("control OUT status complete");
@@ -126,7 +126,7 @@ void ControlEndpoint::on_in_xfer_failed(XferFailReason reason) {
             static_cast<int>(status_), static_cast<int>(reason));
 
   invoke_xfer_failed(reason);
-  usb_->stall_control_endpoint(endpoint_num_);
+  manager_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::on_out_xfer_complete(uint32_t bytes_read) {
@@ -158,7 +158,7 @@ void ControlEndpoint::on_out_xfer_failed(XferFailReason reason) {
             static_cast<int>(status_), static_cast<int>(reason));
 
   invoke_xfer_failed(reason);
-  usb_->stall_control_endpoint(endpoint_num_);
+  manager_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::start_out_read(void *data, size_t size) {
@@ -169,7 +169,7 @@ void ControlEndpoint::start_out_read(void *data, size_t size) {
     return;
   }
 
-  usb_->start_ctrl_out_read(this, data, size);
+  manager_->start_ctrl_out_read(this, data, size);
 }
 
 void ControlEndpoint::ack_out_xfer() {
@@ -181,7 +181,7 @@ void ControlEndpoint::ack_out_xfer() {
   }
 
   status_ = Status::OutAck;
-  usb_->start_ctrl_out_ack(this);
+  manager_->start_ctrl_out_ack(this);
 }
 
 void ControlEndpoint::fail_out_xfer() {
@@ -193,7 +193,7 @@ void ControlEndpoint::fail_out_xfer() {
   }
 
   extract_out_xfer();
-  usb_->stall_control_endpoint(endpoint_num_);
+  manager_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::start_in_write(const void *data, size_t size, bool is_final) {
@@ -206,7 +206,7 @@ void ControlEndpoint::start_in_write(const void *data, size_t size, bool is_fina
   }
 
   status_ = is_final ? Status::InSendFinal : Status::InSendPartial;
-  usb_->start_ctrl_in_write(this, data, size);
+  manager_->start_ctrl_in_write(this, data, size);
 }
 
 void ControlEndpoint::fail_in_xfer() {
@@ -219,24 +219,24 @@ void ControlEndpoint::fail_in_xfer() {
   }
 
   extract_in_xfer();
-  usb_->stall_control_endpoint(endpoint_num_);
+  manager_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::fail_current_xfer(XferFailReason reason) {
   status_ = Status::Idle;
   invoke_xfer_failed(reason);
-  usb_->stall_control_endpoint(endpoint_num_);
+  manager_->stall_control_endpoint(endpoint_num_);
 }
 
 void ControlEndpoint::invoke_xfer_failed(XferFailReason reason) {
   // TODO: invoke_xfer_failed() can potentially be invoked from inside one of
   // the CtrlInXfer or CtrlOutXfer methods.  It would probably be better to
   // avoid immediately destroying the xfer object before we return, and instead
-  // defer it's destruction until the start of the next
-  // UsbDevice::wait_for_event() call.  This would avoid us deleting the xfer
-  // object while it may still be running on the stack.  (Deleting it while it
-  // is running isn't necessarily a problem, but it is a problem if the running
-  // method attempts to access any member variables after we destroy it.)
+  // defer it's destruction until the start of the next wait_for_event() call.
+  // This would avoid us deleting the xfer object while it may still be running
+  // on the stack.  (Deleting it while it is running isn't necessarily a
+  // problem, but it is a problem if the running method attempts to access any
+  // member variables after we destroy it.)
 
   switch (status_) {
   case Status::Idle:

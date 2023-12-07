@@ -17,11 +17,11 @@ class ControlEndpoint;
 /**
  * A class for implementing endpoint 0 control OUT transfers in device mode.
  *
- * Note that this class (and UsbDevice in general) is not thread safe.
- * The implementation should only invoke methods on this class from the main
- * USB task.  e.g.  start_read(), ack(), and error() may only be called
- * from the main USB task.  When the UsbDevice invokes methods on this class,
- * it will always be done from the main USB task.
+ * Note that this class (and all of the USB device code in general) is not
+ * thread safe.  The implementation should only invoke methods on this class
+ * from the main USB task.  e.g.  start_read(), ack(), and error() may only be
+ * called from the main USB task.  When methods are invoked on this class due
+ * to hardware events, it will always be done from the main USB task.
  *
  * If the implementation does any processing on another task, it should use
  * custom events to trigger the final ack() or error() call to occur on the

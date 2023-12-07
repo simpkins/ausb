@@ -1,7 +1,9 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/DescriptorMap.h"
+#include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMapUtils.h"
 
 namespace ausb {
@@ -103,42 +105,6 @@ public:
       const ConfigDescriptor<ConfigTotalLength, NumInterfaces> cfg) {
     return add_descriptor(DescriptorType::Config, index, cfg.data());
   }
-#if 0
-  /**
-   * Add a configuration descriptor, and its associated interface, endpoint,
-   * and class/vendor specific descriptors.
-   */
-  template <typename... SubDescriptors>
-  constexpr StaticDescriptorMap<
-      NumDescriptors + 1,
-      DataLength + ConfigDescriptor::compute_total_size<SubDescriptors...>()>
-  add_config_descriptor(ConfigAttr attributes,
-                        UsbMilliamps max_power,
-                        uint8_t string_index,
-                        SubDescriptors... sub) {
-    // TODO: it would be nice to do some compile-time validation of the config
-    // descriptor:
-    // - The interface numbers should be correct 0-based indexes of each
-    //   interface.
-    // - The number of endpoints listed in each interface should match the
-    //   number of endpoint descriptors.
-    auto cfg_index = count_num_config_descriptors();
-    std::array<uint8_t,
-               ConfigDescriptor::compute_total_size<SubDescriptors...>()>
-        full_desc;
-    ConfigDescriptor config_desc(cfg_index + 1);
-    config_desc.total_length =
-        ConfigDescriptor::compute_total_size<SubDescriptors...>();
-    config_desc.string_index = string_index;
-    config_desc.num_interfaces =
-        ConfigDescriptor::count_num_interfaces(sub...);
-    config_desc.attributes = attributes;
-    config_desc.max_power = max_power;
-    detail::serialize_descriptors(full_desc.data(), config_desc, sub...);
-    return add_descriptor_with_setup_ids(
-        desc_setup_value(DescriptorType::Config, cfg_index), 0, full_desc);
-  }
-#endif
 
   /**
    * Add a string descriptor with a specified index.

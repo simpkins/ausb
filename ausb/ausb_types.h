@@ -6,8 +6,8 @@ namespace ausb {
 enum class XferFailReason {
   // The USB bus was reset
   BusReset,
-  // The UsbDevice object was reset locally (initiated by a local software
-  // call, and not by a reset on the bus).
+  // The device was reset locally (initiated by a local software call, and not
+  // by a reset on the bus).
   LocalReset,
   // Unexpected data was received on the bus, putting us into an error state.
   // e.g., if the host sends a different length of data than it specified in

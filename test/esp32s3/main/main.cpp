@@ -9,7 +9,8 @@
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
-#include "ausb/dev/ControlHandler.h"
+#include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/UsbDeviceExample.h" // just to ensure this header compiles
 #include "ausb/hw/esp/Esp32Device.h"
 
 using namespace ausb;
@@ -17,38 +18,57 @@ using namespace ausb::device;
 using namespace std::chrono_literals;
 
 namespace {
-constexpr auto make_descriptor_map() {
-  DeviceDescriptor dev;
-  dev.set_vendor(0x6666); // Prototype product vendor ID
-  dev.set_product(0x1235);
-  dev.set_device_release(0, 1);
-
-  EndpointDescriptor ep1;
-  ep1.set_address(Direction::In, 1);
-  ep1.set_type(EndpointType::Interrupt);
-  ep1.set_interval(10);
-  ep1.set_max_packet_size(8);
-
-  auto cfg = ConfigDescriptor(1, ConfigAttr::RemoteWakeup)
-                 .add_interface(InterfaceDescriptor(UsbClass::Hid))
-                 .add_endpoint(ep1);
-
-  return StaticDescriptorMap()
-      .add_device_descriptor(dev)
-      .add_language_ids(Language::English_US)
-      .add_string(dev.mfgr_str_idx(), "Adam Simpkins", Language::English_US)
-      .add_string(dev.product_str_idx(), "AUSB Test Device",
-                  Language::English_US)
-      .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
-                  Language::English_US)
-      .add_config_descriptor(cfg);
-}
-
-static constexpr auto kDescriptors = make_descriptor_map();
-static constinit Esp32Device dev;
-ControlHandler ctrl_handler(&kDescriptors);
-static constinit UsbDevice usb(&dev, &ctrl_handler);
 const char *LogTag = "ausb.test";
+
+class TestDevice {
+public:
+  static constexpr uint8_t kConfigId = 1;
+
+  bool set_configuration(uint8_t config_id, EndpointManager* ep_mgr) {
+    if (config_id != kConfigId) {
+      return false;
+    }
+
+    // TODO:
+    // ep_mgr->open_in_endpoint(1);
+
+    ep_mgr->set_configured();
+    return true;
+  }
+
+  void unconfigure(EndpointManager* ep_mgr) {
+    ep_mgr->unconfigure();
+  }
+
+  static constexpr auto make_descriptor_map() {
+    DeviceDescriptor dev;
+    dev.set_vendor(0x6666); // Prototype product vendor ID
+    dev.set_product(0x1235);
+    dev.set_device_release(0, 1);
+
+    EndpointDescriptor ep1;
+    ep1.set_address(Direction::In, 1);
+    ep1.set_type(EndpointType::Interrupt);
+    ep1.set_interval(10);
+    ep1.set_max_packet_size(8);
+
+    auto cfg = ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
+                   .add_interface(InterfaceDescriptor(UsbClass::Hid))
+                   .add_endpoint(ep1);
+
+    return StaticDescriptorMap()
+        .add_device_descriptor(dev)
+        .add_language_ids(Language::English_US)
+        .add_string(dev.mfgr_str_idx(), "Adam Simpkins", Language::English_US)
+        .add_string(dev.product_str_idx(), "AUSB Test Device",
+                    Language::English_US)
+        .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
+                    Language::English_US)
+        .add_config_descriptor(cfg);
+  }
+};
+
+static constinit UsbDevice<TestDevice> usb;
 
 void dump_hex(const uint8_t* buf, uint16_t size) {
   auto p = buf;
@@ -79,7 +99,7 @@ void dump_hex(const uint8_t* buf, uint16_t size) {
 
 void dump_desc(uint16_t value, uint16_t index) {
   printf("Descriptor %#x  %#x:\n", value, index);
-  auto desc = kDescriptors.get_descriptor_with_setup_ids(value, index);
+  auto desc = usb.descriptor_map().get_descriptor_with_setup_ids(value, index);
   if (!desc.has_value()) {
     printf("- none\n");
     return;
@@ -111,7 +131,7 @@ void dump_descriptors() {
   size_t n = 0;
   while (true) {
     ++n;
-    const auto event = dev.wait_for_event(10000ms);
+    const auto event = usb.wait_for_event(10000ms);
     if (std::holds_alternative<NoEvent>(event)) {
       ESP_LOGI(LogTag, "usb %zu: no event", n);
     } else {
@@ -129,12 +149,6 @@ extern "C" void app_main() {
   esp_log_level_set("ausb", ESP_LOG_VERBOSE);
   esp_log_level_set("ausb.esp32", ESP_LOG_VERBOSE);
   esp_log_level_set("ausb.test", ESP_LOG_VERBOSE);
-
-  ESP_LOGI(LogTag, "test starting.  sizeof(kDescriptors)=%zu",
-           sizeof(kDescriptors));
-
-  const auto desc = kDescriptors.get_descriptor(DescriptorType::Device);
-  ESP_LOGI(LogTag, "device descriptor size: %zu", desc ? desc->size() : 0);
 
   dump_descriptors();
 
