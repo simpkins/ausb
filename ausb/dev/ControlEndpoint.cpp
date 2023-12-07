@@ -104,7 +104,7 @@ void ControlEndpoint::on_in_xfer_complete() {
     return;
   case Status::OutAck:
     AUSB_LOGD("control OUT status complete");
-    extract_out_xfer();
+    extract_out_xfer()->ack_complete();
     return;
   case Status::Idle:
   case Status::OutXfer:

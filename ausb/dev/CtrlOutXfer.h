@@ -112,6 +112,17 @@ public:
    */
   virtual void xfer_failed(XferFailReason reason) = 0;
 
+  /**
+   * ack_finished() will be called when the status stage of the transfer
+   * has successfully completed.
+   *
+   * Note that most request implementations should not need to do anything
+   * here.  This is primarily present for SET_ADDRESS, which is unique in that
+   * the address change should be applied only after the status stage
+   * completes.
+   */
+  virtual void ack_complete() {}
+
 private:
   enum class State {
     // We are still waiting on more OUT data from the host

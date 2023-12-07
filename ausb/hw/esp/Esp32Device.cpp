@@ -617,11 +617,18 @@ esp_err_t Esp32Device::enable_interrupts() {
                         &interrupt_handle_);
 }
 
-void Esp32Device::set_address(uint8_t address) {
+void Esp32Device::set_address_early(uint8_t address) {
+  // We go ahead and set the address during set_address_early(), before the
+  // status phase of the SET_ADDRESS transfer.  The docs from STMicro
+  // indicate that DCFG should be updated before sending the status phase.
   auto dcfg = usb_->dcfg;
   dcfg &= ~USB_DEVADDR_M;
   dcfg |= ((address & USB_DEVADDR_V) << USB_DEVADDR_S);
   usb_->dcfg = dcfg;
+}
+
+void Esp32Device::set_address(uint8_t /*address*/) {
+  // We did all processing in set_address_early(), so nothing to do here.
 }
 
 bool Esp32Device::configure_ep0(uint8_t max_packet_size) {

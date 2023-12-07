@@ -86,8 +86,24 @@ public:
    *
    * This should generally only be invoked when handling a SET_ADDRESS request
    * on endpoint 0.
+   *
+   * Note that SET_ADDRESS requests are a bit unusual, and the address change
+   * should be applied only after the final status phase of the message
+   * completes.  This method should be called only when
+   * CtrlOutXfer::ack_complete() is invoked for the SET_ADDRESS request.
+   * During the normal request processing stage (before sending an
+   * acknowledgement), set_address_early() should be invoked.
    */
   void set_address(uint8_t address);
+
+  /**
+   * set_address_early() should be called during the normal request processing
+   * stage of a SET_ADDRESS request.
+   *
+   * This does not apply the address change yet, but gives some hardware types
+   * the ability to do work here if desired.
+   */
+  void set_address_early(uint8_t address);
 
   /**
    * Mark the device as configured.

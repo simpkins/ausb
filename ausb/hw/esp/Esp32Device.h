@@ -100,12 +100,16 @@ public:
   QueueHandle_t event_queue() const { return event_queue_; }
 
   /**
-   * Set the device address.
-   *
-   * This should be called on receipt of a SET_ADDRESS setup packet
-   * on endpoint 0.
+   * set_address() will be called after the status phase of a SET_ADDRESS
+   * control transfer completes.
    */
   void set_address(uint8_t address);
+
+  /**
+   * set_address_early() will be called during the normal procesing phase of a
+   * SET_ADDRESS transfer.
+   */
+  void set_address_early(uint8_t address);
 
   /**
    * Configure endpoint 0.

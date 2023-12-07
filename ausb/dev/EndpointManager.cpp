@@ -199,6 +199,10 @@ void EndpointManager::set_address(uint8_t address) {
   hw_->set_address(address);
 }
 
+void EndpointManager::set_address_early(uint8_t address) {
+  hw_->set_address_early(address);
+}
+
 #if 0
 void EndpointManager::set_configured() {
   // TODO
