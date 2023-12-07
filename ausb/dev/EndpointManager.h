@@ -22,6 +22,21 @@ namespace ausb::device {
  */
 class EndpointManager {
 public:
+  // Figure 9-1 in the USB 2.0 spec lists the various device states.
+  //
+  // We do not distinguish between unattached/attached/powered here.
+  // The Uninit state captures all of these.
+  enum class State : uint8_t {
+    Uninit = 0x00,              // Has not seen a bus reset yet
+    Default = 0x01,             // Has been reset, but no address assigned yet
+    Address = 0x02,             // Address assigned, but not configured
+    Configured = 0x03,          // Configuration selected
+    SuspendedUninit = 0x10,     // Suspended while in Uninit state
+    SuspendedDefault = 0x11,    // Suspended while in Default state
+    SuspendedAddress = 0x12,    // Suspended while in Address state
+    SuspendedConfigured = 0x13, // Suspended while in Configured state
+  };
+
   constexpr explicit EndpointManager(
       HWDevice *hw, ControlEndpointCallback *ep0_handler) noexcept
       : hw_(hw), ep0_(this, ep0_handler) {}
@@ -51,6 +66,20 @@ public:
    * another task).
    */
   void handle_event(const DeviceEvent &event);
+
+  State state() const { return state_; }
+  bool is_suspended() const {
+    return (static_cast<uint8_t>(state_) & kStateSuspendFlag);
+  }
+  /**
+   * If the state is currently suspended, return the state we will return to
+   * when bus activity is seen.  Returns the current state if we are not
+   * currently suspended.
+   */
+  State unsuspended_state() const {
+    return static_cast<State>(static_cast<uint8_t>(state_) &
+                              ~kStateSuspendFlag);
+  }
 
   /**
    * Set the device address.
@@ -163,46 +192,7 @@ public:
   void start_ctrl_out_ack(ControlEndpoint* endpoint);
 
 private:
-  // Figure 9-1 in the USB 2.0 spec lists the various device states.
-  //
-  // We do not distinguish between unattached/attached/powered here.
-  // The Uninit state captures all of these.
-  enum class State : uint8_t {
-    Uninit = 0x00,     // Has not seen a bus reset yet
-    Default = 0x01,    // Has been reset, but no address assigned yet
-    Address = 0x02,    // Address assigned, but not configured
-    Configured = 0x03, // Configuration selected
-  };
-  // Suspended is a bit flag that can be ANDed with any of the
-  // other states.
-  enum class StateFlag : uint8_t {
-    Suspended = 0x10,
-  };
-  enum class StateMask : uint8_t {
-    Mask = 0x0f,
-  };
-
-  friend State &operator|=(State &s, StateFlag flag) {
-    s = static_cast<State>(static_cast<uint8_t>(s) |
-                           static_cast<uint8_t>(flag));
-    return s;
-  }
-  friend State &operator&=(State &s, StateFlag flag) {
-    s = static_cast<State>(static_cast<uint8_t>(s) &
-                           static_cast<uint8_t>(flag));
-    return s;
-  }
-  friend StateFlag operator&(State s, StateFlag flag) {
-    return static_cast<StateFlag>(static_cast<uint8_t>(s) &
-                                  static_cast<uint8_t>(flag));
-  }
-  friend StateFlag operator~(StateFlag flag) {
-    return static_cast<StateFlag>(~static_cast<uint8_t>(flag));
-  }
-  friend State operator&(State s, StateMask mask) {
-    return static_cast<State>(static_cast<uint8_t>(s) &
-                              static_cast<uint8_t>(mask));
-  }
+  static constexpr uint8_t kStateSuspendFlag = 0x10;
 
   EndpointManager(EndpointManager const &) = delete;
   EndpointManager &operator=(EndpointManager const &) = delete;

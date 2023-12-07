@@ -77,13 +77,18 @@ void EndpointManager::on_bus_reset() {
 
 void EndpointManager::on_suspend() {
   AUSB_LOGI("on_suspend");
-  state_ |= StateFlag::Suspended;
+  if (is_suspended()) {
+    // Ignore spurious suspend events from the hardware for any reason
+    return;
+  }
+
+  state_ = static_cast<State>(static_cast<uint8_t>(state_) | kStateSuspendFlag);
 
   // Do not invoke the on_suspend() callback for suspend events that occur
   // before the first reset has been seen.  The bus suspend state can be seen
   // when first attached to the bus, but this generally isn't really relevant
   // or worth distinguishing from the normal uninitialized state.
-  if ((state_ & StateMask::Mask) != State::Uninit) {
+  if (state_ != State::SuspendedUninit) {
 #if 0
     callbacks_->on_suspend();
 #endif
@@ -91,14 +96,16 @@ void EndpointManager::on_suspend() {
 }
 
 void EndpointManager::on_resume() {
-  if ((state_ & StateFlag::Suspended) != StateFlag::Suspended) {
+  if (!is_suspended()) {
+    // Ignore spurious resume events from the hardware for any reason
     return;
   }
   AUSB_LOGI("on_resume");
-  state_ &= ~StateFlag::Suspended;
-  if ((state_ & StateMask::Mask) != State::Uninit) {
+  state_ =
+      static_cast<State>(static_cast<uint8_t>(state_) & ~kStateSuspendFlag);
+  if (state_ != State::Uninit) {
 #if 0
-    callbacks_->on_wakeup();
+    callbacks_->on_resume();
 #endif
   }
 }
@@ -126,7 +133,7 @@ void EndpointManager::on_enum_done(UsbSpeed speed) {
 
 void EndpointManager::on_setup_received(const SetupPacketEvent &event) {
   // Ignore any packets until we have seen a reset.
-  if ((state_ & StateMask::Mask) == State::Uninit) {
+  if (unsuspended_state() == State::Uninit) {
     AUSB_LOGW("ignoring USB setup packet before reset seen");
     return;
   }
