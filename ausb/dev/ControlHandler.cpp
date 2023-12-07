@@ -5,10 +5,13 @@
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/dev/CtrlInXfer.h"
 #include "ausb/dev/CtrlOutXfer.h"
+#include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
 #include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
 #include "ausb/dev/ctrl/GetStaticDescriptor.h"
 #include "ausb/dev/ctrl/SetAddress.h"
 #include "ausb/dev/ctrl/StallCtrlIn.h"
+#include "ausb/dev/ctrl/StallCtrlOut.h"
 #include "ausb/log.h"
 
 using std::make_unique;
@@ -51,7 +54,7 @@ ControlHandler::process_std_device_out(const SetupPacket &packet) {
   if (std_req_type == StdRequestType::SetAddress) {
     return make_unique<SetAddress>(endpoint_);
   } else if (std_req_type == StdRequestType::SetConfiguration) {
-    // TODO
+    return process_set_configuration(packet);
   }
 
   AUSB_LOGE("TODO: unhandled OUT std device setup packet");
@@ -70,10 +73,38 @@ ControlHandler::process_std_device_in(const SetupPacket &packet) {
   return nullptr;
 }
 
+std::unique_ptr<CtrlOutXfer>
+ControlHandler::process_set_configuration(const SetupPacket &packet) {
+  if (packet.length > 0) {
+    AUSB_LOGW("SET_CONFIGURATION request with non-zero length %d",
+              packet.length);
+    return make_unique<StallCtrlOut>(endpoint_);
+  }
+  const uint8_t config_id = packet.value;
+  AUSB_LOGI("SET_CONFIGURATION: %u", config_id);
+
+  const auto state = endpoint_->manager()->state();
+  if (state != DeviceState::Address && state != DeviceState::Configured) {
+    return make_unique<StallCtrlOut>(endpoint_);
+  }
+
+  // TODO: should we perhaps handle the config_id == 0 case specially, rather
+  // than requiring callback_ to handle this on their own?
+  if (!callback_->set_configuration(config_id)) {
+    AUSB_LOGW("rejected SET_CONFIGURATION %u request", config_id);
+    // Note: if a SetConfiguration request is received with an invalid config
+    // ID, the USB spec specifies that we should reply with an error, but does
+    // not really specify what state we should be in afterwards if we were
+    // already in a configured state before.
+    return make_unique<StallCtrlOut>(endpoint_);
+  }
+
+  return make_unique<AckEmptyCtrlOut>(endpoint_);
+}
+
 std::unique_ptr<CtrlInXfer>
 ControlHandler::process_get_descriptor(const SetupPacket &packet) {
-  const auto desc =
-      descriptors_->get_descriptor_for_setup(packet.value, packet.index);
+  const auto desc = callback_->get_descriptor(packet.value, packet.index);
   if (!desc) {
     // The host requested a descriptor that does not exist.
     // This is expected in many cases.  e.g., devices that do not support

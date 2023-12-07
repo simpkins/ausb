@@ -17,29 +17,26 @@ namespace ausb::device::example {
 class UsbDeviceExample {
   /**
    * set_configuration() will be called in response to a SET_CONFIGURATION
-   * control request with a non-zero config ID.
+   * control request.
    *
-   * The implementation should return false if this is an invalid config ID.
-   * If the config ID is valid, it should configure the necessary interfaces
-   * and endpoints on the EndpointManager, call
-   * EndpointManager::set_configured(), and then return true.
+   * If the config_id is 0, the implementation should call
+   * EndpointManager::unconfigure() to close all open endpoints and interfaces,
+   * then return true.
+   *
+   * Otherwise if config_id refers to a valid configuration, the implementation
+   * should configure the necessary interfaces and endpoints on the
+   * EndpointManager, call EndpointManager::set_configured(), and then return
+   * true.
+   *
+   * If the config_id does not refer to a valid configuration, false should be
+   * returned.
    *
    * Note that set_configured() may be called to change the configuration ID
-   * when the device is already configured, without an intervening
-   * unconfigure() call.
+   * when the device is already configured.
    */
-  bool set_configuration(uint8_t config_id, EndpointManager *ep_mgr) {
+  bool set_configuration(uint8_t config_id, EndpointManager &ep_mgr) {
     return false;
   }
-
-  /**
-   * unconfigure() will be called in response to a SET_CONFIGURATION control
-   * request with a config ID set to 0.
-   *
-   * The implementation should call EndpointManager::unconfigure() to close all
-   * endpoints and put the device back into the "Address" state.
-   */
-  void unconfigure(EndpointManager *ep_mgr) { ep_mgr->unconfigure(); }
 
   /**
    * make_descriptor_map() will be called at compile time to create the

@@ -6,6 +6,13 @@
 
 namespace ausb::device {
 
+class ControlHandlerCallback {
+public:
+  virtual bool set_configuration(uint8_t config_id) = 0;
+  virtual std::optional<buf_view> get_descriptor(uint16_t value,
+                                                 uint16_t index) = 0;
+};
+
 class ControlHandler : public ControlEndpointCallback {
 public:
   /**
@@ -17,8 +24,8 @@ public:
    * (Typically the descriptor map is a global singleton, like the
    * ControlHandler itself.)
    */
-  constexpr ControlHandler(const DescriptorMap* descriptors)
-      : descriptors_(descriptors) {}
+  constexpr explicit ControlHandler(ControlHandlerCallback *callback)
+      : callback_(callback) {}
 
   void on_enum_done(uint8_t max_packet_size) override;
 
@@ -34,9 +41,12 @@ private:
   std::unique_ptr<CtrlOutXfer>
   process_std_device_out(const SetupPacket &packet);
   std::unique_ptr<CtrlInXfer> process_std_device_in(const SetupPacket &packet);
+
+  std::unique_ptr<CtrlOutXfer>
+  process_set_configuration(const SetupPacket &packet);
   std::unique_ptr<CtrlInXfer> process_get_descriptor(const SetupPacket &packet);
 
-  const DescriptorMap* descriptors_;
+  ControlHandlerCallback* const callback_ = nullptr;
   uint8_t ep0_max_packet_size_ = 64;
 };
 

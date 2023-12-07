@@ -24,7 +24,11 @@ class TestDevice {
 public:
   static constexpr uint8_t kConfigId = 1;
 
-  bool set_configuration(uint8_t config_id, EndpointManager* ep_mgr) {
+  bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
+    if (config_id == 0) {
+      ep_mgr.unconfigure();
+      return true;
+    }
     if (config_id != kConfigId) {
       return false;
     }
@@ -32,12 +36,8 @@ public:
     // TODO:
     // ep_mgr->open_in_endpoint(1);
 
-    ep_mgr->set_configured();
+    ep_mgr.set_configured();
     return true;
-  }
-
-  void unconfigure(EndpointManager* ep_mgr) {
-    ep_mgr->unconfigure();
   }
 
   static constexpr auto make_descriptor_map() {

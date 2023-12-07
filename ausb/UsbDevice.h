@@ -23,7 +23,7 @@ namespace ausb::device {
  * class needs to provide.
  */
 template<typename UsbDeviceImpl>
-class UsbDevice {
+class UsbDevice : private ControlHandlerCallback {
 public:
   constexpr UsbDevice() noexcept = default;
 
@@ -48,10 +48,18 @@ private:
   UsbDevice(UsbDevice const &) = delete;
   UsbDevice &operator=(UsbDevice const &) = delete;
 
+  bool set_configuration(uint8_t config_id) override {
+    return impl_.set_configuration(config_id, ep_manager_);
+  }
+  std::optional<buf_view> get_descriptor(uint16_t value,
+                                         uint16_t index) override {
+    return descriptors_.get_descriptor_with_setup_ids(value, index);
+  }
+
   static constexpr auto descriptors_ = UsbDeviceImpl::make_descriptor_map();
 
   HWDevice hw_;
-  ControlHandler ctrl_handler{&descriptors_};
+  ControlHandler ctrl_handler{this};
   EndpointManager ep_manager_{&hw_, &ctrl_handler};
   UsbDeviceImpl impl_;
 };

@@ -22,21 +22,6 @@ namespace ausb::device {
  */
 class EndpointManager {
 public:
-  // Figure 9-1 in the USB 2.0 spec lists the various device states.
-  //
-  // We do not distinguish between unattached/attached/powered here.
-  // The Uninit state captures all of these.
-  enum class State : uint8_t {
-    Uninit = 0x00,              // Has not seen a bus reset yet
-    Default = 0x01,             // Has been reset, but no address assigned yet
-    Address = 0x02,             // Address assigned, but not configured
-    Configured = 0x03,          // Configuration selected
-    SuspendedUninit = 0x10,     // Suspended while in Uninit state
-    SuspendedDefault = 0x11,    // Suspended while in Default state
-    SuspendedAddress = 0x12,    // Suspended while in Address state
-    SuspendedConfigured = 0x13, // Suspended while in Configured state
-  };
-
   constexpr explicit EndpointManager(
       HWDevice *hw, ControlEndpointCallback *ep0_handler) noexcept
       : hw_(hw), ep0_(this, ep0_handler) {}
@@ -67,19 +52,8 @@ public:
    */
   void handle_event(const DeviceEvent &event);
 
-  State state() const { return state_; }
-  bool is_suspended() const {
-    return (static_cast<uint8_t>(state_) & kStateSuspendFlag);
-  }
-  /**
-   * If the state is currently suspended, return the state we will return to
-   * when bus activity is seen.  Returns the current state if we are not
-   * currently suspended.
-   */
-  State unsuspended_state() const {
-    return static_cast<State>(static_cast<uint8_t>(state_) &
-                              ~kStateSuspendFlag);
-  }
+  DeviceState state() const { return state_; }
+  bool is_suspended() const { return dev_state_is_suspended(state_); }
 
   /**
    * Set the device address.
@@ -208,8 +182,6 @@ public:
   void start_ctrl_out_ack(ControlEndpoint* endpoint);
 
 private:
-  static constexpr uint8_t kStateSuspendFlag = 0x10;
-
   EndpointManager(EndpointManager const &) = delete;
   EndpointManager &operator=(EndpointManager const &) = delete;
 
@@ -223,7 +195,7 @@ private:
   void on_out_xfer_complete(uint8_t endpoint_num, uint32_t bytes_read);
   void on_out_xfer_failed(uint8_t endpoint_num, XferFailReason reason);
 
-  State state_ = State::Uninit;
+  DeviceState state_ = DeviceState::Uninit;
   uint8_t config_id_ = 0;
   bool remote_wakeup_enabled_ = false;
 

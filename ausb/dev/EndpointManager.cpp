@@ -61,7 +61,7 @@ void EndpointManager::reset() {
   AUSB_LOGW("EndpointManager::reset() called");
   ep0_.on_reset(XferFailReason::LocalReset);
   hw_->reset();
-  state_ = State::Uninit;
+  state_ = DeviceState::Uninit;
   config_id_ = 0;
   remote_wakeup_enabled_ = false;
 }
@@ -82,13 +82,13 @@ void EndpointManager::on_suspend() {
     return;
   }
 
-  state_ = static_cast<State>(static_cast<uint8_t>(state_) | kStateSuspendFlag);
+  state_ = dev_state_suspended(state_);
 
   // Do not invoke the on_suspend() callback for suspend events that occur
   // before the first reset has been seen.  The bus suspend state can be seen
   // when first attached to the bus, but this generally isn't really relevant
   // or worth distinguishing from the normal uninitialized state.
-  if (state_ != State::SuspendedUninit) {
+  if (state_ != DeviceState::SuspendedUninit) {
 #if 0
     callbacks_->on_suspend();
 #endif
@@ -101,9 +101,8 @@ void EndpointManager::on_resume() {
     return;
   }
   AUSB_LOGI("on_resume");
-  state_ =
-      static_cast<State>(static_cast<uint8_t>(state_) & ~kStateSuspendFlag);
-  if (state_ != State::Uninit) {
+  state_ = dev_state_unsuspended(state_);
+  if (state_ != DeviceState::Uninit) {
 #if 0
     callbacks_->on_resume();
 #endif
@@ -113,7 +112,7 @@ void EndpointManager::on_resume() {
 void EndpointManager::on_enum_done(UsbSpeed speed) {
   AUSB_LOGI("on_enum_done: speed=%d", static_cast<int>(speed));
 
-  state_ = State::Default;
+  state_ = DeviceState::Default;
   config_id_ = 0;
   remote_wakeup_enabled_ = false;
 
@@ -133,7 +132,7 @@ void EndpointManager::on_enum_done(UsbSpeed speed) {
 
 void EndpointManager::on_setup_received(const SetupPacketEvent &event) {
   // Ignore any packets until we have seen a reset.
-  if (unsuspended_state() == State::Uninit) {
+  if (dev_state_unsuspended(state_) == DeviceState::Uninit) {
     AUSB_LOGW("ignoring USB setup packet before reset seen");
     return;
   }
@@ -195,7 +194,7 @@ void EndpointManager::on_out_xfer_failed(uint8_t endpoint_num,
 }
 
 void EndpointManager::set_address(uint8_t address) {
-  state_ = EndpointManager::State::Address;
+  state_ = DeviceState::Address;
   hw_->set_address(address);
 }
 
@@ -203,15 +202,16 @@ void EndpointManager::set_address_early(uint8_t address) {
   hw_->set_address_early(address);
 }
 
-#if 0
 void EndpointManager::set_configured() {
-  // TODO
+  state_ = DeviceState::Configured;
 }
 
 void EndpointManager::unconfigure() {
-  // TODO
+  // TODO: close all open endpoints
+  AUSB_LOGE("TODO: EndpointManager::unconfigure()");
+
+  state_ = DeviceState::Address;
 }
-#endif
 
 void EndpointManager::start_ctrl_in_write(ControlEndpoint *endpoint,
                                           const void *data, uint32_t size) {
