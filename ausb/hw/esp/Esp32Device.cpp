@@ -28,6 +28,8 @@
 #define ISR_LOGV(arg, ...) (static_cast<void>(0))
 #endif
 
+using namespace std::chrono_literals;
+
 namespace {
 const char *LogTag = "ausb.esp32";
 
@@ -125,6 +127,10 @@ DeviceEvent Esp32Device::process_event(Esp32DeviceEvent event) {
 }
 
 void Esp32Device::process_bus_reset() {
+  // Reset our state tracking outstanding transfers
+  // We don't send XferFailed events for any outstanding transfers; the
+  // BusResetEvent itself notifies the higher level code that all outstanding
+  // transfers are now failed.
   for (size_t endpoint_num = 0; endpoint_num < in_transfers_.size();
        ++endpoint_num) {
     in_transfers_[endpoint_num].unconfigure();
@@ -132,6 +138,154 @@ void Esp32Device::process_bus_reset() {
   for (size_t endpoint_num = 0; endpoint_num < out_transfers_.size();
        ++endpoint_num) {
     out_transfers_[endpoint_num].unconfigure();
+  }
+
+  flush_all_transfers_on_reset();
+
+  // Re-enable receipt of SETUP and transfer complete endpoint interrupts
+  // Note that we don't actually enable EP0 in daintmsk until configure_ep0()
+  // is called.
+  usb_->doepmsk = USB_SETUPMSK_M | USB_XFERCOMPLMSK;
+  usb_->diepmsk = USB_TIMEOUTMSK_M | USB_DI_XFERCOMPLMSK_M;
+}
+
+void Esp32Device::flush_all_transfers_on_reset() {
+  disable_all_in_endpoints();
+  disable_all_out_endpoints();
+}
+
+/*
+ * TODO: I haven't fully tested this disable_all_out_endpoints() code yet.
+ * This is based on documentation for some STM chips, and I'm not positive if
+ * all of the FIFO behavior maps exactly to ESP32.
+ *
+ * Attempting to set the SGOUTNAK flag on the initial bus reset (when there are
+ * no endpoints already disabled) appears to generate an RX FIFO level
+ * interrupt and then the USB_GOUTNAKEFF_M flag is never set, which causes this
+ * code to hang.  I haven't tested the behavior yet on subsequent resets when
+ * endpoints are currently enabled.
+ */
+void Esp32Device::disable_all_out_endpoints() {
+#if 0
+  flush_rx_fifo_helper();
+#endif
+
+  // TODO: this code busy loops waiting for various status flags to take
+  // effect.  Most of these have interrupts we could wait for instead.  It
+  // would be nicer to use interrupt events rather than busy looping.  That
+  // said, this would make the logic rather more complicated for us to store
+  // state about our in-progress operation and resume this on the various
+  // interrupt events.
+
+  // If all endpoints are already disabled, there is nothing for us to do
+  bool any_enabled = false;
+  for (int ep_num = 1; ep_num < USB_OUT_EP_NUM; ++ep_num) {
+    if (usb_->out_ep_reg[ep_num].doepctl & USB_EPENA0_M) {
+      any_enabled = true;
+      break;
+    }
+  }
+  if (!any_enabled) {
+    return;
+  }
+
+  // Set the global NAK flag if it is not already set.  This must be done prior
+  // to disabling any OUT endpoints.
+  const bool goutnak_already_set = ((usb_->gintsts & USB_GOUTNAKEFF_M) != 0);
+  if (!goutnak_already_set) {
+    ESP_LOGI(LogTag, "prepare to set SGOUTNAK flag: dctl=%#" PRIx32,
+             usb_->dctl);
+    set_bits(usb_->dctl, USB_SGOUTNAK_M);
+    ESP_LOGI(LogTag, "set SGOUTNAK flag: dctl=%#" PRIx32, usb_->dctl);
+    ESP_LOGI(LogTag, "waiting for GOUTNAKEFF...");
+    // Wait for the global NAK flag to take effect.
+    while ((usb_->gintsts & USB_GOUTNAKEFF_M) == 0) {
+    }
+    ESP_LOGI(LogTag, "GOUTNAKEFF done");
+  } else {
+    ESP_LOGI(LogTag, "GOUTNAK already in effect");
+  }
+
+  // Disable all OUT endpoints, except EP0 which is always enabled by HW
+  for (int ep_num = 1; ep_num < USB_OUT_EP_NUM; ++ep_num) {
+    set_bits(usb_->out_ep_reg[ep_num].doepctl, USB_EPDIS0_M | USB_STALL0_M);
+  }
+  // Wait for all endpoints to be disabled
+  for (int ep_num = 1; ep_num < USB_OUT_EP_NUM; ++ep_num) {
+    while ((usb_->out_ep_reg[ep_num].doepint & USB_EPDISBLD0_M) == 0) {
+    }
+  }
+
+  // Restore the global NAK flag
+  if (!goutnak_already_set) {
+    set_bits(usb_->dctl, USB_CGOUTNAK_M);
+  }
+}
+
+// This method flushes the RX FIFO.  This should generally only be used
+// with disable_all_out_endpoints(), as all of the OUT endpoints need to be
+// disabled after this method is finished.
+void Esp32Device::flush_rx_fifo_helper() {
+  for (int retry_count = 0; retry_count < 2; ++retry_count) {
+    // First enable all OUT endpoints
+    for (int ep_num = 0; ep_num < USB_OUT_EP_NUM; ++ep_num) {
+      set_bits(usb_->out_ep_reg[ep_num].doepctl, USB_EPENA0);
+    }
+#if 0
+    // Wait for AHB idle
+    while (usb_->grstctl & USB_AHBIDLE_M) {
+    }
+#endif
+
+    // Request the flush
+    set_bits(usb_->grstctl, USB_RXFFLSH_M);
+
+    // Wait for the flush to complete
+    const auto start = std::chrono::steady_clock::now();
+    uint32_t n = 0;
+    while (true) {
+      if ((usb_->grstctl & USB_RXFFLSH_M) == 0) {
+        // Flush completed successfully
+        ESP_LOGV(LogTag,
+                 "RX FIFO flush succeeded after %" PRIu32
+                 " iterations, %" PRIu64 "us",
+                 n,
+                 std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::steady_clock::now() - start)
+                     .count());
+        return;
+      }
+
+      // If the flush does not complete in 10ms, retry once from the start
+      ++n;
+      if (n > 1000) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - start >= 10ms) {
+          break;
+        }
+        // Our timeout hasn't expired yet, but give other tasks a chance to run
+        // while we are busy looping.
+        taskYIELD();
+      }
+    }
+  }
+  ESP_LOGW(LogTag, "RX FIFO flush timed out");
+}
+
+void Esp32Device::disable_all_in_endpoints() {
+  // Disable all endpoints
+  for (int ep_num = 0; ep_num < USB_IN_EP_NUM; ++ep_num) {
+    set_bits(usb_->in_ep_reg[ep_num].diepctl, USB_D_EPDIS0_M | USB_DI_SNAK0_M);
+  }
+  // Wait for the disable to take effect
+  for (int ep_num = 0; ep_num < USB_IN_EP_NUM; ++ep_num) {
+    while ((usb_->in_ep_reg[ep_num].diepint & USB_D_EPDISBLD0_M) == 0) {
+    }
+  }
+
+  // Now flush all TX FIFOs
+  set_bits(usb_->grstctl, (0x10 << USB_TXFNUM_S) | USB_TXFFLSH_M);
+  while (usb_->grstctl & USB_TXFFLSH_M) {
   }
 }
 
@@ -354,8 +508,8 @@ esp_err_t Esp32Device::esp_init(EspPhyType phy_type,
   clear_bits(usb_->gotgctl,
              USB_BVALIDOVVAL_M | USB_BVALIDOVEN_M | USB_VBVALIDOVVAL_M);
 
-  // Configure all endpoints to NAK
-  all_endpoints_nak();
+  // Configure all OUT endpoints to NAK
+  nak_all_out_endpoints();
 
   // Flush all TX FIFOs, and wait for the flush to complete
   set_bits(usb_->grstctl, (0x10 << USB_TXFNUM_S) | USB_TXFFLSH_M);
@@ -442,11 +596,18 @@ esp_err_t Esp32Device::init_phy(EspPhyType phy_type,
   return ESP_OK;
 }
 
-void Esp32Device::all_endpoints_nak() {
+void Esp32Device::nak_all_out_endpoints() {
   // Set the NAK bit on all OUT endpoints, so they will NAK any OUT packets
-  // sent by the host.
+  // sent by the host.  Note that setting the NAK flag does not take effect
+  // immediately, and this method does not wait for it to become effective.
   for (int ep_num = 0; ep_num < USB_OUT_EP_NUM; ++ep_num) {
     set_bits(usb_->out_ep_reg[ep_num].doepctl, USB_DO_SNAK0_M);
+  }
+}
+
+void Esp32Device::nak_all_in_endpoints() {
+  for (int ep_num = 0; ep_num < USB_IN_EP_NUM; ++ep_num) {
+    set_bits(usb_->in_ep_reg[ep_num].diepctl, USB_DI_SNAK0_M);
   }
 }
 
@@ -544,6 +705,8 @@ void Esp32Device::stall_control_endpoint(uint8_t endpoint_num) {
   // endpoints, we just set the STALL flag.  (The docs explicitly mention that
   // endpoint 0 cannot be disabled.  They are a little bit less clear about the
   // behavior if any other endpoint is configured as a control endpoint type.)
+  //
+  // TODO: need to set EPDIS on the TX side.  EPDIS is only ignored for IN
   set_bits(usb_->out_ep_reg[endpoint_num].doepctl, USB_STALL0_M);
   set_bits(usb_->in_ep_reg[endpoint_num].diepctl,
            USB_DI_SNAK0_M | USB_D_STALL0_M);
@@ -895,7 +1058,7 @@ void Esp32Device::stall_in_endpoint(uint8_t endpoint_num) {
   } else {
     // Set USB_DI_SNAK1_M to NAK transfers.
     set_bits(in_ep->diepctl, USB_DI_SNAK1_M);
-    while ((in_ep->diepint & USB_DI_SNAK1_M) == 0) {
+    while ((in_ep->diepint & USB_D_INEPNAKEFF1_M) == 0) {
       // Busy loop until we observe the USB_DI_SNAK1_M interrupt flag.
       // TODO: It would ideally be nicer to make this API asynchronous, and
       // finish the operation in the interrupt handler rather than busy
@@ -1081,15 +1244,21 @@ void Esp32Device::intr_main() {
 
 void Esp32Device::intr_bus_reset() {
   ISR_LOGV("USB int: reset");
-  // Configure all endpoints to NAK any new packets
-  all_endpoints_nak();
+
+  // Immediately configure all endpoints to NAK any new packets
+  // We do most other state manipulation in process_bus_reset() in the main USB
+  // task, but we want to immediately stop transmission of any new data after
+  // the reset until process_bus_reset() can run.
+  nak_all_out_endpoints();
+  nak_all_in_endpoints();
+
   // Clear the device address
   clear_bits(usb_->dcfg, USB_DEVADDR_M);
 
   // Disable all endpoint interrupts
   usb_->daintmsk = 0;
-  usb_->doepmsk = USB_SETUPMSK_M | USB_XFERCOMPLMSK;
-  usb_->diepmsk = USB_TIMEOUTMSK_M | USB_DI_XFERCOMPLMSK_M;
+  usb_->doepmsk = 0;
+  usb_->diepmsk = 0;
 
   send_event_from_isr<BusResetEvent>();
 }

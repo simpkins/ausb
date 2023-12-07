@@ -368,9 +368,13 @@ private:
                                    std::optional<gpio_num_t> vbus_monitor);
   [[nodiscard]] esp_err_t init_phy(EspPhyType phy_type,
                                    std::optional<gpio_num_t> vbus_monitor);
-  void all_endpoints_nak();
   [[nodiscard]] esp_err_t enable_interrupts();
   static void static_interrupt_handler(void *arg);
+
+  // Configure all IN/OUT endpoints to NAK tokens from the host.
+  // These methods do not wait for the NAK flags to take effect.
+  void nak_all_out_endpoints();
+  void nak_all_in_endpoints();
 
   // Methods invoked from interrupt context.
   // All interrupt context methods have names starting with intr_*()
@@ -401,6 +405,11 @@ private:
 
   DeviceEvent process_out_ep_interrupt(uint8_t endpoint_num, uint32_t doepint);
   DeviceEvent process_out_xfer_complete(uint8_t endpoint_num);
+
+  void flush_all_transfers_on_reset();
+  void disable_all_out_endpoints();
+  void disable_all_in_endpoints();
+  void flush_rx_fifo_helper();
 
   static uint16_t get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl);
   static uint8_t get_ep0_max_packet_size(EP0MaxPktSize mps_bits);
