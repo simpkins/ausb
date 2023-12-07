@@ -27,12 +27,29 @@ class UsbDevice : private ControlHandlerCallback {
 public:
   constexpr UsbDevice() noexcept = default;
 
+  /**
+   * Initialize the USB device and connect to the bus.
+   */
   std::error_code init() { return ep_manager_.init(); }
+
+  /**
+   * Run the main USB task loop, processing events from the hardware.
+   *
+   * This just loops calling wait_for_event() followed by handle_event().
+   * If desired you can implement your own custom task loop instead if you want
+   * to perform any additional work.
+   */
   void loop() { ep_manager_.loop(); }
 
+  /**
+   * Wait for a USB event to process.
+   */
   DeviceEvent wait_for_event(std::chrono::milliseconds timeout) {
     return hw_.wait_for_event(timeout);
   }
+  /**
+   * Process one USB event.
+   */
   void handle_event(const DeviceEvent &event) {
     ep_manager_.handle_event(event);
   }
