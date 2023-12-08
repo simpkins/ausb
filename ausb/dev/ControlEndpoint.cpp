@@ -35,23 +35,33 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   // Handle receipt of a new SETUP packet if we think that we are currently
   // still processing an existing control transfer.
   if (status_ != Status::Idle) [[unlikely]] {
-    // Check to see if we think this is just a retransmitted SETUP packet
-    // from the host.
+    // One possible cause for this is simply from the host retransmitting a
+    // SETUP packet after it thought there was a transmission error.  If this
+    // packet is identical to the SETUP packet we are currently processing and
+    // we haven't seen any IN or OUT tokens since that SETUP packet, this is
+    // just a retransmission and we can ignore it.
+    //
+    // Different hardware implementations provide different functionality for
+    // filtering out or detecting retransmitted SETUP packets.
     if (setup_rxmit_detector_.is_retransmit(packet)) {
       AUSB_LOGI("ignoring retransmitted SETUP packet");
       return;
     }
 
-    // If this is not a retransmit, abort the current transfer and respond to
-    // this SETUP packet with an error.  (We don't want to attempt to process
-    // this transfer, since the previous transfer we thought was in progress
-    // might have already given data to the hardware to transmit, and it might
-    // have already transmitted it, which the host may misinterpret as
-    // belonging to this transfer.)
+    // Otherwise this generally indicates a bug somewhere.
+    //
+    // The most likely cause is probably a bug in the device implementation.
+    // e.g., this can happen if a CtrlInXfer implementation attempts to send a
+    // different amount of data than specified in the setup packet wLength
+    // field, or similarly if a CtrlOutXfer attempts to read the wrong length.
+    //
+    // This also could be caused by a badly behaving host, but if you are
+    // hitting this it's more likely that you are implementing a new USB device
+    // and just have a bug in your device behavior somewhere.
     AUSB_LOGE("received SETUP packet when existing control transfer is in "
               "progress: state=%d",
               static_cast<int>(status_));
-    invoke_xfer_failed(XferFailReason::ProtocolError);
+    fail_current_xfer(XferFailReason::ProtocolError);
     return;
   }
 
