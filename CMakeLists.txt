@@ -16,6 +16,8 @@ set(
     "ausb/dev/ctrl/SetAddress.cpp"
     "ausb/dev/ctrl/StallCtrlIn.cpp"
     "ausb/dev/ctrl/StallCtrlOut.cpp"
+    "ausb/hid/KeyboardInterface.cpp"
+    "ausb/hid/HidSetReport.cpp"
 )
 
 if(ESP_PLATFORM)

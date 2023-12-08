@@ -6,6 +6,7 @@
 #include "ausb/dev/CtrlInXfer.h"
 #include "ausb/dev/CtrlOutXfer.h"
 #include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/Interface.h"
 #include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
 #include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
 #include "ausb/dev/ctrl/GetStaticDescriptor.h"
@@ -30,6 +31,23 @@ ControlHandler::process_out_setup(const SetupPacket &packet) {
     return process_std_device_out(packet);
   }
 
+  const auto recip = packet.get_recipient();
+  if (recip == SetupRecipient::Interface) {
+    const uint8_t interface_num = (packet.index & 0xff);
+    auto *const intf = endpoint_->manager()->get_interface(interface_num);
+    if (!intf) {
+      AUSB_LOGW("received SETUP OUT request for unknown interface %d",
+                interface_num);
+      return nullptr;
+    }
+
+    return intf->process_out_setup(endpoint_, packet);
+  } else if (recip == SetupRecipient::Endpoint) {
+    const uint8_t endpoint_addr = packet.index & 0xff;
+    // TODO
+    (void)endpoint_addr;
+  }
+
   // TODO:
   AUSB_LOGE("TODO: process OUT setup packet");
   return nullptr;
@@ -41,6 +59,23 @@ ControlHandler::process_in_setup(const SetupPacket &packet) {
       SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
     return process_std_device_in(packet);
+  }
+
+  const auto recip = packet.get_recipient();
+  if (recip == SetupRecipient::Interface) {
+    const uint8_t interface_num = (packet.index & 0xff);
+    auto *const intf = endpoint_->manager()->get_interface(interface_num);
+    if (!intf) {
+      AUSB_LOGW("received SETUP IN request for unknown interface %d",
+                interface_num);
+      return nullptr;
+    }
+
+    return intf->process_in_setup(endpoint_, packet);
+  } else if (recip == SetupRecipient::Endpoint) {
+    const uint8_t endpoint_addr = packet.index & 0xff;
+    // TODO
+    (void)endpoint_addr;
   }
 
   // TODO:

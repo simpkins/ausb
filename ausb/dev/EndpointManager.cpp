@@ -202,6 +202,24 @@ void EndpointManager::set_address_early(uint8_t address) {
   hw_->set_address_early(address);
 }
 
+bool EndpointManager::add_interface(uint8_t number, Interface *interface) {
+  if (interfaces_.size() <= number) {
+    interfaces_.resize(number + 1, nullptr);
+  }
+  if (interfaces_[number] != nullptr) {
+    return false;
+  }
+  interfaces_[number] = interface;
+  return true;
+}
+
+Interface *EndpointManager::get_interface(uint8_t number) {
+  if (number >= interfaces_.size()) {
+    return nullptr;
+  }
+  return interfaces_[number];
+}
+
 void EndpointManager::set_configured() {
   state_ = DeviceState::Configured;
 }

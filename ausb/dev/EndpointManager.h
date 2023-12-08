@@ -9,8 +9,11 @@
 #include <cstdint>
 #include <memory>
 #include <system_error>
+#include <vector>
 
 namespace ausb::device {
+
+class Interface;
 
 /**
  * This class is the main gateway between the hardware-independent code and the
@@ -78,6 +81,24 @@ public:
    * the ability to do work here if desired.
    */
   void set_address_early(uint8_t address);
+
+  /**
+   * add_interface() should be called to define a new interface.
+   *
+   * This should generally be called as part of processing a SET_CONFIGURATION
+   * request.  set_configured() should be called after all interfaces and
+   * endpoints have been configured.
+   *
+   * The EndpointManager stores a pointer to the Interface object, but does not
+   * own it.  The caller is responsible for ensuring that the Interface object
+   * lives for at least as long as the device is configured.
+   *
+   * Returns false if an interface with this number is already defined.
+   * Returns true on success.
+   */
+  bool add_interface(uint8_t number, Interface* interface);
+
+  Interface *get_interface(uint8_t number);
 
   /**
    * Mark the device as configured.
@@ -201,6 +222,8 @@ private:
 
   HWDevice* hw_ = nullptr;
   ControlEndpoint ep0_;
+
+  std::vector<Interface*> interfaces_;
 };
 
 } // namespace ausb::device

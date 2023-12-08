@@ -13,6 +13,7 @@
 #include "ausb/dev/UsbDeviceExample.h" // just to ensure this header compiles
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/HidReportDescriptor.h"
+#include "ausb/hid/KeyboardInterface.h"
 #include "ausb/hid/key_codes.h"
 #include "ausb/hid/leds.h"
 #include "ausb/hid/types.h"
@@ -38,6 +39,7 @@ public:
       return false;
     }
 
+    ep_mgr.add_interface(0, &kbd_intf_);
     // TODO:
     // ep_mgr->open_in_endpoint(1);
 
@@ -127,6 +129,9 @@ public:
         .add_config_descriptor(cfg)
         .add_descriptor(DescriptorType::HidReport, kbd_report.data());
   }
+
+private:
+  hid::KeyboardInterface kbd_intf_;
 };
 
 static constinit UsbDevice<TestDevice> usb;

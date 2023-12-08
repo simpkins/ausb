@@ -19,6 +19,8 @@ class EndpointManager;
 
 class ControlEndpointCallback {
 public:
+  virtual ~ControlEndpointCallback() = default;
+
   /**
    * set_endpoint() will be called during device initialization, before any
    * other callback methods are invoked.

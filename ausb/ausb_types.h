@@ -2,8 +2,11 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace ausb {
+
+using buf_view = std::basic_string_view<uint8_t>;
 
 enum class XferFailReason {
   // The USB bus was reset
