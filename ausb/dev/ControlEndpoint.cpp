@@ -7,6 +7,8 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/log.h"
 
+#include <cassert>
+
 namespace ausb::device {
 
 ControlEndpoint::~ControlEndpoint() = default;

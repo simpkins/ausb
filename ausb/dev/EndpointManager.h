@@ -31,8 +31,18 @@ public:
 
   /**
    * Initialize the USB device.
+   *
+   * This accepts any arguments accepted by the underlying hardware device's
+   * init() call, and forwards those to the hardware.
    */
-  std::error_code init();
+  template<typename... Args>
+  std::error_code init(Args... args) {
+    const auto err = pre_init();
+    if (err) {
+      return err;
+    }
+    return hw_->init(std::forward<Args>(args)...);
+  }
 
   /**
    * Reset and de-initialize the USB device.
@@ -205,6 +215,8 @@ public:
 private:
   EndpointManager(EndpointManager const &) = delete;
   EndpointManager &operator=(EndpointManager const &) = delete;
+
+  std::error_code pre_init();
 
   void on_bus_reset();
   void on_suspend();

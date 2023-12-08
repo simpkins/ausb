@@ -3,6 +3,8 @@
 
 #include "ausb/log.h"
 
+#include <chrono>
+
 using namespace std::chrono_literals;
 
 namespace {
@@ -51,10 +53,10 @@ void EndpointManager::handle_event(const DeviceEvent &event) {
       event);
 }
 
-std::error_code EndpointManager::init() {
+std::error_code EndpointManager::pre_init() {
   AUSB_LOGI("EndpointManager::init()");
   ep0_.on_init();
-  return hw_->init();
+  return std::error_code();
 }
 
 void EndpointManager::reset() {

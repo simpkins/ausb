@@ -58,6 +58,10 @@ get_usb_descriptor(uint16_t value,
 
 [[nodiscard]] constexpr bool
 fill_string_descriptor(uint8_t *buf, size_t buflen, std::string_view str) {
+  // It's platform-dependent whether char is signed or not.
+  // Ensure that we interpret the data as unsigned while processing it.
+  auto in_byte = [&](size_t idx) { return static_cast<uint8_t>(str[idx]); };
+
   // buf[0] will be filled at the end, once we know the output length
   buf[1] = static_cast<uint8_t>(DescriptorType::String);
   size_t in_idx = 0;
@@ -68,53 +72,54 @@ fill_string_descriptor(uint8_t *buf, size_t buflen, std::string_view str) {
     }
 
     // Translate UTF-8 input to UTF-16 LE
-    if (str[in_idx] < 0x80) {
-      buf[out_idx] = str[in_idx];
+    if (in_byte(in_idx) < 0x80) {
+      buf[out_idx] = in_byte(in_idx);
       buf[out_idx + 1] = '\0';
       ++in_idx;
       out_idx += 2;
     } else {
       uint32_t c;
-      if ((str[in_idx] & 0xe0) == 0xc0) {
+      if ((in_byte(in_idx) & 0xe0) == 0xc0) {
         // 2-byte UTF-8 value
         if (in_idx + 1 >= str.size()) {
           return false; // truncated UTF-8 data
         }
-        if ((str[in_idx + 1] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 1) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        c = ((str[in_idx] & 0x1f) << 6) | (str[in_idx + 1] & 0x3f);
+        c = ((in_byte(in_idx) & 0x1f) << 6) | (in_byte(in_idx + 1) & 0x3f);
         in_idx += 2;
-      } else if ((str[in_idx] & 0xf0) == 0xe0) {
+      } else if ((in_byte(in_idx) & 0xf0) == 0xe0) {
         // 3-byte UTF-8 value
         if (in_idx + 2 >= str.size()) {
           return false; // truncated UTF-8 data
         }
-        if ((str[in_idx + 1] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 1) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        if ((str[in_idx + 2] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 2) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        c = ((str[in_idx] & 0x1f) << 12) |
-            ((str[in_idx + 1] & 0x3f) << 6) | (str[in_idx + 2] & 0x3f);
+        c = ((in_byte(in_idx) & 0x1f) << 12) |
+            ((in_byte(in_idx + 1) & 0x3f) << 6) | (in_byte(in_idx + 2) & 0x3f);
         in_idx += 3;
-      } else if ((str[in_idx] & 0xf8) == 0xf0) {
+      } else if ((in_byte(in_idx) & 0xf8) == 0xf0) {
         // 4-byte UTF-8 value
         if (in_idx + 3 >= str.size()) {
           return false; // truncated UTF-8 data
         }
-        if ((str[in_idx + 1] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 1) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        if ((str[in_idx + 2] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 2) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        if ((str[in_idx + 3] & 0xc0) != 0x80) {
+        if ((in_byte(in_idx + 3) & 0xc0) != 0x80) {
           return false; // invalid UTF-8
         }
-        c = ((str[in_idx] & 0x1f) << 18) | ((str[in_idx + 1] & 0x3f) << 12) |
-            ((str[in_idx + 2] & 0x3f) << 6) | (str[in_idx + 3] & 0x3f);
+        c = ((in_byte(in_idx) & 0x1f) << 18) |
+            ((in_byte(in_idx + 1) & 0x3f) << 12) |
+            ((in_byte(in_idx + 2) & 0x3f) << 6) | (in_byte(in_idx + 3) & 0x3f);
         in_idx += 4;
       } else {
         return false; // Invalid UTF-8 value

@@ -4,6 +4,7 @@
 #include "ausb/SetupPacket.h"
 #include "ausb/log.h"
 
+#include <cassert>
 #include <cstring>
 
 namespace ausb::device {

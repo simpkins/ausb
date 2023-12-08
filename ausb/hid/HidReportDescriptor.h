@@ -360,8 +360,8 @@ public:
   add_short_item_u16(ItemPrefix prefix, uint16_t value) {
     std::array<uint8_t, 3> item = {{
         static_cast<uint8_t>(static_cast<uint8_t>(prefix) | 2),
-        (value & 0xff),
-        ((value >> 8) & 0xff),
+        static_cast<uint8_t>(value & 0xff),
+        static_cast<uint8_t>((value >> 8) & 0xff),
     }};
     return ReportDescriptor<TotalLength + 3>(*this, item.data());
   }
@@ -370,10 +370,10 @@ public:
   add_short_item_u32(ItemPrefix prefix, uint32_t value) {
     std::array<uint8_t, 5> item = {{
         static_cast<uint8_t>(static_cast<uint8_t>(prefix) | 3),
-        (value & 0xff),
-        ((value >> 8) & 0xff),
-        ((value >> 16) & 0xff),
-        ((value >> 24) & 0xff),
+        static_cast<uint8_t>(value & 0xff),
+        static_cast<uint8_t>((value >> 8) & 0xff),
+        static_cast<uint8_t>((value >> 16) & 0xff),
+        static_cast<uint8_t>((value >> 24) & 0xff),
     }};
     return ReportDescriptor<TotalLength + 5>(*this, item.data());
   }

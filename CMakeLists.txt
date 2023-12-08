@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(AUSB_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(
     srcs
     "ausb/desc/StaticDescriptorMapUtils.cpp"
@@ -23,5 +24,7 @@ set(
 if(ESP_PLATFORM)
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/esp.cmake")
 else()
+    project(ausb HOMEPAGE_URL https://github.com/simpkins/ausb)
+
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/linux.cmake")
 endif()
