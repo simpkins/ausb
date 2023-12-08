@@ -7,16 +7,12 @@
 namespace ausb::device {
 
 void GetStaticDescriptor::start(const SetupPacket &packet) {
-  // It's unexpected if we try to respond with more data than was requested.
-  // This could be caused by a badly behaving host, but it might indicate a
-  // bug in our device code somewhere.
-  if (size_ > packet.length) {
-    AUSB_LOGW("data provided for GET_DESCRIPTOR response is longer than host "
-              "requested.  descriptor will be truncated.");
-    send_full(data_, packet.length);
-  } else {
-    send_full(data_, size_);
-  }
+  // If the host requested less than the full descriptor length, just send
+  // the first portion.  This is common for the config descriptor: the host
+  // does not know the full length, so it requests just the basic descriptor
+  // header first, which includes the total length.  Afterwards it can then
+  // request the full descriptor.
+  send_full(data_, std::min(packet.length, static_cast<uint16_t>(size_)));
 }
 
 void GetStaticDescriptor::xfer_acked() {
