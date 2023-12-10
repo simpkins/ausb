@@ -63,6 +63,7 @@ public:
     ep1.set_interval(10);
     ep1.set_max_packet_size(8);
 
+    // TODO: move this definition to the ausb/hid code
     const auto max_key_code = hid::Key::ExSel;
     auto kbd_report = hid::ReportDescriptor()
                           .usage_page(hid::UsagePage::GenericDesktop)
@@ -126,8 +127,7 @@ public:
                     Language::English_US)
         .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
                     Language::English_US)
-        .add_config_descriptor(cfg)
-        .add_descriptor(DescriptorType::HidReport, kbd_report.data());
+        .add_config_descriptor(cfg);
   }
 
 private:

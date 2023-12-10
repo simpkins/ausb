@@ -1,5 +1,7 @@
 set(CMAKE_CXX_STANDARD 20)
 
+include(CTest)
+
 # Prefer compiling clang if we can find it.
 # Enable ASAN if we found clang.
 find_program(CXX_COMPILER NAMES "clang++" "clang++-15" "g++")
@@ -28,4 +30,5 @@ target_include_directories(
     "${AUSB_ROOT_DIR}"
 )
 
-# add_executable(test ausb/test/main.cpp)
+add_executable(ausb_test test/runner/mock/main.cpp)
+add_test(NAME ausb COMMAND ausb_test)
