@@ -212,6 +212,8 @@ public:
    */
   void start_ctrl_out_ack(ControlEndpoint* endpoint);
 
+  HWDevice *hw() { return hw_; }
+
 private:
   EndpointManager(EndpointManager const &) = delete;
   EndpointManager &operator=(EndpointManager const &) = delete;

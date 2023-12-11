@@ -154,6 +154,108 @@ void Esp32Device::flush_all_transfers_on_reset() {
   disable_all_out_endpoints();
 }
 
+bool Esp32Device::open_in_endpoint(uint8_t endpoint_num, EndpointType type,
+                                   uint16_t max_packet_size) {
+  ESP_LOGV(LogTag, "open IN endpoint %d", endpoint_num);
+
+  // Argument validation
+  //
+  // TODO: Only 4 IN endpoints can be active at a time.  Check this when we do
+  // FIFO allocation.
+  // TODO: Section 32.2.2 in the ESP32-S3 technical reference manual seems to
+  // imply that endpoints other than 0 can only be configured as either OUT or
+  // IN, and cannot use the same endpoint number for both OUT and IN at the
+  // same time.
+  if (endpoint_num == 0 || endpoint_num >= USB_IN_EP_NUM) {
+    ESP_LOGE(LogTag,
+             "cannot IN endpoint %d: hardware only supports endpoint numbers "
+             "up to %d",
+             endpoint_num, USB_IN_EP_NUM - 1);
+    return false;
+  }
+  if (in_transfers_[endpoint_num].status != InEPStatus::Unconfigured) {
+    ESP_LOGE(LogTag, "IN endpoint %d is already open", endpoint_num);
+    return false;
+  }
+  if (max_packet_size == 0 || max_packet_size > Correct_USB_MPS1_V) {
+    ESP_LOGE(LogTag,
+             "error opening IN endpoint %d: invalid max packet size %" PRIu16,
+             endpoint_num, max_packet_size);
+    return false;
+  }
+
+  uint8_t fifo_num = allocate_tx_fifo(endpoint_num, max_packet_size);
+  if (fifo_num == 0) {
+    return false;
+  }
+
+  // Set the endpoint type, max packet size, fifo number, and enable flag
+  // in diepctl
+  auto diepctl = usb_->in_ep_reg[endpoint_num].diepctl;
+  diepctl &= ~(USB_D_TXFNUM1_M | USB_D_EPTYPE1_M | USB_DI_SETD0PID1_M |
+               Correct_USB_D_MPS1_M);
+  diepctl |= USB_D_USBACTEP1_M;
+  diepctl |= (fifo_num << USB_D_TXFNUM1_S);
+  diepctl |= (static_cast<uint8_t>(type) << USB_D_EPTYPE1_S);
+  diepctl |= (max_packet_size << USB_D_MPS1_S);
+  if (type != EndpointType::Isochronous) {
+    diepctl |= USB_DI_SETD0PID1_M;
+  }
+  usb_->in_ep_reg[endpoint_num].diepctl = diepctl;
+
+  // Mark that the endpoint is configured and now idle
+  in_transfers_[endpoint_num].status = InEPStatus::Idle;
+
+  // Enable interrupts for this endpoint
+  set_bits(usb_->daintmsk, (1 << (USB_INEPMSK0_S + endpoint_num)));
+  return true;
+}
+
+bool Esp32Device::open_out_endpoint(uint8_t endpoint_num, EndpointType type,
+                                    uint16_t max_packet_size) {
+  ESP_LOGV(LogTag, "open OUT endpoint %d", endpoint_num);
+
+  // Argument validation
+  if (endpoint_num == 0 || endpoint_num >= USB_OUT_EP_NUM) {
+    ESP_LOGE(LogTag,
+             "cannot OUT endpoint %d: hardware only supports endpoint numbers "
+             "up to %d",
+             endpoint_num, USB_OUT_EP_NUM - 1);
+    return false;
+  }
+  if (out_transfers_[endpoint_num].status != OutEPStatus::Unconfigured) {
+    ESP_LOGE(LogTag, "error opening OUT endpoint %d: endpoint is already open",
+             endpoint_num);
+    return false;
+  }
+  if (max_packet_size == 0 || max_packet_size > Correct_USB_MPS1_V) {
+    ESP_LOGE(LogTag,
+             "error opening OUT endpoint %d: invalid max packet size %" PRIu16,
+             endpoint_num, max_packet_size);
+    return false;
+  }
+
+  // Set the endpoint type, max packet size, and enable flag in doepctl
+  auto doepctl = usb_->out_ep_reg[endpoint_num].doepctl;
+  doepctl &= ~(USB_EPTYPE1_M | Correct_USB_MPS1_M | USB_DO_SETD0PID1_M |
+               USB_DO_SETD1PID1_M);
+  doepctl |= USB_USBACTEP1_M;
+  doepctl |= (static_cast<uint8_t>(type) << USB_EPTYPE1_S);
+  doepctl |= (max_packet_size << USB_MPS1_S);
+  if (type != EndpointType::Isochronous) {
+    doepctl |= USB_DO_SETD0PID1_M;
+  }
+  usb_->out_ep_reg[endpoint_num].doepctl = doepctl;
+
+  // Mark that the endpoint is configured and now idle
+  out_transfers_[endpoint_num].status = OutEPStatus::Idle;
+
+  // Enable interrupts for this endpoint
+  set_bits(usb_->daintmsk, (1 << (USB_OUTEPMSK0_S + endpoint_num)));
+
+  return true;
+}
+
 /*
  * TODO: I haven't fully tested this disable_all_out_endpoints() code yet.
  * This is based on documentation for some STM chips, and I'm not positive if
@@ -520,6 +622,29 @@ esp_err_t Esp32Device::esp_init(EspPhyType phy_type,
   while (usb_->grstctl & USB_RXFFLSH_M) {
   }
 
+  // Configure reasonable default sizes for the FIFOs.
+  //
+  // We set 208 bytes for the RX FIFO.  This should generally be reasonable if
+  // the max packet size on any endpoint is 64 bytes.
+  ESP_RETURN_ON_ERROR(configure_rx_fifo(208), LogTag,
+                      "error configuring RX FIFO");
+  // Set 64 bytes for the EP0 TX FIFO.  This is the max allowed max packet size
+  // for endpoint 0, regardless of whether the bus is using low speed, full
+  // speed, or high speed.
+  //
+  ESP_RETURN_ON_ERROR(configure_tx_fifo0(64), LogTag,
+                      "error configuring TX FIFO 0");
+  // Configure reasonable defaults for the TX FIFOs.
+  // Split the remaining FIFO space among them evenly.
+  ESP_RETURN_ON_ERROR(configure_tx_fifo1(188), LogTag,
+                      "error configuring TX FIFO 1");
+  ESP_RETURN_ON_ERROR(configure_tx_fifo2(188), LogTag,
+                      "error configuring TX FIFO 2");
+  ESP_RETURN_ON_ERROR(configure_tx_fifo3(188), LogTag,
+                      "error configuring TX FIFO 3");
+  ESP_RETURN_ON_ERROR(configure_tx_fifo4(188), LogTag,
+                      "error configuring TX FIFO 4");
+
   // Interrupt configuration
   usb_->gintmsk = 0;          // mask all interrupts
   usb_->gotgint = 0xffffffff; // clear OTG interrupts
@@ -631,6 +756,205 @@ void Esp32Device::set_address(uint8_t /*address*/) {
   // We did all processing in set_address_early(), so nothing to do here.
 }
 
+esp_err_t Esp32Device::configure_rx_fifo(uint16_t rx_size) {
+  // This method should only be called when EP0 is disabled and has not yet
+  // been configured.  (e.g., after a bus reset)
+  if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
+    ESP_LOGE(LogTag, "configure_rx_fifo() called after endpoint 0 has already "
+                     "been configured");
+    return ESP_ERR_INVALID_STATE;
+  }
+  if (rx_size >= kFifoMaxAddress) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  auto const rx_words = rx_size >> 2;
+  usb_->grxfsiz = rx_words;
+  return ESP_OK;
+}
+
+[[nodiscard]] esp_err_t Esp32Device::configure_tx_fifo0(uint16_t size,
+                                                        uint16_t start_offset) {
+  // This method should only be called when EP0 is disabled and has not yet
+  // been configured.  (e.g., after a bus reset)
+  if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
+    ESP_LOGE(LogTag, "configure_tx_fifo0() called after endpoint 0 has already "
+                     "been configured");
+    return ESP_ERR_INVALID_STATE;
+  }
+  if ((size & 0x3) || (start_offset & 0x3)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // If start_offset was not specified, default to the end of the RX FIFO
+  uint16_t const start_words =
+      (start_offset == 0) ? usb_->grxfsiz : (start_offset >> 2);
+  uint16_t const size_words = size >> 2;
+  if (((start_words + size_words) << 2) > kFifoMaxAddress) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // Set the configuration register
+  usb_->gnptxfsiz = (size_words << USB_NPTXFDEP_S) |
+                    ((start_words & USB_NPTXFSTADDR_V) << USB_NPTXFSTADDR_S);
+  return ESP_OK;
+}
+
+esp_err_t Esp32Device::configure_tx_fifo1(uint16_t size, uint16_t endpoint_num,
+                                          uint16_t start_offset) {
+  return configure_tx_fifo(1, size, endpoint_num, start_offset);
+}
+
+esp_err_t Esp32Device::configure_tx_fifo2(uint16_t size, uint16_t endpoint_num,
+                                          uint16_t start_offset) {
+  return configure_tx_fifo(2, size, endpoint_num, start_offset);
+}
+
+esp_err_t Esp32Device::configure_tx_fifo3(uint16_t size, uint16_t endpoint_num,
+                                          uint16_t start_offset) {
+  return configure_tx_fifo(3, size, endpoint_num, start_offset);
+}
+
+esp_err_t Esp32Device::configure_tx_fifo4(uint16_t size, uint16_t endpoint_num,
+                                          uint16_t start_offset) {
+  return configure_tx_fifo(4, size, endpoint_num, start_offset);
+}
+
+esp_err_t Esp32Device::configure_tx_fifo(uint8_t fifo_num, uint16_t size,
+                                         uint16_t endpoint_num,
+                                         uint16_t start_offset) {
+  if ((size & 0x3) || (start_offset & 0x3)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  uint16_t start_words;
+  if (start_offset == 0) {
+      uint16_t prev_size;
+      uint16_t prev_start;
+      if (fifo_num == 1) {
+        prev_size = (usb_->gnptxfsiz >> USB_NPTXFDEP_S) & USB_NPTXFDEP_V;
+        prev_start = (usb_->gnptxfsiz >> USB_NPTXFSTADDR_S) & USB_NPTXFSTADDR_V;
+      } else {
+        const auto prev_cfg = usb_->dieptxf[fifo_num - 2];
+        prev_size = (prev_cfg >> USB_INEP1TXFDEP_S) & USB_INEP1TXFDEP_V;
+        prev_start = (prev_cfg >> USB_INEP1TXFSTADDR_S) & USB_INEP1TXFSTADDR_V;
+      }
+      start_words = prev_size + prev_start;
+  } else {
+      start_words = start_offset >> 2;
+  }
+
+  uint16_t const size_words = size >> 2;
+  if (((start_words + size_words) << 2) > kFifoMaxAddress) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // dieptxf configuration starts at FIFO 1.
+  // FIFO 0 is configured in gnptxfsiz.
+  usb_->dieptxf[fifo_num - 1] =
+      (start_words << USB_INEP1TXFSTADDR_S) | (size_words << USB_INEP1TXFDEP_S);
+
+  return ESP_OK;
+}
+
+uint8_t Esp32Device::allocate_tx_fifo(uint8_t endpoint_num,
+                                         uint16_t max_packet_size) {
+  // If this endpoint already has a FIFO assigned, use it.
+  for (uint8_t idx = 0; idx < tx_fifo_allocations_.size(); ++idx) {
+    const auto fifo_num = idx + 1;
+    if (tx_fifo_allocations_[idx] == endpoint_num) {
+      if (get_tx_fifo_size(fifo_num) < max_packet_size) {
+        // FIFO is too small to store packets for this endpoint.
+        ESP_LOGE(LogTag,
+                 "TX FIFO %d has been explicitly assigned to endpoint %d, but "
+                 "is too small for the endpoint's max packet size (FIFO "
+                 "size=%d, MPS=%d)",
+                 fifo_num, endpoint_num, get_tx_fifo_size(fifo_num),
+                 max_packet_size);
+        return 0;
+      }
+      return fifo_num;
+    }
+  }
+
+  // Use the first available FIFO large enough to accommodate this endpoint's
+  // packet size.
+  for (uint8_t idx = 0; idx < tx_fifo_allocations_.size(); ++idx) {
+    const auto fifo_num = idx + 1;
+    if (tx_fifo_allocations_[idx] != 0) {
+      // FIFO already in use
+      continue;
+    }
+    if (get_tx_fifo_size(fifo_num) < max_packet_size) {
+      // FIFO is too small to store packets for this endpoint.
+      continue;
+    }
+    return fifo_num;
+  }
+
+  // No FIFOs available (or at least none large enough to hold a maximum sized
+  // packet for this endpoint)
+  ESP_LOGE(LogTag,
+           "no TX FIFO available when attempting to open IN endpoint %d",
+           endpoint_num);
+  return 0;
+}
+
+uint16_t Esp32Device::get_rx_fifo_size() const {
+  return usb_->grxfsiz * 4;
+}
+
+uint16_t Esp32Device::get_tx_fifo0_size() const {
+  return (usb_->gnptxfsiz >> USB_NPTXFDEP_S) & USB_NPTXFDEP_V;
+}
+
+uint16_t Esp32Device::get_tx_fifo1_size() const {
+  return get_tx_fifo_size(1);
+}
+uint16_t Esp32Device::get_tx_fifo2_size() const {
+  return get_tx_fifo_size(2);
+}
+
+uint16_t Esp32Device::get_tx_fifo3_size() const {
+  return get_tx_fifo_size(3);
+}
+
+uint16_t Esp32Device::get_tx_fifo4_size() const {
+  return get_tx_fifo_size(4);
+}
+
+uint16_t Esp32Device::get_tx_fifo_size(uint8_t fifo_num) const {
+  assert(fifo_num > 0 && fifo_num < 5);
+  return 4 * ((usb_->dieptxf[fifo_num - 1] >> USB_INEP1TXFDEP_S) &
+              USB_INEP1TXFDEP_V);
+}
+
+uint16_t Esp32Device::get_tx_fifo0_start() const {
+  return (usb_->gnptxfsiz >> USB_NPTXFSTADDR_S) & USB_NPTXFSTADDR_V;
+}
+
+uint16_t Esp32Device::get_tx_fifo1_start() const {
+    return get_tx_fifo_start(1);
+}
+
+uint16_t Esp32Device::get_tx_fifo2_start() const {
+    return get_tx_fifo_start(2);
+}
+
+uint16_t Esp32Device::get_tx_fifo3_start() const {
+    return get_tx_fifo_start(3);
+}
+
+uint16_t Esp32Device::get_tx_fifo4_start() const {
+    return get_tx_fifo_start(4);
+}
+
+uint16_t Esp32Device::get_tx_fifo_start(uint8_t fifo_num) const {
+  assert(fifo_num > 0 && fifo_num < 5);
+  return 4 * ((usb_->dieptxf[fifo_num - 1] >> USB_INEP1TXFSTADDR_S) &
+              USB_INEP1TXFSTADDR_V);
+}
+
 bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
   ESP_LOGI(LogTag, "configure EP0, MPS=%u", max_packet_size);
   // This method should only be called when EP0 is disabled and has not yet
@@ -642,16 +966,6 @@ bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
   }
   assert(in_transfers_[0].status == InEPStatus::Unconfigured);
   assert(out_transfers_[0].status == OutEPStatus::Unconfigured);
-
-  // Configure FIFO sizes
-  // Configure the receive FIFO size.
-  // Use 52 words (208 bytes), simply since this is the value that tinyusb
-  // uses.  The comments in the tinyusb code appear to refer to data from
-  // Synopsys technical reference manuals.
-  usb_->grxfsiz = 52;
-  // TX FIFO size
-  // Control IN uses FIFO 0 with 64 bytes (16 32-bit words)
-  usb_->gnptxfsiz = (16 << USB_NPTXFDEP_S) | (usb_->grxfsiz & 0x0000ffffUL);
 
   // Compute bits to set in the doepctl and diepctl registers
   EP0MaxPktSize mps_bits;

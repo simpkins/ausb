@@ -9,6 +9,7 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/KeyboardInterface.h"
+#include "ausb/log.h"
 
 using namespace ausb;
 using namespace ausb::device;
@@ -32,7 +33,11 @@ public:
 
     ep_mgr.add_interface(0, &kbd_intf_);
     // TODO:
-    // ep_mgr->open_in_endpoint(1);
+    // ep_mgr.open_in_endpoint(1);
+    auto res = ep_mgr.hw()->open_in_endpoint(1, EndpointType::Interrupt, 8);
+    if (!res) {
+      AUSB_LOGE("error opening IN endpoint 1");
+    }
 
     ep_mgr.set_configured();
     return true;

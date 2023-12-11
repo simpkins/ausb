@@ -61,6 +61,8 @@ public:
    */
   static constexpr const auto &descriptor_map() { return descriptors_; }
 
+  UsbDeviceImpl &dev() { return *impl_; }
+
 private:
   UsbDevice(UsbDevice const &) = delete;
   UsbDevice &operator=(UsbDevice const &) = delete;

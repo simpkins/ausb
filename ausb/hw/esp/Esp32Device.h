@@ -125,6 +125,11 @@ public:
    */
   bool configure_ep0(uint8_t max_packet_size);
 
+  [[nodiscard]] bool open_in_endpoint(uint8_t endpoint_num, EndpointType type,
+                                      uint16_t max_packet_size);
+  [[nodiscard]] bool open_out_endpoint(uint8_t endpoint_num, EndpointType type,
+                                       uint16_t max_packet_size);
+
   /**
    * Configure a control endpoint to respond with a STALL error to IN and OUT
    * tokens.
@@ -245,6 +250,117 @@ public:
    */
   [[nodiscard]] XferStartResult ack_ctrl_in();
 
+  /*
+   * FIFO size configuration:
+   * - There are 1024 bytes total available for all FIFOs.
+   * - There is 1 RX FIFO shared by all endpoints, and 5 TX FIFOs.
+   * - TX FIFO 0 is always assigned to endpoint 0.  The other 4 TX FIFOs are
+   *   for use by other IN endpoints.  (Apart from endpoint 0, there can be at
+   *   most 4 IN endpoints open at any one time, since each IN endpoint needs a
+   *   dedicated TX FIFO.)
+   *
+   * Esp32Device::init() will set reasonable default FIFO sizes, so users don't
+   * need to manually alter FIFO size settings unless they want to tweak
+   * performance for their device configuration.
+   *
+   * The FIFO sizes should only be adjusted when the FIFOs are not currently in
+   * use.  For the RX FIFO and TX FIFO 0, this means it should only be adjusted
+   * after the bus is reset and before the call to configure_ep0().
+   *
+   * It is the user's responsibility to ensure that the FIFO sizes and
+   * addresses chosen do not overlap.  If the start address for a FIFO is not
+   * explicitly specified, the end address for the previous FIFO will be used.
+   *
+   * All FIFO sizes must be a multiple of 4 bytes.  TX FIFOs must be at least
+   * as large as the max packet size of the endpoint they are assigned to (and
+   * should ideally be a multiple of the max packet size, to avoid wasted
+   * space).
+   */
+
+  /**
+   * Configure the RX FIFO size.
+   *
+   * The RX FIFO is shared by all OUT endpoints.
+   *
+   * This method should only be called when the device is reset, before
+   * configure_ep0() has been called.
+   *
+   * The RX FIFO size is recommended to include space for all of the following:
+   * - At least 40 bytes for storing SETUP packets
+   * - At least 4 bytes for Global OUT NAK state
+   * - At least 4 bytes for each OUT endpoint (including EP0) for transfer
+   *   complete status information
+   * - 2 * (max_packet_size + 4), for the largest max packet size across all
+   *   configured OUT endpoints.
+   *
+   * The RX FIFO always starts at the very beginning of the FIFO SPRAM.
+   */
+  [[nodiscard]] esp_err_t configure_rx_fifo(uint16_t size);
+
+  /**
+   * Configure the size of the TX FIFO for endpoint 0.
+   *
+   * This method should only be called when the device is reset, before
+   * configure_ep0() has been called.  The FIFO size must be a multiple of 4,
+   * and at least as large as endpoint 0's maximum packet size.
+   *
+   * If start_offset is 0, the TX FIFO will be configured to start at the end
+   * of the RX FIFO.
+   */
+  [[nodiscard]] esp_err_t configure_tx_fifo0(uint16_t size,
+                                             uint16_t start_offset = 0);
+
+  /**
+   * Configure the size of the TX FIFO N.
+   *
+   * If endpoint_num is 0, this FIFO will be automatically allocated to an
+   * endpoint as needed when open_in_endpoint() is called.  If endpoint_num is
+   * non-zero, this will mark this FIFO as only being usable for the specified
+   * endpoint.  When that endpoint is opened it will be assigned to use this
+   * FIFO.  An error will be returned when opening the endpoint if the FIFO
+   * size is smaller than the max packet size for the endpoint.
+   *
+   * If start_offset is 0, the TX FIFO will be configured to start at the end
+   * of the previous TX FIFO.
+   *
+   * It is the caller's responsibility to ensure that the configured RX and TX
+   * FIFOs do not overlap with one another.
+   */
+  [[nodiscard]] esp_err_t configure_tx_fifo1(uint16_t size,
+                                             uint16_t endpoint_num = 0,
+                                             uint16_t start_offset = 0);
+  [[nodiscard]] esp_err_t configure_tx_fifo2(uint16_t size,
+                                             uint16_t endpoint_num = 0,
+                                             uint16_t start_offset = 0);
+  [[nodiscard]] esp_err_t configure_tx_fifo3(uint16_t size,
+                                             uint16_t endpoint_num = 0,
+                                             uint16_t start_offset = 0);
+  [[nodiscard]] esp_err_t configure_tx_fifo4(uint16_t size,
+                                             uint16_t endpoint_num = 0,
+                                             uint16_t start_offset = 0);
+
+  /**
+   * Return the current RX FIFO size, in bytes.
+   */
+  uint16_t get_rx_fifo_size() const;
+
+  /**
+   * Return the current size of the specified TX FIFO.
+   */
+  uint16_t get_tx_fifo0_size() const;
+  uint16_t get_tx_fifo1_size() const;
+  uint16_t get_tx_fifo2_size() const;
+  uint16_t get_tx_fifo3_size() const;
+  uint16_t get_tx_fifo4_size() const;
+  /**
+   * Return the start offset of the specified TX FIFO.
+   */
+  uint16_t get_tx_fifo0_start() const;
+  uint16_t get_tx_fifo1_start() const;
+  uint16_t get_tx_fifo2_start() const;
+  uint16_t get_tx_fifo3_start() const;
+  uint16_t get_tx_fifo4_start() const;
+
 private:
   // Speed bits used by the dcfg and dsts registers.
   // These unfortunately are not defined in soc/usb_reg.h
@@ -261,6 +377,8 @@ private:
     Mps16 = 2,
     Mps8 = 3,
   };
+
+  static constexpr uint16_t kFifoMaxAddress = 1024;
 
   enum class InEPStatus : uint8_t {
     Unconfigured,
@@ -415,6 +533,14 @@ private:
   void disable_all_in_endpoints();
   void flush_rx_fifo_helper();
 
+  [[nodiscard]] esp_err_t configure_tx_fifo(uint8_t fifo_num, uint16_t size,
+                                            uint16_t endpoint_num,
+                                            uint16_t start_offset);
+  [[nodiscard]] uint8_t allocate_tx_fifo(uint8_t endpoint_num,
+                                         uint16_t max_packet_size);
+  uint16_t get_tx_fifo_size(uint8_t fifo_num) const;
+  uint16_t get_tx_fifo_start(uint8_t fifo_num) const;
+
   static uint16_t get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl);
   static uint8_t get_ep0_max_packet_size(EP0MaxPktSize mps_bits);
 
@@ -437,6 +563,12 @@ private:
 
   std::array<InTransfer, USB_IN_EP_NUM> in_transfers_;
   std::array<OutTransfer, USB_OUT_EP_NUM> out_transfers_;
+
+  // An array tracking FIFO to endpoint allocations.
+  // The array starts at FIFO 1 (since FIFO 0 is always assigned to endpoint
+  // 0).  The value in the array is 0 if the FIFO is not currently assigned, or
+  // an endpoint number if it is assigned.
+  std::array<uint8_t, 4> tx_fifo_allocations_ = {};
 };
 
 } // namespace ausb
