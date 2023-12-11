@@ -90,9 +90,22 @@ ControlHandler::process_std_device_out(const SetupPacket &packet) {
     return make_unique<SetAddress>(endpoint_);
   } else if (std_req_type == StdRequestType::SetConfiguration) {
     return process_set_configuration(packet);
+  } else if (std_req_type == StdRequestType::SetFeature) {
+    // TODO
+    AUSB_LOGE("TODO: handle SET_FEATURE");
+    return nullptr;
+  } else if (std_req_type == StdRequestType::ClearFeature) {
+    // TODO
+    AUSB_LOGE("TODO: handle CLEAR_FEATURE");
+    return nullptr;
+  } else if (std_req_type == StdRequestType::SetDescriptor) {
+    // TODO
+    AUSB_LOGE("TODO: handle SET_DESCRIPTOR");
+    return nullptr;
   }
 
-  AUSB_LOGE("TODO: unhandled OUT std device setup packet");
+  AUSB_LOGW("unknown standard device OUT request %u",
+            static_cast<unsigned int>(std_req_type));
   return nullptr;
 }
 
@@ -101,10 +114,18 @@ ControlHandler::process_std_device_in(const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::GetDescriptor) {
     return process_get_descriptor(packet);
+  } else if (std_req_type == StdRequestType::GetStatus) {
+    // TODO: return remote wakeup and self-powered status
+    AUSB_LOGE("TODO: handle GET_STATUS");
+    return nullptr;
+  } else if (std_req_type == StdRequestType::GetConfiguration) {
+    // TODO: return current config ID
+    AUSB_LOGE("TODO: handle GET_CONFIGURATION");
+    return nullptr;
   }
 
-  // TODO
-  AUSB_LOGW("TODO: unhandled IN std device setup packet");
+  AUSB_LOGW("unknown standard device IN request %u",
+            static_cast<unsigned int>(std_req_type));
   return nullptr;
 }
 

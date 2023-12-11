@@ -56,12 +56,6 @@ enum class UsbClass : uint8_t {
   VendorSpecific = 0xff,
 };
 
-enum class FeatureSelector {
-  EndpointHalt = 0, // Only valid for SetupRecipient::Endpoint
-  RemoteWakeup = 1, // Only valid for SetupRecipient::Device
-  TestMode = 2,     // Only valid for SetupRecipient::Device
-};
-
 enum class EndpointSync : uint8_t {
   NoSync = 0,
   Async = 1 << 2,

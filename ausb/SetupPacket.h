@@ -27,10 +27,21 @@ enum class StdRequestType : uint8_t {
   SetFeature = 3,
   SetAddress = 5,
   GetDescriptor = 6,
+  SetDescriptor = 7,
   GetConfiguration = 8,
   SetConfiguration = 9,
   GetInterface = 10,
   SetInterface = 11,
+  SynchFrame = 12,
+};
+
+/**
+ * Flags for use with SET_FEATURE and GET_FEATURE requests
+ */
+enum class FeatureSelector {
+  EndpointHalt = 0, // Only valid for SetupRecipient::Endpoint
+  RemoteWakeup = 1, // Only valid for SetupRecipient::Device
+  TestMode = 2,     // Only valid for SetupRecipient::Device
 };
 
 struct SetupPacket {
