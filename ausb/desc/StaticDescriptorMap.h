@@ -176,12 +176,14 @@ private:
   template <uint16_t X, size_t Y>
   friend class StaticDescriptorMap;
 
-  template <size_t DescLen>
+  template <size_t DescLen, uint16_t OtherNumDescriptors,
+            size_t OtherDataLength>
   constexpr StaticDescriptorMap(
-      const StaticDescriptorMap<NumDescriptors - 1, DataLength - DescLen>
-          &other,
-      uint16_t value, uint16_t index,
-      const std::array<uint8_t, DescLen> &desc) {
+      const StaticDescriptorMap<OtherNumDescriptors, OtherDataLength> &other,
+      typename std::enable_if<OtherNumDescriptors + 1 == NumDescriptors &&
+                                  OtherDataLength + DescLen == DataLength,
+                              uint16_t>::type value,
+      uint16_t index, const std::array<uint8_t, DescLen> &desc) {
     // StaticDescriptorMapEntry uses uint16_t to store the offset.
     // Make sure the total descriptor length fits in this data type.
     static_assert(DataLength <=

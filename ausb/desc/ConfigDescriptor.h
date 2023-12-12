@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <string_view>
 #include <type_traits>
 
@@ -200,10 +201,13 @@ private:
 
   // Constructor for appending an InterfaceDescriptor to an existing
   // ConfigDescriptor
+  template <uint8_t OtherNumInterfaces>
   constexpr ConfigDescriptor(
       const ConfigDescriptor<TotalLength - InterfaceDescriptor::kSize,
-                             NumInterfaces - 1> &other,
-      const InterfaceDescriptor &intf, uint32_t last_intf_offset)
+                             OtherNumInterfaces> &other,
+      const typename std::enable_if<OtherNumInterfaces + 1 == NumInterfaces,
+                                    InterfaceDescriptor>::type &intf,
+      uint32_t last_intf_offset)
       : last_intf_offset_(last_intf_offset) {
     static_assert(TotalLength <= std::numeric_limits<uint16_t>::max(),
                   "config descriptor data is to large");
