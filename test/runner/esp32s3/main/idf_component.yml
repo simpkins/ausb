@@ -1,3 +1,5 @@
 dependencies:
   ausb:
+    path: ../../../..
+  test:
     path: ../../..

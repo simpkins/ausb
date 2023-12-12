@@ -30,5 +30,7 @@ target_include_directories(
     "${AUSB_ROOT_DIR}"
 )
 
-add_executable(ausb_test test/runner/mock/main.cpp)
+add_executable(test_runner test/runner/mock/main.cpp)
+target_link_libraries(test_runner PUBLIC test_cases)
+
 add_test(NAME ausb COMMAND ausb_test)

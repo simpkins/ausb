@@ -27,4 +27,5 @@ else()
     project(ausb HOMEPAGE_URL https://github.com/simpkins/ausb)
 
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/linux.cmake")
+    add_subdirectory("test")
 endif()
