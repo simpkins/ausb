@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 set(AUSB_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(
@@ -28,6 +28,26 @@ if(ESP_PLATFORM)
 else()
     project(ausb HOMEPAGE_URL https://github.com/simpkins/ausb)
 
-    include("${CMAKE_CURRENT_LIST_DIR}/cmake/linux.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/cmake/compiler-settings.cmake")
     add_subdirectory("test")
+
+    add_subdirectory("asel")
+
+    add_library(ausb STATIC ${srcs})
+    target_include_directories(
+        ausb PUBLIC
+        "${AUSB_ROOT_DIR}"
+    )
+    target_link_libraries(
+        ausb PUBLIC
+        asel
+    )
+
+    add_executable(ausb_tests test/runner/mock/main.cpp)
+    target_link_libraries(ausb_tests PUBLIC ausb_test_cases)
+
+    if(NOT CMAKE_CROSSCOMPILING)
+        include(CTest)
+        add_test(NAME ausb COMMAND ausb_tests)
+    endif()
 endif()

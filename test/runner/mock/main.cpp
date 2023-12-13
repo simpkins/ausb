@@ -1,13 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
-#include <cstdio>
-
-namespace ausb {
-void descriptor_test();
-}
+#include "asel/test/run_tests.h"
 
 extern "C" int main() {
-  printf("starting\n");
-  ausb::descriptor_test();
-  printf("done\n");
-  return 0;
+  const auto num_failures = asel::run_tests();
+  return num_failures == 0 ? 0 : 1;
 }
