@@ -28,6 +28,14 @@ void ControlEndpoint::on_enum_done(uint8_t max_packet_size) {
   callback_->on_enum_done(max_packet_size);
 }
 
+void ControlEndpoint::on_suspend() {
+  callback_->on_suspend();
+}
+
+void ControlEndpoint::on_resume() {
+  callback_->on_suspend();
+}
+
 void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   AUSB_LOGI("SETUP received: request_type=0x%02x request=0x%02x "
             "value=0x%04x index=0x%04x length=0x%04x",

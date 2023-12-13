@@ -29,6 +29,8 @@ public:
 
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
+  virtual void on_suspend() {}
+  virtual void on_resume() {}
 
   virtual std::unique_ptr<CtrlOutXfer>
   process_out_setup(const SetupPacket &packet) = 0;
@@ -106,6 +108,18 @@ public:
    * reason should generally be either BusReset or LocalReset.
    */
   void on_reset(XferFailReason reason);
+
+  /**
+   * on_suspend() will be invoked when a suspend state is seen on the bus
+   * (the bus has been idle for more than 3ms).
+   */
+  void on_suspend();
+
+  /**
+   * on_resume() will be invoked when resumed bus activity is seen after a
+   * suspend state.
+   */
+  void on_resume();
 
   /**
    * on_setup_received() should be called by the EndpointManager when a SETUP

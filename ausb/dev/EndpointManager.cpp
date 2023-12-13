@@ -71,10 +71,6 @@ void EndpointManager::reset() {
 void EndpointManager::on_bus_reset() {
   AUSB_LOGW("on_bus_reset");
   ep0_.on_reset(XferFailReason::BusReset);
-
-#if 0
-  callbacks_->on_reset();
-#endif
 }
 
 void EndpointManager::on_suspend() {
@@ -91,9 +87,7 @@ void EndpointManager::on_suspend() {
   // when first attached to the bus, but this generally isn't really relevant
   // or worth distinguishing from the normal uninitialized state.
   if (state_ != DeviceState::SuspendedUninit) {
-#if 0
-    callbacks_->on_suspend();
-#endif
+    ep0_.on_suspend();
   }
 }
 
@@ -105,9 +99,7 @@ void EndpointManager::on_resume() {
   AUSB_LOGI("on_resume");
   state_ = dev_state_unsuspended(state_);
   if (state_ != DeviceState::Uninit) {
-#if 0
-    callbacks_->on_resume();
-#endif
+    ep0_.on_resume();
   }
 }
 
@@ -126,10 +118,6 @@ void EndpointManager::on_enum_done(UsbSpeed speed) {
 
   hw_->configure_ep0(max_packet_size);
   ep0_.on_enum_done(max_packet_size);
-
-#if 0
-  callbacks_->on_enumerated(max_ep0_packet_size);
-#endif
 }
 
 void EndpointManager::on_setup_received(const SetupPacketEvent &event) {
