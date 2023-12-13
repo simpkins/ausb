@@ -2,23 +2,12 @@ set(CMAKE_CXX_STANDARD 20)
 
 include(CTest)
 
-# Prefer compiling clang if we can find it.
-# Enable ASAN if we found clang.
-find_program(CXX_COMPILER NAMES "clang++" "clang++-15" "g++")
-find_program(C_COMPILER NAMES "clang" "clang-15" "gcc")
-if(CXX_COMPILER)
-    set(CMAKE_CXX_COMPILER "${CXX_COMPILER}")
-    string(REGEX MATCH ".*/clang.*" IS_CLANG "${CXX_COMPILER}")
-    if(IS_CLANG)
-      string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fsanitize=address")
-    endif()
+# Enable ASAN in debug builds if we are using clang
+if(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
+    string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fsanitize=address")
 endif()
-if(C_COMPILER)
-    set(CMAKE_C_COMPILER "${C_COMPILER}")
-    string(REGEX MATCH ".*/clang.*" IS_CLANG "${C_COMPILER}")
-    if(IS_CLANG)
-      string(APPEND CMAKE_C_FLAGS_DEBUG " -fsanitize=address")
-    endif()
+if(CMAKE_C_COMPILER_ID STREQUAL Clang)
+    string(APPEND CMAKE_C_FLAGS_DEBUG " -fsanitize=address")
 endif()
 
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " -Werror")

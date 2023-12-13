@@ -22,6 +22,8 @@ set(
 )
 
 if(ESP_PLATFORM)
+    # We are being invoked as part of ESP-IDF's custom CMake toolchain.
+    # Use idf_component_register() rather than normal CMake project setup.
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/esp.cmake")
 else()
     project(ausb HOMEPAGE_URL https://github.com/simpkins/ausb)
