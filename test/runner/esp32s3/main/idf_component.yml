@@ -3,3 +3,5 @@ dependencies:
     path: ../../../..
   test:
     path: ../../..
+  asel:
+    path: ../../../../../asel

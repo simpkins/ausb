@@ -9,8 +9,8 @@ namespace ausb::device {
 class ControlHandlerCallback {
 public:
   virtual bool set_configuration(uint8_t config_id) = 0;
-  virtual std::optional<buf_view> get_descriptor(uint16_t value,
-                                                 uint16_t index) = 0;
+  virtual std::optional<asel::buf_view> get_descriptor(uint16_t value,
+                                                       uint16_t index) = 0;
 };
 
 class ControlHandler : public ControlEndpointCallback {

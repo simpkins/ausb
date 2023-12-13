@@ -137,8 +137,8 @@ public:
    * Look up a descriptor by the wValue and wIndex fields from a GET_DESCRIPTOR
    * query.
    */
-  std::optional<buf_view> get_descriptor_with_setup_ids(uint16_t value,
-                                                        uint16_t index) const {
+  std::optional<asel::buf_view>
+  get_descriptor_with_setup_ids(uint16_t value, uint16_t index) const {
     return detail::get_usb_descriptor(
         value, index, data_.data(), data_.size(), index_.data(), index_.size());
   }
@@ -146,8 +146,8 @@ public:
   /**
    * Look up a descriptor by its type and descriptor index.
    */
-  std::optional<buf_view> get_descriptor(DescriptorType type,
-                                         uint8_t desc_index = 0) const {
+  std::optional<asel::buf_view> get_descriptor(DescriptorType type,
+                                               uint8_t desc_index = 0) const {
     return get_descriptor_with_setup_ids(desc_setup_value(type, desc_index), 0);
   }
 
@@ -157,8 +157,8 @@ public:
    * Returns the raw string descriptor buffer, which contains the descriptor
    * header followed by UTF-16 data.
    */
-  std::optional<buf_view> get_string_descriptor(uint8_t index,
-                                                Language language) const {
+  std::optional<asel::buf_view> get_string_descriptor(uint8_t index,
+                                                      Language language) const {
     return get_descriptor_with_setup_ids(
         desc_setup_value(DescriptorType::String, index),
         desc_setup_index(language));
@@ -167,7 +167,7 @@ public:
   /*
    * The implementation of the DescriptorMap interface
    */
-  std::optional<buf_view>
+  std::optional<asel::buf_view>
   get_descriptor_for_setup(uint16_t value, uint16_t index) const override {
     return get_descriptor_with_setup_ids(value, index);
   }

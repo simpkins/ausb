@@ -68,7 +68,7 @@ public:
   process_in_setup(device::ControlEndpoint *ctrl_ep,
                    const SetupPacket &packet) override;
 
-  bool set_report(buf_view data) override;
+  bool set_report(asel::buf_view data) override;
 
   static constexpr size_t report_descriptor_length() {
     return report_descriptor_.kTotalLength;

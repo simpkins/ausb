@@ -3,15 +3,15 @@
 
 #include "ausb/desc/types.h"
 
+#include <asel/buf_view.h>
+#include <asel/range.h>
+
 #include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
-#include <string_view>
 
 namespace ausb {
-
-using buf_view = std::basic_string_view<uint8_t>;
 
 namespace detail {
 
@@ -48,7 +48,7 @@ struct ExternalDescriptorPtr {
   uint16_t size;
 };
 
-std::optional<buf_view>
+std::optional<asel::buf_view>
 get_usb_descriptor(uint16_t value,
                     uint16_t index,
                     const uint8_t *data,
@@ -57,7 +57,7 @@ get_usb_descriptor(uint16_t value,
                     size_t num_entries);
 
 [[nodiscard]] constexpr bool
-fill_string_descriptor(uint8_t *buf, size_t buflen, std::string_view str) {
+fill_string_descriptor(uint8_t *buf, size_t buflen, asel::string_view str) {
   // It's platform-dependent whether char is signed or not.
   // Ensure that we interpret the data as unsigned while processing it.
   auto in_byte = [&](size_t idx) { return static_cast<uint8_t>(str[idx]); };

@@ -3,7 +3,7 @@
 
 namespace ausb::detail {
 
-std::optional<buf_view>
+std::optional<asel::buf_view>
 get_usb_descriptor(uint16_t value,
                     uint16_t index,
                     const uint8_t *data,
@@ -18,7 +18,7 @@ get_usb_descriptor(uint16_t value,
   for (size_t n = 0; n < num_entries; ++n) {
     if (entries[n].value == value && entries[n].index == index) {
       // TODO: handle ExternalDescriptorPtr entries
-      return buf_view(data + entries[n].offset, entries[n].length);
+      return asel::buf_view(data + entries[n].offset, entries[n].length);
     }
   }
 

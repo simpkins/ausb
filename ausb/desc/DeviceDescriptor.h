@@ -4,16 +4,15 @@
 #include "ausb/bcd.h"
 #include "ausb/desc/types.h"
 
+#include <asel/buf_view.h>
+
 #include <array>
 #include <cstdint>
 #include <cstdlib>
-#include <string_view>
 #include <type_traits>
 #include <utility>
 
 namespace ausb {
-
-using buf_view = std::basic_string_view<uint8_t>;
 
 /**
  * A USB device descriptor.
@@ -218,7 +217,7 @@ public:
       abort();
     }
   }
-  constexpr DeviceDescriptorParser(buf_view data)
+  constexpr DeviceDescriptorParser(asel::buf_view data)
       : data_(data.size() == kSize ? data.data() : nullptr) {
     if (std::is_constant_evaluated() && data.size() != kSize) {
       abort();
@@ -228,7 +227,7 @@ public:
   constexpr bool valid() const { return data_ != nullptr; }
   constexpr explicit operator bool() const { return data_ != nullptr; }
 
-  constexpr buf_view data() const { return buf_view(data_, kSize); }
+  constexpr asel::buf_view data() const { return asel::buf_view(data_, kSize); }
 
   constexpr uint8_t get_class() const { return data_[4]; }
   constexpr uint8_t subclass() const { return data_[5]; }

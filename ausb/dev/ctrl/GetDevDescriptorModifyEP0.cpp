@@ -10,7 +10,7 @@
 namespace ausb::device {
 
 GetDevDescriptorModifyEP0::GetDevDescriptorModifyEP0(ControlEndpoint *ep,
-                                                     buf_view buf,
+                                                     asel::buf_view buf,
                                                      uint8_t correct_ep0_mps)
     : CtrlInXfer(ep) {
   assert(desc_.data().size() == buf.size());

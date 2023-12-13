@@ -5,16 +5,15 @@
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/InterfaceDescriptor.h"
 
+#include <asel/buf_view.h>
+
 #include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
-#include <string_view>
 #include <type_traits>
 
 namespace ausb {
-
-using buf_view = std::basic_string_view<uint8_t>;
 
 /**
  * A USB configuration descriptor.
@@ -305,7 +304,7 @@ public:
       abort();
     }
   }
-  constexpr ConfigDescriptorParser(buf_view data)
+  constexpr ConfigDescriptorParser(asel::buf_view data)
       : data_(data.size() < kSize ? data.data() : nullptr), size_(data.size()) {
     if (std::is_constant_evaluated() && data.size() != kSize) {
       abort();
@@ -315,7 +314,7 @@ public:
   constexpr bool valid() const { return data_ != nullptr; }
   constexpr explicit operator bool() const { return data_ != nullptr; }
 
-  constexpr buf_view data() const { return buf_view(data_, size_); }
+  constexpr asel::buf_view data() const { return asel::buf_view(data_, size_); }
 
   constexpr uint16_t total_length() const {
     return (static_cast<uint16_t>(data_[2]) << 8) |

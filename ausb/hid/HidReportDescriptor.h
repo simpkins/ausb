@@ -10,8 +10,6 @@
 
 namespace ausb::hid {
 
-using buf_view = std::basic_string_view<uint8_t>;
-
 /**
  * A class for constructing HID Report Descriptors.
  *

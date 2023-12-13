@@ -6,7 +6,7 @@ set(
 if(ESP_PLATFORM)
     idf_component_register(
         SRCS ${ausb_test_srcs}
-        REQUIRES "ausb"
+        REQUIRES ausb asel
         WHOLE_ARCHIVE
     )
 else()

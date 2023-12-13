@@ -70,8 +70,8 @@ private:
   bool set_configuration(uint8_t config_id) override {
     return impl_.set_configuration(config_id, ep_manager_);
   }
-  std::optional<buf_view> get_descriptor(uint16_t value,
-                                         uint16_t index) override {
+  std::optional<asel::buf_view> get_descriptor(uint16_t value,
+                                               uint16_t index) override {
     return descriptors_.get_descriptor_with_setup_ids(value, index);
   }
 

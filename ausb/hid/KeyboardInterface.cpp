@@ -73,7 +73,7 @@ KeyboardInterface::process_in_setup(ControlEndpoint *ctrl_ep,
   return nullptr;
 }
 
-bool KeyboardInterface::set_report(buf_view data) {
+bool KeyboardInterface::set_report(asel::buf_view data) {
   // TODO
   return true;
 }

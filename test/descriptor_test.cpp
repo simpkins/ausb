@@ -10,14 +10,20 @@
 #include "ausb/hid/leds.h"
 #include "ausb/hid/types.h"
 
+#include <asel/test/checks.h>
+#include <asel/test/TestCase.h>
+
 namespace ausb {
 namespace {
 
 constexpr auto make_descriptor_map() {
   DeviceDescriptor dev;
-  dev.set_vendor(0x6666); // Prototype product vendor ID
-  dev.set_product(0x1237);
-  dev.set_device_release(0, 1);
+  dev.set_vendor(0xcafe);
+  dev.set_product(0xd00d);
+  dev.set_class(UsbClass::Hid);
+  dev.set_subclass(1);
+  dev.set_protocol(2);
+  dev.set_device_release(12, 34);
 
   InterfaceDescriptor kbd_intf(UsbClass::Hid,
                                static_cast<uint8_t>(HidSubclass::Boot),
@@ -172,18 +178,36 @@ void dump_descriptors() {
 }
 #endif
 
+const auto kDescriptors = make_descriptor_map();
+
 } // namespace
 
 
-class Foo {
-public:
-  Foo() { printf("Foo constructor\n"); }
-};
-
-Foo f;
-
-void descriptor_test() {
-  fprintf(stderr, "TODO\n");
+ASEL_TEST(Descriptors, test) {
+  auto dev_desc = kDescriptors.get_descriptor(DescriptorType::Device);
+  ASEL_ASSERT_TRUE(dev_desc);
+  ASEL_EXPECT_EQ(dev_desc->size(), 18);
+  std::array<uint8_t, 18> expected_dev_desc = {{
+      18,   // length
+      1,    // descriptor type: device
+      0,    // USB minor version
+      2,    // USB major version
+      3,    // class
+      1,    // subclass
+      2,    // protocol
+      64,   // max_packet size
+      0xfe, // vendor (lower half)
+      0xca, // vendor (upper half)
+      0x0d, // product (lower half)
+      0xd0, // product (upper half)
+      0x34, // device version (lower half)
+      0x12, // device version (upper half)
+      1,    // manufacturer string index
+      2,    // product string index
+      3,    // serial string index
+      1,    // num configurations
+  }};
+  ASEL_EXPECT_EQ(*dev_desc, expected_dev_desc);
 }
 
 

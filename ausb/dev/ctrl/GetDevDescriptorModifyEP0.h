@@ -4,11 +4,9 @@
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/dev/CtrlInXfer.h"
 
-#include <string_view>
+#include <asel/buf_view.h>
 
 namespace ausb {
-
-using buf_view = std::basic_string_view<uint8_t>;
 
 namespace device {
 
@@ -24,7 +22,7 @@ namespace device {
  */
 class GetDevDescriptorModifyEP0 : public CtrlInXfer {
 public:
-  GetDevDescriptorModifyEP0(ControlEndpoint *ep, buf_view buf,
+  GetDevDescriptorModifyEP0(ControlEndpoint *ep, asel::buf_view buf,
                             uint8_t correct_ep0_mps);
 
   void start(const SetupPacket &packet) override;
