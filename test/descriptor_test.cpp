@@ -102,91 +102,13 @@ constexpr auto make_descriptor_map() {
       .add_config_descriptor(cfg);
 }
 
-#if 0
-void dump_hex(const uint8_t* buf, uint16_t size) {
-  auto p = buf;
-  size_t bytes_left = size;
-  while (bytes_left > 8) {
-    printf("- %02x %02x %02x %02x %02x %02x %02x %02x\n",
-           p[0],
-           p[1],
-           p[2],
-           p[3],
-           p[4],
-           p[5],
-           p[6],
-           p[7]);
-    p += 8;
-    bytes_left -= 8;
-  }
-  if (bytes_left > 0) {
-    printf("-");
-    while (bytes_left > 0) {
-      printf(" %02x", p[0]);
-      ++p;
-      --bytes_left;
-    }
-    printf("\n");
-  }
-}
-
-void dump_desc(uint16_t value, uint16_t index) {
-  printf("Descriptor %#x  %#x:\n", value, index);
-  auto desc = usb.descriptor_map().get_descriptor_with_setup_ids(value, index);
-  if (!desc.has_value()) {
-    printf("- none\n");
-    return;
-  }
-
-  printf("- size: %d\n", desc->size());
-  dump_hex(desc->data(), desc->size());
-}
-
-void dump_descriptors() {
-  printf("USB Descriptors:\n");
-  dump_desc(0x100, 0);
-  dump_desc(0x200, 0);
-  dump_desc(0x300, 0);
-  dump_desc(0x301, 0x0409);
-  dump_desc(0x302, 0x0409);
-  dump_desc(0x303, 0x0409);
-  dump_desc(0x2200, 0);
-}
-
-[[nodiscard]] std::error_code run_test() {
-  ESP_LOGI(LogTag, "Starting USB initialization...");
-  const auto init_err = usb.init();
-  if (init_err) {
-      ESP_LOGE(LogTag, "Error initializing USB device.");
-      return init_err;
-  }
-  ESP_LOGI(LogTag, "USB initialization complete.");
-
-  size_t n = 0;
-  while (true) {
-    ++n;
-    const auto event = usb.wait_for_event(10000ms);
-    if (std::holds_alternative<NoEvent>(event)) {
-      ESP_LOGI(LogTag, "usb %zu: no event", n);
-    } else {
-      ESP_LOGI(LogTag, "usb %zu: got event", n);
-      usb.handle_event(event);
-    }
-  }
-
-  return std::error_code();
-}
-#endif
-
 const auto kDescriptors = make_descriptor_map();
 
 } // namespace
 
-
-ASEL_TEST(Descriptors, test) {
+ASEL_TEST(Descriptors, device_descriptor) {
   auto dev_desc = kDescriptors.get_descriptor(DescriptorType::Device);
   ASEL_ASSERT_TRUE(dev_desc);
-  ASEL_EXPECT_EQ(dev_desc->size(), 18);
   std::array<uint8_t, 18> expected_dev_desc = {{
       18,   // length
       1,    // descriptor type: device
@@ -210,5 +132,49 @@ ASEL_TEST(Descriptors, test) {
   ASEL_EXPECT_EQ(*dev_desc, expected_dev_desc);
 }
 
+ASEL_TEST(Descriptors, config_descriptor) {
+  auto cfg_desc = kDescriptors.get_descriptor(DescriptorType::Config);
+  ASEL_ASSERT_TRUE(cfg_desc);
+  std::array<uint8_t, 34> expected_desc = {{
+      9,    // config descriptor length
+      2,    // descriptor type: config
+      34,   // total length (lower half)
+      0,    // total length (upper half)
+      1,    // num interfaces
+      1,    // value
+      0,    // config name string index
+      0x20, // attributes: remote wakeup suppported
+      25,   // max power in 2ma
+            //
+      9,    // interface descriptor length
+      4,    // descriptor type: interface
+      0,    // interface number
+      0,    // alt setting
+      1,    // num endpoints
+      3,    // class
+      1,    // subclass
+      1,    // protocol
+      0,    // interface name string index
+            //
+      9,    // hid descriptor length
+      0x21, // descriptor type: hid
+      0x11, // HID minor version
+      0x01, // HID major version
+      0,    // country code
+      1,    // num descriptors
+      0x22, // descriptor type
+      63,   // descriptor length (lower half)
+      0,    // descriptor length (upper half)
+            //
+      7,    // endpoint descriptor length
+      5,    // descriptor type: endpoint
+      0x81, // endpoint address
+      0x03, // attributes: interrupt type
+      8,    // max packet size (lower half)
+      0,    // max packet size (upper half)
+      10,   // interval
+  }};
+  ASEL_EXPECT_EQ(*cfg_desc, expected_desc);
+}
 
 } // namespace ausb

@@ -26,13 +26,13 @@ public:
       : data_{{
             kSize, // bLength
             static_cast<uint8_t>(DescriptorType::Hid),
-            11, // bcdHID (lower half)
-            1,  // bcdHID (upper half)
-            0,  // bCountryCode
-            0,  // bNumDescriptors
-            0,  // bDescriptorType
-            0,  // wDescriptorLength (lower half)
-            0   // wDescriptorLength (upper half)
+            0x11, // bcdHID (lower half)
+            0x01, // bcdHID (upper half)
+            0,    // bCountryCode
+            0,    // bNumDescriptors
+            0,    // bDescriptorType
+            0,    // wDescriptorLength (lower half)
+            0     // wDescriptorLength (upper half)
         }} {}
 
   constexpr const std::array<uint8_t, kSize> &data() const { return data_; }
