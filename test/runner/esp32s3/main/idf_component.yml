@@ -4,4 +4,4 @@ dependencies:
   test:
     path: ../../..
   asel:
-    path: ../../../../../asel
+    path: ../../../../asel
