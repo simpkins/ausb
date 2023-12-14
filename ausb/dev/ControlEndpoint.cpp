@@ -11,7 +11,11 @@
 
 namespace ausb::device {
 
-ControlEndpoint::~ControlEndpoint() = default;
+ControlEndpoint::~ControlEndpoint() {
+  if (status_ != Status::Idle) {
+    invoke_xfer_failed(XferFailReason::LocalReset);
+  }
+}
 
 void ControlEndpoint::on_init() { callback_->set_endpoint(this); }
 
