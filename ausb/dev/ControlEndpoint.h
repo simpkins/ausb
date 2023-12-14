@@ -51,19 +51,10 @@ class ControlEndpointCallback : public ControlMessageHandler {
 public:
   virtual ~ControlEndpointCallback() = default;
 
-  /**
-   * set_endpoint() will be called during device initialization, before any
-   * other callback methods are invoked.
-   */
-  void set_endpoint(ControlEndpoint *ep) { endpoint_ = ep; }
-
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
   virtual void on_suspend() {}
   virtual void on_resume() {}
-
-protected:
-  ControlEndpoint* endpoint_ = nullptr;
 };
 
 /**
@@ -131,8 +122,6 @@ public:
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by EndpointManager to inform us of events
   ////////////////////////////////////////////////////////////////////
-
-  void on_init();
 
   /**
    * on_enum_done() will be called by the EndpointManager after the device is

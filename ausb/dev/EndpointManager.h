@@ -35,12 +35,7 @@ public:
    * This accepts any arguments accepted by the underlying hardware device's
    * init() call, and forwards those to the hardware.
    */
-  template<typename... Args>
-  std::error_code init(Args... args) {
-    const auto err = pre_init();
-    if (err) {
-      return err;
-    }
+  template <typename... Args> std::error_code init(Args... args) {
     return hw_->init(std::forward<Args>(args)...);
   }
 

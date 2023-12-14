@@ -53,12 +53,6 @@ void EndpointManager::handle_event(const DeviceEvent &event) {
       event);
 }
 
-std::error_code EndpointManager::pre_init() {
-  AUSB_LOGI("EndpointManager::init()");
-  ep0_.on_init();
-  return std::error_code();
-}
-
 void EndpointManager::reset() {
   AUSB_LOGW("EndpointManager::reset() called");
   ep0_.on_reset(XferFailReason::LocalReset);

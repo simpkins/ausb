@@ -17,8 +17,6 @@ ControlEndpoint::~ControlEndpoint() {
   }
 }
 
-void ControlEndpoint::on_init() { callback_->set_endpoint(this); }
-
 void ControlEndpoint::on_reset(XferFailReason reason) {
   status_ = Status::Idle;
   invoke_xfer_failed(reason);
