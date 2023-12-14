@@ -1,0 +1,14 @@
+# Configuration file used for ESP-IDF when building for Espressif platforms.
+menu "AUSB"
+    config AUSB_HW_ESP
+        bool
+        default y
+        help
+            Support ESP32-S2 and ESP32-S3 USB OTG hardware.
+    config AUSB_HW_MOCK
+        bool "Support a mock USB hardware device."
+        default n
+        help
+            Support a mock USB hardware device.  This is mainly useful for
+            building unit tests.
+endmenu #AUSB

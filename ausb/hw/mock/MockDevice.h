@@ -3,6 +3,7 @@
 
 #include "ausb/ausb_types.h"
 #include "ausb/dev/DeviceEvent.h"
+#include "ausb/hw/HWDeviceBase.h"
 
 #include <array>
 #include <chrono>
@@ -14,7 +15,7 @@ namespace ausb {
  *
  * This allows unit tests to be run on any platform, including on a Linux host.
  */
-class MockDevice {
+class MockDevice : public HWDeviceBase {
 public:
   // The USB 2.0 spec allows up to 15 in and 15 out endpoints for full speed
   // devices.  For now we don't have a use case for that many.

@@ -2,3 +2,4 @@
 # Espressif IoT Development Framework (ESP-IDF)  Project Minimal Configuration
 #
 CONFIG_LOG_MAXIMUM_LEVEL_VERBOSE=y
+CONFIG_AUSB_HW_MOCK=y

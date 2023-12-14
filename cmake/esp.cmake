@@ -3,6 +3,9 @@ set(
     "ausb/hw/esp/Esp32Device.cpp"
     "ausb/hw/esp/EspError.cpp"
 )
+if(CONFIG_AUSB_HW_MOCK)
+    list(APPEND esp_srcs "ausb/hw/mock/MockDevice.cpp")
+endif()
 
 idf_component_register(
     SRCS ${srcs} ${esp_srcs}

@@ -3,6 +3,7 @@
 
 #include "ausb/ausb_types.h"
 #include "ausb/dev/DeviceEvent.h"
+#include "ausb/hw/HWDeviceBase.h"
 #include "ausb/usb_types.h"
 
 #include <esp_err.h>
@@ -59,7 +60,7 @@ enum class EspPhyType {
  *   FIFOs happens in the main USB task.  Interrupt handlers only signal the
  *   USB task when I/O is possible.
  */
-class Esp32Device {
+class Esp32Device : public HWDeviceBase {
 public:
   explicit constexpr Esp32Device(usb_dev_t *usb = &USB0) noexcept : usb_{usb} {}
   ~Esp32Device();

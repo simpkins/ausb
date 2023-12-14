@@ -35,12 +35,21 @@ else()
 
     add_subdirectory("asel")
 
+    set(
+        AUSB_CONFIG_HW_MULTI
+        OFF CACHE BOOL
+        "Explicitly force runtime support for multiple hardware implementations"
+    )
+    mark_as_advanced(AUSB_CONFIG_HW_MULTI)
+
+    set(AUSB_CONFIG_HW_MOCK ON)
     set(hw_srcs "ausb/hw/mock/MockDevice.cpp")
 
     add_library(ausb STATIC ${srcs} ${hw_srcs})
     target_include_directories(
         ausb PUBLIC
         "${AUSB_ROOT_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}"
     )
     target_link_libraries(
         ausb PUBLIC
@@ -54,4 +63,9 @@ else()
         include(CTest)
         add_test(NAME ausb COMMAND ausb_tests)
     endif()
+
+    configure_file(
+        "${AUSB_ROOT_DIR}/ausb/ausb_config_vars.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/ausb/ausb_config_vars.h"
+    )
 endif()
