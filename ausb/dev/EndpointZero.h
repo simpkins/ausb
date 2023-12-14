@@ -11,9 +11,9 @@ namespace ausb::device {
 
 class EndpointManager;
 
-class ControlEndpointCallback : public ControlMessageHandler {
+class EndpointZeroCallback : public ControlMessageHandler {
 public:
-  virtual ~ControlEndpointCallback() = default;
+  virtual ~EndpointZeroCallback() = default;
 
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
@@ -27,12 +27,11 @@ public:
  * This class largely consists of the MessagePipe for endpoint 0, plus a few
  * additional device state callbacks that are specific to endpoint 0.
  */
-class ControlEndpoint {
+class EndpointZero {
 public:
-  constexpr ControlEndpoint(EndpointManager *mgr,
-                            ControlEndpointCallback *callback)
+  constexpr EndpointZero(EndpointManager *mgr, EndpointZeroCallback *callback)
       : pipe_(mgr, /*endpoint_num*/ 0, callback) {}
-  ~ControlEndpoint();
+  ~EndpointZero();
 
   EndpointManager* manager() const { return pipe_.manager(); }
   uint8_t endpoint_num() const { return 0; }
@@ -94,14 +93,14 @@ public:
   }
 
 private:
-  ControlEndpoint(ControlEndpoint const &) = delete;
-  ControlEndpoint &operator=(ControlEndpoint const &) = delete;
+  EndpointZero(EndpointZero const &) = delete;
+  EndpointZero &operator=(EndpointZero const &) = delete;
 
-  ControlEndpointCallback* get_callback() {
-    // We passed our ControlEndpointCallback to the MessagePipe.
+  EndpointZeroCallback* get_callback() {
+    // We passed our EndpointZeroCallback to the MessagePipe.
     // Rather than storing a second copy of this pointer, just downcast it's
-    // handler back to our ControlEndpointCallback type.
-    return static_cast<ControlEndpointCallback*>(pipe_.handler());
+    // handler back to our EndpointZeroCallback type.
+    return static_cast<EndpointZeroCallback *>(pipe_.handler());
   }
 
   MessagePipe pipe_;

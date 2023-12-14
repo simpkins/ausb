@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/ControlEndpoint.h"
+#include "ausb/dev/EndpointZero.h"
 
 #include <asel/buf_view.h>
 #include <optional>
@@ -20,7 +20,7 @@ public:
  * StdControlHandler processes most standard SETUP requests on the device's
  * default control endpoint.
  */
-class StdControlHandler : public ControlEndpointCallback {
+class StdControlHandler : public EndpointZeroCallback {
 public:
   /**
    * Create a new StdControlHandler.

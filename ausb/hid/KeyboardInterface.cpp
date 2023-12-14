@@ -5,6 +5,7 @@
 #include "ausb/desc/types.h"
 #include "ausb/dev/CtrlInXfer.h"
 #include "ausb/dev/CtrlOutXfer.h"
+#include "ausb/dev/MessagePipe.h"
 #include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
 #include "ausb/dev/ctrl/GetStaticDescriptor.h"
 #include "ausb/dev/ctrl/StallCtrlIn.h"

@@ -6,10 +6,10 @@ set(AUSB_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(
     srcs
     "ausb/desc/StaticDescriptorMapUtils.cpp"
-    "ausb/dev/ControlEndpoint.cpp"
     "ausb/dev/CtrlInXfer.cpp"
     "ausb/dev/CtrlOutXfer.cpp"
     "ausb/dev/EndpointManager.cpp"
+    "ausb/dev/EndpointZero.cpp"
     "ausb/dev/MessagePipe.cpp"
     "ausb/dev/StdControlHandler.cpp"
     "ausb/dev/ctrl/AckEmptyCtrlOut.cpp"

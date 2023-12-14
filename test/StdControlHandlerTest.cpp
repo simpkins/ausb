@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ControlEndpoint.h"
+#include "ausb/dev/EndpointZero.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
@@ -41,7 +41,7 @@ public:
 
 } // namespace
 
-ASEL_TEST(ControlEndpoint, test_ep0_mps_low_speed) {
+ASEL_TEST(StdControlHandler, test_ep0_mps_low_speed) {
   MockDevice hw;
   TestControlHandlerCallback cb;
 
@@ -95,7 +95,7 @@ ASEL_TEST(ControlEndpoint, test_ep0_mps_low_speed) {
   ASEL_EXPECT_EQ(reply, expected_reply);
 }
 
-ASEL_TEST(ControlEndpoint, test_ep0_mps_full_speed) {
+ASEL_TEST(StdControlHandler, test_ep0_mps_full_speed) {
   MockDevice hw;
   TestControlHandlerCallback cb;
 

@@ -1,9 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/ControlEndpoint.h"
-
-#include <memory>
+#include "ausb/dev/ControlMessageHandler.h"
 
 namespace ausb {
 class SetupPacket;

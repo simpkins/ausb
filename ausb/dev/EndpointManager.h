@@ -2,8 +2,8 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
-#include "ausb/dev/ControlEndpoint.h"
 #include "ausb/dev/DeviceEvent.h"
+#include "ausb/dev/EndpointZero.h"
 #include "ausb/hw/HWDevice.h"
 
 #include <cstdint>
@@ -26,8 +26,8 @@ class Interface;
 class EndpointManager {
 public:
   constexpr explicit EndpointManager(
-      HWDevice *hw, ControlEndpointCallback *ep0_handler) noexcept
-      : hw_(hw), ep0_(this, ep0_handler) {}
+      HWDevice *hw, EndpointZeroCallback *ep0_callback) noexcept
+      : hw_(hw), ep0_(this, ep0_callback) {}
 
   /**
    * Initialize the USB device.
@@ -229,7 +229,7 @@ private:
   bool remote_wakeup_enabled_ = false;
 
   HWDevice* hw_ = nullptr;
-  ControlEndpoint ep0_;
+  EndpointZero ep0_;
 
   std::vector<Interface*> interfaces_;
 };
