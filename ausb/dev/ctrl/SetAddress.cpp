@@ -21,7 +21,7 @@ void SetAddress::start(const SetupPacket &packet) {
   // be changed until after the ack has completed.  We do still make a call to
   // the underlying hardware here just in case some hardware implementations
   // need to be informed earlier during the transfer.
-  endpoint()->manager()->set_address_early(address_);
+  pipe()->manager()->set_address_early(address_);
 
   ack();
 }
@@ -34,7 +34,7 @@ void SetAddress::xfer_failed(XferFailReason reason) {}
 
 void SetAddress::ack_complete() {
   // Apply the address once the status stage of this transfer has finished.
-  endpoint()->manager()->set_address(address_);
+  pipe()->manager()->set_address(address_);
 }
 
 } // namespace ausb::device

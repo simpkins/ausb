@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Adam Simpkins
 #pragma once
 
+/*
+ * Definitions of various types that are defined by USB standards (and which
+ * don't really fit into other more specific header files).
+ */
+
 #include <cstdint>
 
 namespace ausb {

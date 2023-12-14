@@ -3,32 +3,18 @@
 
 #include "ausb/ausb_types.h"
 #include "ausb/dev/ControlMessageHandler.h"
+#include "ausb/dev/MessagePipe.h"
 
 #include <cinttypes>
-#include <type_traits>
 
-namespace ausb {
+namespace ausb::device {
 
-class SetupPacket;
-
-namespace device {
-
-class CtrlInXfer;
-class CtrlOutXfer;
 class EndpointManager;
 
 class ControlEndpointCallback : public ControlMessageHandler {
 public:
   virtual ~ControlEndpointCallback() = default;
 
-  /**
-   * Methods invoked on device status change.
-   *
-   * Note that these methods will only be invoked for the default control pipe
-   * (endpoint 0).  If another (non-zero) endpoint is configured as a control
-   * pipe it can receive SETUP messages, but this pipe will not be notified of
-   * device reset/suspend/resume state.
-   */
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
   virtual void on_suspend() {}
@@ -36,66 +22,21 @@ public:
 };
 
 /**
- * A class to manage transfers on a control pipe.
+ * This class manages state for the Default Control Pipe (endpoint 0).
  *
- * This class primarily keeps track of the state of the current transfer, and
- * invokes the transfer handler on receipt of SETUP, IN, or OUT packets on the
- * control endpoint.  Processing of the transfers themselves is done by a
- * separate ControlEndpointCallback object.
- *
- * Control transfers basically act like RPC calls from the host to the device.
- * A control endpoint can only have a single transfer in progress at a time.
- *
- * Endpoint 0 is always a control pipe.  In theory the USB spec allows
- * other endpoints to also be configured as control pipes.  However, in
- * practice this is very uncommon.  If for some reason you do want to configure
- * another endpoint as a control pipe, beware that most interface and endpoint
- * implementations will not expect to receive control messages from additional
- * control pipes: having multiple control pipes would allow multiple control
- * transfers to be in progress simultaneously, and many control message
- * handlers are likely not prepared to support this.  (Supporting multiple
- * outstanding control transfers would likely require additional storage space
- * to store state for the additional in-progress transfers.)
+ * This class largely consists of the MessagePipe for endpoint 0, plus a few
+ * additional device state callbacks that are specific to endpoint 0.
  */
 class ControlEndpoint {
 public:
-  /**
-   * The current transfer state of the endpoint.
-   *
-   * Only a single transfer can be in progress at a time.
-   */
-  enum class Status : uint8_t {
-    // No control transfer in progress
-    Idle,
-    // We have received a SETUP packet for an OUT transfer, and are currently
-    // processing that transfer.
-    OutXfer,
-    // We have completed processing an OUT transfer are sending the final
-    // 0-length IN transaction to acknowledge the transfer.
-    OutAck,
-    // We have received a SETUP packet for an IN transfer,
-    // but have not yet prepared IN data to send to the host.
-    InSetupReceived,
-    // We received a SETUP packet for an IN transfer, and are currently sending
-    // data, but more data remains to be sent after the current write.
-    InSendPartial,
-    // We received a SETUP packet for an IN transfer,
-    // and are currently sending the last portion of data.
-    InSendFinal,
-    // We have sent all data for an IN transfer, and are waiting for the host
-    // to acknowledge the transfer.
-    InStatus,
-  };
-
   constexpr ControlEndpoint(EndpointManager *mgr,
-                            ControlEndpointCallback *callback,
-                            uint8_t endpoint_num = 0)
-      : manager_(mgr), endpoint_num_(endpoint_num), callback_(callback) {}
+                            ControlEndpointCallback *callback)
+      : pipe_(mgr, /*endpoint_num*/ 0, callback) {}
   ~ControlEndpoint();
 
-  EndpointManager* manager() const { return manager_; }
-  uint8_t number() const { return endpoint_num_; }
-  Status status() const { return status_; }
+  EndpointManager* manager() const { return pipe_.manager(); }
+  uint8_t endpoint_num() const { return 0; }
+  MessagePipe::Status status() const { return pipe_.status(); }
 
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by EndpointManager to inform us of events
@@ -132,146 +73,38 @@ public:
    * on_setup_received() should be called by the EndpointManager when a SETUP
    * packet is received.
    */
-  void on_setup_received(const SetupPacket &packet);
+  void on_setup_received(const SetupPacket &packet) {
+    pipe_.on_setup_received(packet);
+  }
 
   /**
    * on_in_xfer_complete() should be called by the EndpointManager when a IN
    * transfer started with EndpointManager::start_ctrl_in_write() has finished.
    */
-  void on_in_xfer_complete();
-  void on_in_xfer_failed(XferFailReason reason);
-
-  void on_out_xfer_complete(uint32_t bytes_read);
-  void on_out_xfer_failed(XferFailReason reason);
-
-  ////////////////////////////////////////////////////////////////////
-  // Methods to be invoked by transfer objects
-  ////////////////////////////////////////////////////////////////////
-
-  /**
-   * Begin receiving data for the current control OUT transfer.
-   *
-   * This method should only be invoked by the current CtrlOutXfer object.
-   */
-  void start_out_read(void *data, size_t size);
-
-  /**
-   * Acknowledge an OUT transfer as successful.
-   *
-   * This method should only be invoked by the current CtrlOutXfer object,
-   * after it has read and processed the transfer data.
-   */
-  void ack_out_xfer();
-
-  /**
-   * Fail an OUT transfer by returning a STALL error to the host.
-   *
-   * This method should only be invoked by the current CtrlOutXfer object.
-   * Note that this method will immediately destroy the CtrlOutXfer.
-   */
-  void fail_out_xfer();
-
-  /**
-   * Begin receiving data for the current control IN transfer.
-   *
-   * This method should only be invoked by the current CtrlInXfer object.
-   *
-   * is_final should be true if this data completes the data to send as part of
-   * this SETUP transfer.  is_final should be false if there is more data to
-   * send after this. If is_final is false, size must be an exact multiple of
-   * the endpoint maximum packet size.  Once the partial write is complete
-   * CtrlInXfer::partial_write_complete() will be invoked.  If is_final is true
-   * then xfer_acked() is invoked instead once the host acknowledges the data.
-   */
-  void start_in_write(const void *data, size_t size, bool is_final = true);
-
-  /**
-   * Fail an IN transfer by returning a STALL error to the host.
-   *
-   * This method should only be invoked by the current CtrlInXfer object.
-   * Note that this method will immediately destroy the CtrlInXfer.
-   */
-  void fail_in_xfer();
-
-  template <typename Handler, typename... Args>
-  std::enable_if_t<std::is_base_of_v<CtrlInXfer, Handler>, Handler *>
-  new_in_handler(Args &&...args) {
-    // TODO: each ControlEndpoint should have a fixed storage space for storing
-    // the current request handler, rather than doing a heap allocation here.
-    return new Handler(std::forward<Args>(args)...);
+  void on_in_xfer_complete() { pipe_.on_in_xfer_complete(); }
+  void on_in_xfer_failed(XferFailReason reason) {
+    pipe_.on_in_xfer_failed(reason);
   }
-  template <typename Handler, typename... Args>
-  std::enable_if_t<std::is_base_of_v<CtrlOutXfer, Handler>, Handler *>
-  new_out_handler(Args &&...args) {
-    // TODO: each ControlEndpoint should have a fixed storage space for storing
-    // the current request handler, rather than doing a heap allocation here.
-    return new Handler(std::forward<Args>(args)...);
+
+  void on_out_xfer_complete(uint32_t bytes_read) {
+    pipe_.on_out_xfer_complete(bytes_read);
+  }
+  void on_out_xfer_failed(XferFailReason reason) {
+    pipe_.on_out_xfer_failed(reason);
   }
 
 private:
-  // This class is just a stub for now.  The purpose is just to provide a hook
-  // where we can make a compile-time selection based on the current hardware
-  // target for whether or not we want to store the current in-progress SETUP
-  // packet to decide if a newly-received one is a retransmit or not.  On
-  // hardware that provides its own retransmit avoidance mechanism we don't
-  // need to store this state.
-  class SetupRetransmitDetector {
-  public:
-    bool is_retransmit(const SetupPacket &packet) { return false; }
-    void on_setup(const SetupPacket& packet) {}
-  };
-
   ControlEndpoint(ControlEndpoint const &) = delete;
   ControlEndpoint &operator=(ControlEndpoint const &) = delete;
 
-  // Invoke xfer_failed() on the current transaction, flush any pending data to
-  // transfer, and set the endpoint to return a STALL error to the host.
-  void fail_current_xfer(XferFailReason reason);
-  // Invoke xfer_failed() on the current transaction (but does not STALL or
-  // flush buffers)
-  void invoke_xfer_failed(XferFailReason reason);
-  void stall();
+  ControlEndpointCallback* get_callback() {
+    // We passed our ControlEndpointCallback to the MessagePipe.
+    // Rather than storing a second copy of this pointer, just downcast it's
+    // handler back to our ControlEndpointCallback type.
+    return static_cast<ControlEndpointCallback*>(pipe_.handler());
+  }
 
-  // Destroy the current CtrlInXfer object, and reset the state to Idle
-  void destroy_in_xfer();
-  // Destroy the current CtrlOutXfer object, and reset the state to Idle
-  void destroy_out_xfer();
-
-  EndpointManager* const manager_ = nullptr;
-
-  /**
-   * The endpoint number is pretty much always 0.
-   *
-   * The USB spec documents control endpoints and message pipes generically,
-   * but in practice there is pretty much only ever a single control endpoint
-   * (and single message pipe) on endpoint 0.
-   *
-   * While some hardware devices allow configuring other endpoints as control
-   * endpoints, not all hardware devices support this.  On the host side, there
-   * is usually limited support for sending control transfers to endpoints
-   * other than endpoint 0.  (libusb does not appear to support this, newer
-   * Windows UWP APIs also only appear to support control transfers to the
-   * default control endpoint.  WinUsb_ControlTransfer() does allow specifying
-   * an alternate interface.)
-   */
-  uint8_t const endpoint_num_ = 0;
-  Status status_ = Status::Idle;
-
-  union CurrentXfer {
-    constexpr CurrentXfer() : idle(nullptr) {}
-    ~CurrentXfer() {}
-
-    // Idle is set when status_ is Idle
-    void* idle;
-    // Out is set during OUT transfers (status is Out*)
-    CtrlOutXfer *out;
-    // Out is set during IN transfers (status in In*)
-    CtrlInXfer *in;
-  } xfer_;
-
-  SetupRetransmitDetector setup_rxmit_detector_;
-  ControlEndpointCallback* callback_ = nullptr;
+  MessagePipe pipe_;
 };
 
-} // namespace device
-} // namespace ausb
+} // namespace ausb::device

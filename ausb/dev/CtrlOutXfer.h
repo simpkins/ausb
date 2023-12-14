@@ -12,10 +12,10 @@ class SetupPacket;
 
 namespace device {
 
-class ControlEndpoint;
+class MessagePipe;
 
 /**
- * A class for implementing endpoint 0 control OUT transfers in device mode.
+ * A class for implementing control OUT transfers in device mode.
  *
  * Note that this class (and all of the USB device code in general) is not
  * thread safe.  The implementation should only invoke methods on this class
@@ -29,11 +29,11 @@ class ControlEndpoint;
  */
 class CtrlOutXfer {
 public:
-  explicit CtrlOutXfer(ControlEndpoint *endpoint) : endpoint_(endpoint) {}
+  explicit CtrlOutXfer(MessagePipe *pipe) : pipe_(pipe) {}
 
   /**
    * The lifetime of the CtrlInXfer object is controlled by the
-   * ControlEndpoint, and the object will be destroyed when it is no longer
+   * MessagePipe, and the object will be destroyed when it is no longer
    * needed.
    *
    * Unless the implementation has called ack() or error() to complete the
@@ -41,7 +41,7 @@ public:
    */
   virtual ~CtrlOutXfer() {}
 
-  ControlEndpoint *endpoint() const { return endpoint_; }
+  MessagePipe *pipe() const { return pipe_; }
 
   /**
    * Begin processing this transfer.
@@ -62,14 +62,14 @@ public:
    * size should normally be the length field from the SetupPacket in order to
    * read the full transfer data.  That said, it is possible to read the data
    * in smaller chunks if desired, but those chunks must be in multiples of the
-   * endpoint 0 maximum packet size.  start_read() can be called with less than
-   * the full transfer length as long as size is a multiple of the maximum
-   * packet size for endpoint 0.  In this case, out_data_received() will be
-   * invoked once the specified size has been received, and you can call
-   * start_read() again to read the next set of OUT packets from the transfer.
-   * Only a single start_read() call can be in progress at a time--a new
-   * start_read() attempt cannot be initiated until out_data_received() has
-   * been invoked for the previous read.
+   * message pipe's maximum packet size.  start_read() can be called with less
+   * than the full transfer length as long as size is a multiple of the maximum
+   * packet size.  In this case, out_data_received() will be invoked once the
+   * specified size has been received, and you can call start_read() again to
+   * read the next set of OUT packets from the transfer.  Only a single
+   * start_read() call can be in progress at a time--a new start_read() attempt
+   * cannot be initiated until out_data_received() has been invoked for the
+   * previous read.
    */
   void start_read(void *data, uint32_t size);
 
@@ -140,17 +140,17 @@ private:
   CtrlOutXfer(CtrlOutXfer const &) = delete;
   CtrlOutXfer &operator=(CtrlOutXfer const &) = delete;
 
-  friend class ControlEndpoint;
+  friend class MessagePipe;
   void invoke_xfer_failed(XferFailReason reason) {
-      endpoint_ = nullptr;
+      pipe_ = nullptr;
       xfer_failed(reason);
   }
 
-  // The pointer to the ControlEndpoint.
+  // The pointer to the MessagePipe.
   // This will be reset to null when the transfer is complete (by calling ack()
   // or error()), or once it has been cancelled, immediately before a
   // xfer_failed() call.
-  ControlEndpoint *endpoint_{nullptr};
+  MessagePipe *pipe_{nullptr};
 };
 
 } // namespace device

@@ -10,6 +10,7 @@ set(
     "ausb/dev/CtrlInXfer.cpp"
     "ausb/dev/CtrlOutXfer.cpp"
     "ausb/dev/EndpointManager.cpp"
+    "ausb/dev/MessagePipe.cpp"
     "ausb/dev/StdControlHandler.cpp"
     "ausb/dev/ctrl/AckEmptyCtrlOut.cpp"
     "ausb/dev/ctrl/GetDevDescriptorModifyEP0.cpp"

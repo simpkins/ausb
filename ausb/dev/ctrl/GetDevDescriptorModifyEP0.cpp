@@ -9,10 +9,10 @@
 
 namespace ausb::device {
 
-GetDevDescriptorModifyEP0::GetDevDescriptorModifyEP0(ControlEndpoint *ep,
+GetDevDescriptorModifyEP0::GetDevDescriptorModifyEP0(MessagePipe *pipe,
                                                      asel::buf_view buf,
                                                      uint8_t correct_ep0_mps)
-    : CtrlInXfer(ep) {
+    : CtrlInXfer(pipe) {
   assert(desc_.data().size() == buf.size());
   memcpy(desc_.data().data(), buf.data(), desc_.data().size());
   desc_.set_ep0_max_pkt_size(correct_ep0_mps);

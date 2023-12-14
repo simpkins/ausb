@@ -1,6 +1,11 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+/*
+ * Definitions of various types that are specific to AUSB (as opposed to types
+ * and constants defined by USB standards).
+ */
+
 #include <cstdint>
 
 #include <asel/buf_view.h>

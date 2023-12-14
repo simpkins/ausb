@@ -7,7 +7,7 @@ class SetupPacket;
 
 namespace ausb::device {
 
-class ControlEndpoint;
+class MessagePipe;
 class CtrlInXfer;
 class CtrlOutXfer;
 
@@ -28,24 +28,24 @@ public:
    * Return a CtrlOutXfer object for handling an OUT control transfer.
    *
    * This should return a handler object returned by calling
-   * ep->new_out_handler(), or nullptr if the request is not supported.
+   * pipe->new_out_handler(), or nullptr if the request is not supported.
    *
    * If nullptr is returned the transfer will be failed by returning a STALL
    * error to the host.
    */
-  virtual CtrlOutXfer *process_out_setup(ControlEndpoint *ep,
+  virtual CtrlOutXfer *process_out_setup(MessagePipe *pipe,
                                          const SetupPacket &packet) = 0;
 
   /**
    * Return a CtrlInXfer object for handling an IN control transfer.
    *
    * This should return a handler object returned by calling
-   * ep->new_in_handler(), or nullptr if the request is not supported.
+   * pipe->new_in_handler(), or nullptr if the request is not supported.
    *
    * If nullptr is returned the transfer will be failed by returning a STALL
    * error to the host.
    */
-  virtual CtrlInXfer *process_in_setup(ControlEndpoint *ep,
+  virtual CtrlInXfer *process_in_setup(MessagePipe *pipe,
                                        const SetupPacket &packet) = 0;
 
 private:

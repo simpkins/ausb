@@ -125,23 +125,24 @@ public:
   void unconfigure();
 
   /**
-   * Configure a control endpoint to respond to any future IN or OUT tokens
+   * Configure a message pipe to respond to any future IN or OUT tokens
    * with a STALL error.
    *
-   * This stall state will automatically be cleared the next time a SETUP
-   * packet is received from the host.
+   * This configures both the IN and OUT endpoints associated with the pipe to
+   * respond to tokens with a STALL error.  This stall state will automatically
+   * be cleared the next time a SETUP packet is received from the host.
    *
-   * This method should generally only be invoked by a ControlEndpoint.
+   * This method should generally only be invoked by a MessagePipe.
    */
-  void stall_control_endpoint(uint8_t endpoint);
+  void stall_message_pipe(uint8_t endpoint_num);
 
   /**
    * Send data for the current control IN transfer.
    *
-   * This method should only be invoked by a ControlEndpoint.
+   * This method should only be invoked by a MessagePipe.
    * on_in_xfer_complete() or on_in_xfer_failed() will be called on the
-   * ControlEndpoint when the write is complete.  Note that on_in_xfer_failed()
-   * may be invoked before start_ctrl_in_write() returns if there is an error
+   * MessagePipe when the write is complete.  Note that on_in_xfer_failed() may
+   * be invoked before start_ctrl_in_write() returns if there is an error
    * starting the write operation.
    *
    * If size is larger than the endpoint's maximum packet size the data will be
@@ -150,27 +151,26 @@ public:
    * be a multiple of the endpoint's maximum packet size.  All but the last
    * packet in an IN transfer must be full, maximum sized packets
    */
-  void start_ctrl_in_write(ControlEndpoint *endpoint, const void *data,
-                           uint32_t size);
+  void start_ctrl_in_write(MessagePipe *pipe, const void *data, uint32_t size);
 
   /**
    * Begin waiting for the host to acknowledge the status phase of a control IN
    * transfer.
    *
-   * This method should only be invoked by a ControlEndpoint.
+   * This method should only be invoked by a MessagePipe.
    * on_out_xfer_complete() or on_out_xfer_failed() will be called on the
-   * ControlEndpoint when the write is complete.  (The on_out_*() methods are
+   * MessagePipe when the write is complete.  (The on_out_*() methods are
    * called because the status phase of an IN transfer is a single 0-length OUT
    * packet.)
    */
-  void start_ctrl_in_ack(ControlEndpoint* endpoint);
+  void start_ctrl_in_ack(MessagePipe *pipe);
 
   /**
    * Begin receiving data for the current control OUT transfer.
    *
-   * This method should only be invoked by a ControlEndpoint.
+   * This method should only be invoked by a MessagePipe.
    * on_out_xfer_complete() or on_out_xfer_failed() will be called on the
-   * ControlEndpoint when the read is complete.
+   * MessagePipe when the read is complete.
    *
    * on_out_xfer_complete() will be invoked when one of:
    * - exactly size bytes have been received from the host
@@ -192,20 +192,19 @@ public:
    *   endpoint, so a new start_ctrl_out_read() cannot be started until the
    *   previous read has completed.
    */
-  void start_ctrl_out_read(ControlEndpoint *endpoint, void *data,
-                           uint32_t size);
+  void start_ctrl_out_read(MessagePipe *pipe, void *data, uint32_t size);
 
   /**
    * Begin to successfully acknowledge the status phase of a control OUT
    * transfer.
    *
-   * This method should only be invoked by a ControlEndpoint.
+   * This method should only be invoked by a MessagePipe.
    * on_in_xfer_complete() or on_in_xfer_failed() will be called on the
-   * ControlEndpoint when the acknowledgement is complete.  (The on_in_*()
+   * MessagePipe when the acknowledgement is complete.  (The on_in_*()
    * methods are called because the status phase of an OUT transfer is a single
    * 0-length IN packet.)
    */
-  void start_ctrl_out_ack(ControlEndpoint* endpoint);
+  void start_ctrl_out_ack(MessagePipe *pipe);
 
   HWDevice *hw() { return hw_; }
 

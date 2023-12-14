@@ -124,16 +124,17 @@ void EndpointManager::on_setup_received(const SetupPacketEvent &event) {
   if (event.endpoint_num == 0) {
     ep0_.on_setup_received(event.packet);
   } else {
-    // I can't really think of many practical use cases for someone to
-    // configure any endpoint other than EP0 as a control endpoint, but in
-    // theory we could potentially support this in the future.
+    // We could eventually provide APIs for someone to configure a message
+    // pipe on an endpoint other than EP0.  For now we don't provide an API yet
+    // to configure any other endpoints as message pipes.
+    // Using message pipes on endpoints other than EP0 seems pretty uncommon.
     AUSB_LOGW("SETUP packet received on unexpected endpoint %u",
               event.endpoint_num);
   }
 }
 
-void EndpointManager::stall_control_endpoint(uint8_t endpoint) {
-  hw_->stall_control_endpoint(endpoint);
+void EndpointManager::stall_message_pipe(uint8_t endpoint_num) {
+  hw_->stall_control_endpoint(endpoint_num);
 }
 
 void EndpointManager::on_in_xfer_complete(uint8_t endpoint_num) {
@@ -215,43 +216,43 @@ void EndpointManager::unconfigure() {
   state_ = DeviceState::Address;
 }
 
-void EndpointManager::start_ctrl_in_write(ControlEndpoint *endpoint,
+void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
                                           const void *data, uint32_t size) {
-  auto status = hw_->start_write(endpoint->number(), data, size);
+  auto status = hw_->start_write(pipe->endpoint_num(), data, size);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting control IN transfer: %d",
               static_cast<int>(status));
-    endpoint->on_in_xfer_failed(XferFailReason::SoftwareError);
+    pipe->on_in_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
 }
 
-void EndpointManager::start_ctrl_in_ack(ControlEndpoint* endpoint) {
-  auto status = hw_->start_read(endpoint->number(), nullptr, 0);
+void EndpointManager::start_ctrl_in_ack(MessagePipe* pipe) {
+  auto status = hw_->start_read(pipe->endpoint_num(), nullptr, 0);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting receipt of control IN ACK: %d",
               static_cast<int>(status));
-    endpoint->on_out_xfer_failed(XferFailReason::SoftwareError);
+    pipe->on_out_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
 }
 
-void EndpointManager::start_ctrl_out_read(ControlEndpoint *endpoint, void *data,
+void EndpointManager::start_ctrl_out_read(MessagePipe *pipe, void *data,
                                           uint32_t size) {
-  auto status = hw_->start_read(endpoint->number(), data, size);
+  auto status = hw_->start_read(pipe->endpoint_num(), data, size);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting control OUT transfer: %d",
               static_cast<int>(status));
-    endpoint->on_out_xfer_failed(XferFailReason::SoftwareError);
+    pipe->on_out_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
 }
 
-void EndpointManager::start_ctrl_out_ack(ControlEndpoint *endpoint) {
-  auto status = hw_->start_write(endpoint->number(), nullptr, 0);
+void EndpointManager::start_ctrl_out_ack(MessagePipe *pipe) {
+  auto status = hw_->start_write(pipe->endpoint_num(), nullptr, 0);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting control OUT ACK: %d", static_cast<int>(status));
-    endpoint->on_in_xfer_failed(XferFailReason::SoftwareError);
+    pipe->on_in_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
 }

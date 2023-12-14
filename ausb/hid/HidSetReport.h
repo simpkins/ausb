@@ -11,8 +11,8 @@ class HidInterface;
 
 class HidSetReport : public device::CtrlOutXfer {
 public:
-  HidSetReport(device::ControlEndpoint *ctrl_ep, HidInterface *intf)
-      : CtrlOutXfer(ctrl_ep), intf_(intf) {}
+  HidSetReport(device::MessagePipe *pipe, HidInterface *intf)
+      : CtrlOutXfer(pipe), intf_(intf) {}
 
   void start(const SetupPacket &packet) override;
   void out_data_received(uint32_t bytes_received) override;

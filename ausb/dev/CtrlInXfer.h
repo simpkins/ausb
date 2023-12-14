@@ -12,10 +12,10 @@ class SetupPacket;
 
 namespace device {
 
-class ControlEndpoint;
+class MessagePipe;
 
 /**
- * A class for implementing endpoint 0 control IN transfers in device mode.
+ * A class for implementing control IN transfers in device mode.
  *
  * Note that this class (and all of the USB device code in general) is not
  * thread safe.  The implementation should only invoke methods on this class
@@ -25,11 +25,11 @@ class ControlEndpoint;
  */
 class CtrlInXfer {
 public:
-  explicit CtrlInXfer(ControlEndpoint *endpoint) : endpoint_(endpoint) {}
+  explicit CtrlInXfer(MessagePipe *pipe) : pipe_(pipe) {}
 
   /**
    * The lifetime of the CtrlInXfer object is controlled by the
-   * ControlEndpoint, and the object will be destroyed when it is no longer
+   * MessagePipe, and the object will be destroyed when it is no longer
    * needed.
    *
    * One of xfer_acked() or xfer_failed() will be called before the object is
@@ -37,7 +37,7 @@ public:
    */
   virtual ~CtrlInXfer() {}
 
-  ControlEndpoint *usb() const { return endpoint_; }
+  MessagePipe *pipe() const { return pipe_; }
 
   /**
    * Begin processing this transfer.
@@ -61,11 +61,11 @@ public:
   /**
    * Provide partial response data to send to the host.
    *
-   * The size must be an exact multiple of the control endpoint's maximum
-   * packet size.  After a call to send_partial(), partial_write_complete()
-   * will be called by the endpoint once the data has been transmitted.  Only a
-   * single write attempt may be in progress at a time: no new send_partial()
-   * or send_final() call can be made until partial_write_complete() has been
+   * The size must be an exact multiple of the message pipe's maximum packet
+   * size.  After a call to send_partial(), partial_write_complete() will be
+   * called by the pipe once the data has been transmitted.  Only a single
+   * write attempt may be in progress at a time: no new send_partial() or
+   * send_final() call can be made until partial_write_complete() has been
    * invoked.
    *
    * The caller must ensure that the data buffer remains valid until
@@ -121,13 +121,13 @@ private:
   CtrlInXfer(CtrlInXfer const &) = delete;
   CtrlInXfer &operator=(CtrlInXfer const &) = delete;
 
-  friend class ControlEndpoint;
+  friend class MessagePipe;
   void invoke_xfer_failed(XferFailReason reason) {
-      endpoint_ = nullptr;
+      pipe_ = nullptr;
       xfer_failed(reason);
   }
 
-  ControlEndpoint *endpoint_{nullptr};
+  MessagePipe *pipe_{nullptr};
 };
 
 } // namespace device

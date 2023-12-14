@@ -61,9 +61,9 @@ class KeyboardInterface : public HidInterface {
 public:
   constexpr KeyboardInterface() noexcept = default;
 
-  device::CtrlOutXfer *process_out_setup(device::ControlEndpoint *ctrl_ep,
+  device::CtrlOutXfer *process_out_setup(device::MessagePipe *pipe,
                                          const SetupPacket &packet) override;
-  device::CtrlInXfer *process_in_setup(device::ControlEndpoint *ctrl_ep,
+  device::CtrlInXfer *process_in_setup(device::MessagePipe *pipe,
                                        const SetupPacket &packet) override;
 
   bool set_report(asel::buf_view data) override;

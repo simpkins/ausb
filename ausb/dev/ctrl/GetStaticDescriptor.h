@@ -13,11 +13,11 @@ namespace ausb::device {
  */
 class GetStaticDescriptor : public CtrlInXfer {
 public:
-  GetStaticDescriptor(ControlEndpoint *ep, const void *data, size_t size)
-      : CtrlInXfer(ep), data_(data), size_(size) {}
+  GetStaticDescriptor(MessagePipe *pipe, const void *data, size_t size)
+      : CtrlInXfer(pipe), data_(data), size_(size) {}
   template <size_t S>
-  GetStaticDescriptor(ControlEndpoint *ep, const std::array<uint8_t, S> &data)
-      : GetStaticDescriptor(ep, data.data(), data.size()) {}
+  GetStaticDescriptor(MessagePipe *pipe, const std::array<uint8_t, S> &data)
+      : GetStaticDescriptor(pipe, data.data(), data.size()) {}
 
   void start(const SetupPacket &packet) override;
 

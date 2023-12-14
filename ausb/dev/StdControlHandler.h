@@ -1,8 +1,11 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/desc/DescriptorMap.h"
 #include "ausb/dev/ControlEndpoint.h"
+
+#include <asel/buf_view.h>
+#include <optional>
+#include <cinttypes>
 
 namespace ausb::device {
 
@@ -33,23 +36,23 @@ public:
 
   void on_enum_done(uint8_t max_packet_size) override;
 
-  CtrlOutXfer *process_out_setup(ControlEndpoint *ep,
+  CtrlOutXfer *process_out_setup(MessagePipe *pipe,
                                  const SetupPacket &packet) override;
-  CtrlInXfer *process_in_setup(ControlEndpoint *ep,
+  CtrlInXfer *process_in_setup(MessagePipe *pipe,
                                const SetupPacket &packet) override;
 
 private:
   StdControlHandler(StdControlHandler const &) = delete;
   StdControlHandler &operator=(StdControlHandler const &) = delete;
 
-  CtrlOutXfer *process_std_device_out(ControlEndpoint *ep,
+  CtrlOutXfer *process_std_device_out(MessagePipe *pipe,
                                       const SetupPacket &packet);
-  CtrlInXfer *process_std_device_in(ControlEndpoint *ep,
+  CtrlInXfer *process_std_device_in(MessagePipe *pipe,
                                     const SetupPacket &packet);
 
-  CtrlOutXfer *process_set_configuration(ControlEndpoint *ep,
+  CtrlOutXfer *process_set_configuration(MessagePipe *pipe,
                                          const SetupPacket &packet);
-  CtrlInXfer *process_get_descriptor(ControlEndpoint *ep,
+  CtrlInXfer *process_get_descriptor(MessagePipe *pipe,
                                      const SetupPacket &packet);
 
   ControlHandlerCallback* const callback_ = nullptr;
