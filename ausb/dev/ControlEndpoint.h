@@ -17,7 +17,23 @@ class CtrlInXfer;
 class CtrlOutXfer;
 class EndpointManager;
 
-class ControlEndpointCallback {
+// TODO: move to its own dedicated header file?
+class ControlMessageHandler {
+public:
+  virtual ~ControlMessageHandler() = default;
+
+  virtual std::unique_ptr<CtrlOutXfer>
+  process_out_setup(ControlEndpoint *ep, const SetupPacket &packet) = 0;
+  virtual std::unique_ptr<CtrlInXfer>
+  process_in_setup(ControlEndpoint *ep, const SetupPacket &packet) = 0;
+
+#if 0
+  virtual void ctrl_out_xfer_done(ControlEndpoint *ep, CtrlOutXfer *xfer) = 0;
+  virtual void ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) = 0;
+#endif
+};
+
+class ControlEndpointCallback : public ControlMessageHandler {
 public:
   virtual ~ControlEndpointCallback() = default;
 
@@ -32,21 +48,31 @@ public:
   virtual void on_suspend() {}
   virtual void on_resume() {}
 
-  virtual std::unique_ptr<CtrlOutXfer>
-  process_out_setup(const SetupPacket &packet) = 0;
-  virtual std::unique_ptr<CtrlInXfer>
-  process_in_setup(const SetupPacket &packet) = 0;
-
 protected:
   ControlEndpoint* endpoint_ = nullptr;
 };
 
 /**
- * A class to manage transfers on a control endpoint.
+ * A class to manage transfers on a control pipe.
  *
- * This class primarily keeps track of the state of the current transfer.
- * Processing of the transfers themselves is done by a separate
- * ControlEndpointCallback object.
+ * This class primarily keeps track of the state of the current transfer, and
+ * invokes the transfer handler on receipt of SETUP, IN, or OUT packets on the
+ * control endpoint.  Processing of the transfers themselves is done by a
+ * separate ControlEndpointCallback object.
+ *
+ * Control transfers basically act like RPC calls from the host to the device.
+ * A control endpoint can only have a single transfer in progress at a time.
+ *
+ * Endpoint 0 is always a control pipe.  In theory the USB spec allows
+ * other endpoints to also be configured as control pipes.  However, in
+ * practice this is very uncommon.  If for some reason you do want to configure
+ * another endpoint as a control pipe, beware that most interface and endpoint
+ * implementations will not expect to receive control messages from additional
+ * control pipes: having multiple control pipes would allow multiple control
+ * transfers to be in progress simultaneously, and many control message
+ * handlers are likely not prepared to support this.  (Supporting multiple
+ * outstanding control transfers would likely require additional storage space
+ * to store state for the additional in-progress transfers.)
  */
 class ControlEndpoint {
 public:

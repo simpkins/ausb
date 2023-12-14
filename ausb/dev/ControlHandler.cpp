@@ -24,24 +24,25 @@ void ControlHandler::on_enum_done(uint8_t max_packet_size) {
 }
 
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_out_setup(const SetupPacket &packet) {
+ControlHandler::process_out_setup(ControlEndpoint *ep,
+                                  const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::Out, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
-    return process_std_device_out(packet);
+    return process_std_device_out(ep, packet);
   }
 
   const auto recip = packet.get_recipient();
   if (recip == SetupRecipient::Interface) {
     const uint8_t interface_num = (packet.index & 0xff);
-    auto *const intf = endpoint_->manager()->get_interface(interface_num);
+    auto *const intf = ep->manager()->get_interface(interface_num);
     if (!intf) {
       AUSB_LOGW("received SETUP OUT request for unknown interface %d",
                 interface_num);
       return nullptr;
     }
 
-    return intf->process_out_setup(endpoint_, packet);
+    return intf->process_out_setup(ep, packet);
   } else if (recip == SetupRecipient::Endpoint) {
     const uint8_t endpoint_addr = packet.index & 0xff;
     // TODO
@@ -54,24 +55,25 @@ ControlHandler::process_out_setup(const SetupPacket &packet) {
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_in_setup(const SetupPacket &packet) {
+ControlHandler::process_in_setup(ControlEndpoint *ep,
+                                 const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
-    return process_std_device_in(packet);
+    return process_std_device_in(ep, packet);
   }
 
   const auto recip = packet.get_recipient();
   if (recip == SetupRecipient::Interface) {
     const uint8_t interface_num = (packet.index & 0xff);
-    auto *const intf = endpoint_->manager()->get_interface(interface_num);
+    auto *const intf = ep->manager()->get_interface(interface_num);
     if (!intf) {
       AUSB_LOGW("received SETUP IN request for unknown interface %d",
                 interface_num);
       return nullptr;
     }
 
-    return intf->process_in_setup(endpoint_, packet);
+    return intf->process_in_setup(ep, packet);
   } else if (recip == SetupRecipient::Endpoint) {
     const uint8_t endpoint_addr = packet.index & 0xff;
     // TODO
@@ -83,13 +85,27 @@ ControlHandler::process_in_setup(const SetupPacket &packet) {
   return nullptr;
 }
 
+#if 0
+void ControlHandler::ctrl_out_xfer_done(ControlEndpoint *ep,
+                                        CtrlOutXfer *xfer) {
+  // TODO: store the current handler in a std::variant rather than a
+  // unique_ptr, and reset it here.
+}
+
+void ControlHandler::ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) {
+  // TODO: store the current handler in a std::variant rather than a
+  // unique_ptr, and reset it here.
+}
+#endif
+
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_std_device_out(const SetupPacket &packet) {
+ControlHandler::process_std_device_out(ControlEndpoint *ep,
+                                       const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
-    return make_unique<SetAddress>(endpoint_);
+    return make_unique<SetAddress>(ep);
   } else if (std_req_type == StdRequestType::SetConfiguration) {
-    return process_set_configuration(packet);
+    return process_set_configuration(ep, packet);
   } else if (std_req_type == StdRequestType::SetFeature) {
     // TODO
     AUSB_LOGE("TODO: handle SET_FEATURE");
@@ -110,10 +126,11 @@ ControlHandler::process_std_device_out(const SetupPacket &packet) {
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_std_device_in(const SetupPacket &packet) {
+ControlHandler::process_std_device_in(ControlEndpoint *ep,
+                                      const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::GetDescriptor) {
-    return process_get_descriptor(packet);
+    return process_get_descriptor(ep, packet);
   } else if (std_req_type == StdRequestType::GetStatus) {
     // TODO: return remote wakeup and self-powered status
     AUSB_LOGE("TODO: handle GET_STATUS");
@@ -130,18 +147,19 @@ ControlHandler::process_std_device_in(const SetupPacket &packet) {
 }
 
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_set_configuration(const SetupPacket &packet) {
+ControlHandler::process_set_configuration(ControlEndpoint *ep,
+                                          const SetupPacket &packet) {
   if (packet.length > 0) {
     AUSB_LOGW("SET_CONFIGURATION request with non-zero length %d",
               packet.length);
-    return make_unique<StallCtrlOut>(endpoint_);
+    return make_unique<StallCtrlOut>(ep);
   }
   const uint8_t config_id = packet.value;
   AUSB_LOGI("SET_CONFIGURATION: %u", config_id);
 
-  const auto state = endpoint_->manager()->state();
+  const auto state = ep->manager()->state();
   if (state != DeviceState::Address && state != DeviceState::Configured) {
-    return make_unique<StallCtrlOut>(endpoint_);
+    return make_unique<StallCtrlOut>(ep);
   }
 
   // TODO: should we perhaps handle the config_id == 0 case specially, rather
@@ -152,14 +170,15 @@ ControlHandler::process_set_configuration(const SetupPacket &packet) {
     // ID, the USB spec specifies that we should reply with an error, but does
     // not really specify what state we should be in afterwards if we were
     // already in a configured state before.
-    return make_unique<StallCtrlOut>(endpoint_);
+    return make_unique<StallCtrlOut>(ep);
   }
 
-  return make_unique<AckEmptyCtrlOut>(endpoint_);
+  return make_unique<AckEmptyCtrlOut>(ep);
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_get_descriptor(const SetupPacket &packet) {
+ControlHandler::process_get_descriptor(ControlEndpoint *ep,
+                                       const SetupPacket &packet) {
   const auto desc = callback_->get_descriptor(packet.value, packet.index);
   if (!desc) {
     // The host requested a descriptor that does not exist.
@@ -169,7 +188,7 @@ ControlHandler::process_get_descriptor(const SetupPacket &packet) {
     AUSB_LOGI(
         "GET_DESCRIPTOR request for non-existent descriptor 0x%04x 0x%04x",
         packet.value, packet.index);
-    return make_unique<StallCtrlIn>(endpoint_);
+    return make_unique<StallCtrlIn>(ep);
   }
 
   AUSB_LOGI("GET_DESCRIPTOR request for 0x%04x 0x%04x", packet.value,
@@ -193,13 +212,12 @@ ControlHandler::process_get_descriptor(const SetupPacket &packet) {
       AUSB_LOGI("GET_DESCRIPTOR explicitly modifying device descriptor to set "
                 "correct EP0 max packet size (%u -> %u)",
                 (*desc)[7], ep0_max_packet_size_);
-      return make_unique<GetDevDescriptorModifyEP0>(endpoint_, *desc,
+      return make_unique<GetDevDescriptorModifyEP0>(ep, *desc,
                                                     ep0_max_packet_size_);
     }
   }
 
-  return make_unique<GetStaticDescriptor>(endpoint_, desc->data(),
-                                          desc->size());
+  return make_unique<GetStaticDescriptor>(ep, desc->data(), desc->size());
 }
 
 } // namespace ausb::device

@@ -83,8 +83,8 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   setup_rxmit_detector_.on_setup(packet);
   if (packet.get_direction() == Direction::Out) {
     status_ = Status::OutXfer;
-    new (&xfer_.out)
-        std::unique_ptr<CtrlOutXfer>(callback_->process_out_setup(packet));
+    new (&xfer_.out) std::unique_ptr<CtrlOutXfer>(
+        callback_->process_out_setup(this, packet));
     if (xfer_.out) {
       xfer_.out->start(packet);
     } else {
@@ -100,7 +100,7 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   } else {
     status_ = Status::InSetupReceived;
     new (&xfer_.in)
-        std::unique_ptr<CtrlInXfer>(callback_->process_in_setup(packet));
+        std::unique_ptr<CtrlInXfer>(callback_->process_in_setup(this, packet));
     if (xfer_.in) {
       xfer_.in->start(packet);
     } else {

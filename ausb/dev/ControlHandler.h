@@ -13,6 +13,11 @@ public:
                                                        uint16_t index) = 0;
 };
 
+// TODO: rename to StdControlHandler?
+/**
+ * ControlHandler processes most standard SETUP requests on the control
+ * endpoint.
+ */
 class ControlHandler : public ControlEndpointCallback {
 public:
   /**
@@ -30,21 +35,28 @@ public:
   void on_enum_done(uint8_t max_packet_size) override;
 
   std::unique_ptr<CtrlOutXfer>
-  process_out_setup(const SetupPacket &packet) override;
+  process_out_setup(ControlEndpoint *ep, const SetupPacket &packet) override;
   std::unique_ptr<CtrlInXfer>
-  process_in_setup(const SetupPacket &packet) override;
+  process_in_setup(ControlEndpoint *ep, const SetupPacket &packet) override;
+
+#if 0
+  void ctrl_out_xfer_done(ControlEndpoint *ep, CtrlOutXfer *xfer) override;
+  void ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) override;
+#endif
 
 private:
   ControlHandler(ControlHandler const &) = delete;
   ControlHandler &operator=(ControlHandler const &) = delete;
 
   std::unique_ptr<CtrlOutXfer>
-  process_std_device_out(const SetupPacket &packet);
-  std::unique_ptr<CtrlInXfer> process_std_device_in(const SetupPacket &packet);
+  process_std_device_out(ControlEndpoint *ep, const SetupPacket &packet);
+  std::unique_ptr<CtrlInXfer> process_std_device_in(ControlEndpoint *ep,
+                                                    const SetupPacket &packet);
 
   std::unique_ptr<CtrlOutXfer>
-  process_set_configuration(const SetupPacket &packet);
-  std::unique_ptr<CtrlInXfer> process_get_descriptor(const SetupPacket &packet);
+  process_set_configuration(ControlEndpoint *ep, const SetupPacket &packet);
+  std::unique_ptr<CtrlInXfer> process_get_descriptor(ControlEndpoint *ep,
+                                                     const SetupPacket &packet);
 
   ControlHandlerCallback* const callback_ = nullptr;
   uint8_t ep0_max_packet_size_ = 64;

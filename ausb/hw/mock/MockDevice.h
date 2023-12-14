@@ -16,6 +16,8 @@ namespace ausb {
  */
 class MockDevice {
 public:
+  // The USB 2.0 spec allows up to 15 in and 15 out endpoints for full speed
+  // devices.  For now we don't have a use case for that many.
   static constexpr size_t kMaxOutEndpoints = 6;
   static constexpr size_t kMaxInEndpoints = 6;
 

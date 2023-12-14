@@ -1,6 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/dev/ControlEndpoint.h"
+
 #include <memory>
 
 namespace ausb {
@@ -16,25 +18,16 @@ class CtrlOutXfer;
 /**
  * A pure virtual class defining the API that any device interface must
  * implement.
+ *
+ * This derives from ControlMessageHandler, since control messages on
+ * Endpoint 0 may indicate that they are for a specific interface.  This
+ * Interface object will be asked to process any SETUP control messages sent to
+ * it on endpoint 0.
  */
-class Interface {
+class Interface : public ControlMessageHandler {
 public:
   constexpr Interface() noexcept = default;
   virtual ~Interface() = default;
-
-  /**
-   * Process an OUT SETUP request on the control endpoint that was sent to this
-   * interface.
-   */
-  virtual std::unique_ptr<CtrlOutXfer>
-  process_out_setup(ControlEndpoint* ctrl_ep, const SetupPacket &packet) = 0;
-
-  /**
-   * Process an IN SETUP request on the control endpoint that was sent to this
-   * interface.
-   */
-  virtual std::unique_ptr<CtrlInXfer>
-  process_in_setup(ControlEndpoint* ctrl_ep, const SetupPacket &packet) = 0;
 
   /**
    * unconfigure() will be called when the interface is unconfigured.
