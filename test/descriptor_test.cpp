@@ -13,7 +13,7 @@
 #include <asel/test/checks.h>
 #include <asel/test/TestCase.h>
 
-namespace ausb {
+namespace ausb::test {
 namespace {
 
 constexpr auto make_descriptor_map() {
@@ -177,4 +177,4 @@ ASEL_TEST(Descriptors, config_descriptor) {
   ASEL_EXPECT_EQ(*cfg_desc, expected_desc);
 }
 
-} // namespace ausb
+} // namespace ausb::test

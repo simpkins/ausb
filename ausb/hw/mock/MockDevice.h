@@ -4,6 +4,7 @@
 #include "ausb/ausb_types.h"
 #include "ausb/dev/DeviceEvent.h"
 
+#include <array>
 #include <chrono>
 
 namespace ausb {
@@ -15,6 +16,26 @@ namespace ausb {
  */
 class MockDevice {
 public:
+  static constexpr size_t kMaxOutEndpoints = 6;
+  static constexpr size_t kMaxInEndpoints = 6;
+
+  template <typename BufType> struct EndpointState {
+    void reset() {
+      max_packet_size = 0;
+      xfer_in_progress = false;
+      cur_xfer_data = nullptr;
+      cur_xfer_size = 0;
+    }
+    uint16_t max_packet_size = 0;
+    bool xfer_in_progress = false;
+    BufType cur_xfer_data = nullptr;
+    size_t cur_xfer_size = 0;
+  };
+  using OutEndpointState = EndpointState<void*>;
+  using InEndpointState = EndpointState<const void*>;
+
+  constexpr MockDevice() noexcept = default;
+
   [[nodiscard]] std::error_code init();
   void reset();
 
@@ -30,6 +51,9 @@ public:
                                            uint32_t size);
 
   void stall_control_endpoint(uint8_t endpoint_num);
+
+  std::array<OutEndpointState, kMaxOutEndpoints> out_eps;
+  std::array<InEndpointState, kMaxInEndpoints> in_eps;
 
 private:
   MockDevice(MockDevice const &) = delete;

@@ -1,6 +1,7 @@
 set(
     ausb_test_srcs
     descriptor_test.cpp
+    ControlEndpointTest.cpp
 )
 
 if(ESP_PLATFORM)

@@ -19,6 +19,7 @@ set(
     "ausb/dev/ctrl/StallCtrlOut.cpp"
     "ausb/hid/KeyboardInterface.cpp"
     "ausb/hid/HidSetReport.cpp"
+    "ausb/log.cpp"
 )
 
 if(ESP_PLATFORM)
@@ -33,7 +34,9 @@ else()
 
     add_subdirectory("asel")
 
-    add_library(ausb STATIC ${srcs})
+    set(hw_srcs "ausb/hw/mock/MockDevice.cpp")
+
+    add_library(ausb STATIC ${srcs} ${hw_srcs})
     target_include_directories(
         ausb PUBLIC
         "${AUSB_ROOT_DIR}"

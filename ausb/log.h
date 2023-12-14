@@ -19,11 +19,23 @@ namespace ausb {
 
 #else
 
-#define AUSB_LOGV(arg, ...) printf(arg, ##__VA_ARGS__)
-#define AUSB_LOGD(arg, ...) printf(arg, ##__VA_ARGS__)
-#define AUSB_LOGI(arg, ...) printf(arg, ##__VA_ARGS__)
-#define AUSB_LOGW(arg, ...) printf(arg, ##__VA_ARGS__)
-#define AUSB_LOGE(arg, ...) printf(arg, ##__VA_ARGS__)
+#define AUSB_LOGV(arg, ...) AUSB_LOG_IMPL(10, arg, ##__VA_ARGS__)
+#define AUSB_LOGD(arg, ...) AUSB_LOG_IMPL(20, arg, ##__VA_ARGS__)
+#define AUSB_LOGI(arg, ...) AUSB_LOG_IMPL(30, arg, ##__VA_ARGS__)
+#define AUSB_LOGW(arg, ...) AUSB_LOG_IMPL(40, arg, ##__VA_ARGS__)
+#define AUSB_LOGE(arg, ...) AUSB_LOG_IMPL(50, arg, ##__VA_ARGS__)
+
+#define AUSB_LOG_LEVEL 0
+
+#define AUSB_LOG_IMPL(level, arg, ...)                                         \
+  do {                                                                         \
+    if ((level) >= AUSB_LOG_LEVEL) {                                           \
+      ::ausb::log_message((arg), ##__VA_ARGS__);                               \
+    }                                                                          \
+  } while (0)
+
+__attribute__((__format__ (__printf__, 1, 2)))
+void log_message(const char* fmt, ...);
 
 #endif
 
