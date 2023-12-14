@@ -2,6 +2,7 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
+#include "ausb/dev/ControlMessageHandler.h"
 
 #include <cinttypes>
 #include <type_traits>
@@ -12,45 +13,22 @@ class SetupPacket;
 
 namespace device {
 
-class ControlEndpoint;
 class CtrlInXfer;
 class CtrlOutXfer;
 class EndpointManager;
-
-// TODO: move to its own dedicated header file?
-class ControlMessageHandler {
-public:
-  virtual ~ControlMessageHandler() = default;
-
-  /**
-   * Return a CtrlOutXfer object for handling an OUT control transfer.
-   *
-   * This should return a handler object returned by calling
-   * ep->new_out_handler(), or nullptr if the request is not supported.
-   *
-   * If nullptr is returned the transfer will be failed by returning a STALL
-   * error to the host.
-   */
-  virtual CtrlOutXfer *process_out_setup(ControlEndpoint *ep,
-                                         const SetupPacket &packet) = 0;
-
-  /**
-   * Return a CtrlInXfer object for handling an IN control transfer.
-   *
-   * This should return a handler object returned by calling
-   * ep->new_in_handler(), or nullptr if the request is not supported.
-   *
-   * If nullptr is returned the transfer will be failed by returning a STALL
-   * error to the host.
-   */
-  virtual CtrlInXfer *process_in_setup(ControlEndpoint *ep,
-                                       const SetupPacket &packet) = 0;
-};
 
 class ControlEndpointCallback : public ControlMessageHandler {
 public:
   virtual ~ControlEndpointCallback() = default;
 
+  /**
+   * Methods invoked on device status change.
+   *
+   * Note that these methods will only be invoked for the default control pipe
+   * (endpoint 0).  If another (non-zero) endpoint is configured as a control
+   * pipe it can receive SETUP messages, but this pipe will not be notified of
+   * device reset/suspend/resume state.
+   */
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_enum_done(uint8_t max_packet_size) {}
   virtual void on_suspend() {}
