@@ -4,7 +4,7 @@
 #include "ausb/ausb_types.h"
 
 #include <cinttypes>
-#include <memory>
+#include <type_traits>
 
 namespace ausb {
 
@@ -22,15 +22,29 @@ class ControlMessageHandler {
 public:
   virtual ~ControlMessageHandler() = default;
 
-  virtual std::unique_ptr<CtrlOutXfer>
-  process_out_setup(ControlEndpoint *ep, const SetupPacket &packet) = 0;
-  virtual std::unique_ptr<CtrlInXfer>
-  process_in_setup(ControlEndpoint *ep, const SetupPacket &packet) = 0;
+  /**
+   * Return a CtrlOutXfer object for handling an OUT control transfer.
+   *
+   * This should return a handler object returned by calling
+   * ep->new_out_handler(), or nullptr if the request is not supported.
+   *
+   * If nullptr is returned the transfer will be failed by returning a STALL
+   * error to the host.
+   */
+  virtual CtrlOutXfer *process_out_setup(ControlEndpoint *ep,
+                                         const SetupPacket &packet) = 0;
 
-#if 0
-  virtual void ctrl_out_xfer_done(ControlEndpoint *ep, CtrlOutXfer *xfer) = 0;
-  virtual void ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) = 0;
-#endif
+  /**
+   * Return a CtrlInXfer object for handling an IN control transfer.
+   *
+   * This should return a handler object returned by calling
+   * ep->new_in_handler(), or nullptr if the request is not supported.
+   *
+   * If nullptr is returned the transfer will be failed by returning a STALL
+   * error to the host.
+   */
+  virtual CtrlInXfer *process_in_setup(ControlEndpoint *ep,
+                                       const SetupPacket &packet) = 0;
 };
 
 class ControlEndpointCallback : public ControlMessageHandler {
@@ -212,6 +226,21 @@ public:
    */
   void fail_in_xfer();
 
+  template <typename Handler, typename... Args>
+  std::enable_if_t<std::is_base_of_v<CtrlInXfer, Handler>, Handler *>
+  new_in_handler(Args &&...args) {
+    // TODO: each ControlEndpoint should have a fixed storage space for storing
+    // the current request handler, rather than doing a heap allocation here.
+    return new Handler(std::forward<Args>(args)...);
+  }
+  template <typename Handler, typename... Args>
+  std::enable_if_t<std::is_base_of_v<CtrlOutXfer, Handler>, Handler *>
+  new_out_handler(Args &&...args) {
+    // TODO: each ControlEndpoint should have a fixed storage space for storing
+    // the current request handler, rather than doing a heap allocation here.
+    return new Handler(std::forward<Args>(args)...);
+  }
+
 private:
   // This class is just a stub for now.  The purpose is just to provide a hook
   // where we can make a compile-time selection based on the current hardware
@@ -236,10 +265,10 @@ private:
   void invoke_xfer_failed(XferFailReason reason);
   void stall();
 
-  // Return the current CtrlInXfer, and reset the state to Idle
-  std::unique_ptr<CtrlInXfer> extract_in_xfer();
-  // Return the current CtrlOutXfer, and reset the state to Idle
-  std::unique_ptr<CtrlOutXfer> extract_out_xfer();
+  // Destroy the current CtrlInXfer object, and reset the state to Idle
+  void destroy_in_xfer();
+  // Destroy the current CtrlOutXfer object, and reset the state to Idle
+  void destroy_out_xfer();
 
   EndpointManager* const manager_ = nullptr;
 
@@ -268,9 +297,9 @@ private:
     // Idle is set when status_ is Idle
     void* idle;
     // Out is set during OUT transfers (status is Out*)
-    std::unique_ptr<CtrlOutXfer> out;
+    CtrlOutXfer *out;
     // Out is set during IN transfers (status in In*)
-    std::unique_ptr<CtrlInXfer> in;
+    CtrlInXfer *in;
   } xfer_;
 
   SetupRetransmitDetector setup_rxmit_detector_;

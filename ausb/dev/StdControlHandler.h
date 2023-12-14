@@ -33,29 +33,24 @@ public:
 
   void on_enum_done(uint8_t max_packet_size) override;
 
-  std::unique_ptr<CtrlOutXfer>
-  process_out_setup(ControlEndpoint *ep, const SetupPacket &packet) override;
-  std::unique_ptr<CtrlInXfer>
-  process_in_setup(ControlEndpoint *ep, const SetupPacket &packet) override;
-
-#if 0
-  void ctrl_out_xfer_done(ControlEndpoint *ep, CtrlOutXfer *xfer) override;
-  void ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) override;
-#endif
+  CtrlOutXfer *process_out_setup(ControlEndpoint *ep,
+                                 const SetupPacket &packet) override;
+  CtrlInXfer *process_in_setup(ControlEndpoint *ep,
+                               const SetupPacket &packet) override;
 
 private:
   StdControlHandler(StdControlHandler const &) = delete;
   StdControlHandler &operator=(StdControlHandler const &) = delete;
 
-  std::unique_ptr<CtrlOutXfer>
-  process_std_device_out(ControlEndpoint *ep, const SetupPacket &packet);
-  std::unique_ptr<CtrlInXfer> process_std_device_in(ControlEndpoint *ep,
-                                                    const SetupPacket &packet);
+  CtrlOutXfer *process_std_device_out(ControlEndpoint *ep,
+                                      const SetupPacket &packet);
+  CtrlInXfer *process_std_device_in(ControlEndpoint *ep,
+                                    const SetupPacket &packet);
 
-  std::unique_ptr<CtrlOutXfer>
-  process_set_configuration(ControlEndpoint *ep, const SetupPacket &packet);
-  std::unique_ptr<CtrlInXfer> process_get_descriptor(ControlEndpoint *ep,
-                                                     const SetupPacket &packet);
+  CtrlOutXfer *process_set_configuration(ControlEndpoint *ep,
+                                         const SetupPacket &packet);
+  CtrlInXfer *process_get_descriptor(ControlEndpoint *ep,
+                                     const SetupPacket &packet);
 
   ControlHandlerCallback* const callback_ = nullptr;
   uint8_t ep0_max_packet_size_ = 64;

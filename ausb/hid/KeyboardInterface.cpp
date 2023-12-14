@@ -14,13 +14,11 @@
 #include "ausb/log.h"
 
 using namespace ausb::device;
-using std::make_unique;
 
 namespace ausb::hid {
 
-std::unique_ptr<CtrlOutXfer>
-KeyboardInterface::process_out_setup(ControlEndpoint *ctrl_ep,
-                                     const SetupPacket &packet) {
+CtrlOutXfer *KeyboardInterface::process_out_setup(ControlEndpoint *ctrl_ep,
+                                                  const SetupPacket &packet) {
   const auto req_type = packet.get_request_type();
   if (req_type == SetupReqType::Class) {
       if (packet.request == static_cast<uint8_t>(HidRequest::SetIdle)) {
@@ -29,11 +27,11 @@ KeyboardInterface::process_out_setup(ControlEndpoint *ctrl_ep,
         // TODO: actually record and act on the idle setting
         (void)duration;
         (void)report_id;
-        return make_unique<AckEmptyCtrlOut>(ctrl_ep);
+        return ctrl_ep->new_out_handler<AckEmptyCtrlOut>(ctrl_ep);
       } else if (packet.request ==
                  static_cast<uint8_t>(HidRequest::SetReport)) {
         // TODO
-        return make_unique<HidSetReport>(ctrl_ep, this);
+        return ctrl_ep->new_out_handler<HidSetReport>(ctrl_ep, this);
       }
 
       AUSB_LOGW("unhandled HID request %u to HID keyboard interface",
@@ -47,21 +45,20 @@ KeyboardInterface::process_out_setup(ControlEndpoint *ctrl_ep,
   return nullptr;
 }
 
-std::unique_ptr<CtrlInXfer>
-KeyboardInterface::process_in_setup(ControlEndpoint *ctrl_ep,
-                                    const SetupPacket &packet) {
+CtrlInXfer *KeyboardInterface::process_in_setup(ControlEndpoint *ctrl_ep,
+                                                const SetupPacket &packet) {
   const auto req_type = packet.get_request_type();
   if (req_type == SetupReqType::Standard) {
     const auto std_req_type = packet.get_std_request();
     if (std_req_type == StdRequestType::GetDescriptor) {
         if (packet.value == desc_setup_value(DescriptorType::HidReport, 0)) {
-          return make_unique<GetStaticDescriptor>(ctrl_ep,
-                                                  report_descriptor_.data());
+          return ctrl_ep->new_in_handler<GetStaticDescriptor>(
+              ctrl_ep, report_descriptor_.data());
         } else {
           AUSB_LOGI("GET_DESCRIPTOR request for non-existent HID class "
                     "descriptor 0x%04x",
                     packet.value);
-          return make_unique<StallCtrlIn>(ctrl_ep);
+          return ctrl_ep->new_in_handler<StallCtrlIn>(ctrl_ep);
         }
     }
   } else if (req_type == SetupReqType::Class) {

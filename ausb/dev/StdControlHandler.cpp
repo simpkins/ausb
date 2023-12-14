@@ -15,17 +15,14 @@
 #include "ausb/dev/ctrl/StallCtrlOut.h"
 #include "ausb/log.h"
 
-using std::make_unique;
-
 namespace ausb::device {
 
 void StdControlHandler::on_enum_done(uint8_t max_packet_size) {
   ep0_max_packet_size_ = max_packet_size;
 }
 
-std::unique_ptr<CtrlOutXfer>
-StdControlHandler::process_out_setup(ControlEndpoint *ep,
-                                     const SetupPacket &packet) {
+CtrlOutXfer *StdControlHandler::process_out_setup(ControlEndpoint *ep,
+                                                  const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::Out, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
@@ -54,9 +51,8 @@ StdControlHandler::process_out_setup(ControlEndpoint *ep,
   return nullptr;
 }
 
-std::unique_ptr<CtrlInXfer>
-StdControlHandler::process_in_setup(ControlEndpoint *ep,
-                                    const SetupPacket &packet) {
+CtrlInXfer *StdControlHandler::process_in_setup(ControlEndpoint *ep,
+                                                const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
@@ -85,26 +81,12 @@ StdControlHandler::process_in_setup(ControlEndpoint *ep,
   return nullptr;
 }
 
-#if 0
-void StdControlHandler::ctrl_out_xfer_done(ControlEndpoint *ep,
-                                           CtrlOutXfer *xfer) {
-  // TODO: store the current handler in a std::variant rather than a
-  // unique_ptr, and reset it here.
-}
-
-void StdControlHandler::ctrl_in_xfer_done(ControlEndpoint *ep,
-                                          CtrlInXfer *xfer) {
-  // TODO: store the current handler in a std::variant rather than a
-  // unique_ptr, and reset it here.
-}
-#endif
-
-std::unique_ptr<CtrlOutXfer>
+CtrlOutXfer *
 StdControlHandler::process_std_device_out(ControlEndpoint *ep,
                                           const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
-    return make_unique<SetAddress>(ep);
+    return ep->new_out_handler<SetAddress>(ep);
   } else if (std_req_type == StdRequestType::SetConfiguration) {
     return process_set_configuration(ep, packet);
   } else if (std_req_type == StdRequestType::SetFeature) {
@@ -126,7 +108,7 @@ StdControlHandler::process_std_device_out(ControlEndpoint *ep,
   return nullptr;
 }
 
-std::unique_ptr<CtrlInXfer>
+CtrlInXfer *
 StdControlHandler::process_std_device_in(ControlEndpoint *ep,
                                          const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
@@ -147,20 +129,20 @@ StdControlHandler::process_std_device_in(ControlEndpoint *ep,
   return nullptr;
 }
 
-std::unique_ptr<CtrlOutXfer>
+CtrlOutXfer *
 StdControlHandler::process_set_configuration(ControlEndpoint *ep,
                                              const SetupPacket &packet) {
   if (packet.length > 0) {
     AUSB_LOGW("SET_CONFIGURATION request with non-zero length %d",
               packet.length);
-    return make_unique<StallCtrlOut>(ep);
+    return ep->new_out_handler<StallCtrlOut>(ep);
   }
   const uint8_t config_id = packet.value;
   AUSB_LOGI("SET_CONFIGURATION: %u", config_id);
 
   const auto state = ep->manager()->state();
   if (state != DeviceState::Address && state != DeviceState::Configured) {
-    return make_unique<StallCtrlOut>(ep);
+    return ep->new_out_handler<StallCtrlOut>(ep);
   }
 
   // TODO: should we perhaps handle the config_id == 0 case specially, rather
@@ -171,13 +153,13 @@ StdControlHandler::process_set_configuration(ControlEndpoint *ep,
     // ID, the USB spec specifies that we should reply with an error, but does
     // not really specify what state we should be in afterwards if we were
     // already in a configured state before.
-    return make_unique<StallCtrlOut>(ep);
+    return ep->new_out_handler<StallCtrlOut>(ep);
   }
 
-  return make_unique<AckEmptyCtrlOut>(ep);
+  return ep->new_out_handler<AckEmptyCtrlOut>(ep);
 }
 
-std::unique_ptr<CtrlInXfer>
+CtrlInXfer *
 StdControlHandler::process_get_descriptor(ControlEndpoint *ep,
                                           const SetupPacket &packet) {
   const auto desc = callback_->get_descriptor(packet.value, packet.index);
@@ -189,7 +171,7 @@ StdControlHandler::process_get_descriptor(ControlEndpoint *ep,
     AUSB_LOGI(
         "GET_DESCRIPTOR request for non-existent descriptor 0x%04x 0x%04x",
         packet.value, packet.index);
-    return make_unique<StallCtrlIn>(ep);
+    return ep->new_in_handler<StallCtrlIn>(ep);
   }
 
   AUSB_LOGI("GET_DESCRIPTOR request for 0x%04x 0x%04x", packet.value,
@@ -213,12 +195,13 @@ StdControlHandler::process_get_descriptor(ControlEndpoint *ep,
       AUSB_LOGI("GET_DESCRIPTOR explicitly modifying device descriptor to set "
                 "correct EP0 max packet size (%u -> %u)",
                 (*desc)[7], ep0_max_packet_size_);
-      return make_unique<GetDevDescriptorModifyEP0>(ep, *desc,
-                                                    ep0_max_packet_size_);
+      return ep->new_in_handler<GetDevDescriptorModifyEP0>(
+          ep, *desc, ep0_max_packet_size_);
     }
   }
 
-  return make_unique<GetStaticDescriptor>(ep, desc->data(), desc->size());
+  return ep->new_in_handler<GetStaticDescriptor>(ep, desc->data(),
+                                                 desc->size());
 }
 
 } // namespace ausb::device

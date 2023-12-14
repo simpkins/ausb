@@ -83,8 +83,7 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
   setup_rxmit_detector_.on_setup(packet);
   if (packet.get_direction() == Direction::Out) {
     status_ = Status::OutXfer;
-    new (&xfer_.out) std::unique_ptr<CtrlOutXfer>(
-        callback_->process_out_setup(this, packet));
+    xfer_.out = callback_->process_out_setup(this, packet);
     if (xfer_.out) {
       xfer_.out->start(packet);
     } else {
@@ -94,13 +93,11 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
           packet.request_type, packet.request, packet.value, packet.index,
           packet.length);
       status_ = Status::Idle;
-      xfer_.out.~unique_ptr();
       manager_->stall_control_endpoint(endpoint_num_);
     }
   } else {
     status_ = Status::InSetupReceived;
-    new (&xfer_.in)
-        std::unique_ptr<CtrlInXfer>(callback_->process_in_setup(this, packet));
+    xfer_.in = callback_->process_in_setup(this, packet);
     if (xfer_.in) {
       xfer_.in->start(packet);
     } else {
@@ -109,7 +106,6 @@ void ControlEndpoint::on_setup_received(const SetupPacket &packet) {
                 packet.request_type, packet.request, packet.value, packet.index,
                 packet.length);
       status_ = Status::Idle;
-      xfer_.in.~unique_ptr();
       manager_->stall_control_endpoint(endpoint_num_);
     }
   }
@@ -128,7 +124,8 @@ void ControlEndpoint::on_in_xfer_complete() {
     return;
   case Status::OutAck:
     AUSB_LOGD("control OUT status complete");
-    extract_out_xfer()->ack_complete();
+    xfer_.out->ack_complete();
+    destroy_out_xfer();
     return;
   case Status::Idle:
   case Status::OutXfer:
@@ -160,7 +157,8 @@ void ControlEndpoint::on_out_xfer_complete(uint32_t bytes_read) {
     return;
   case Status::InStatus:
     AUSB_LOGD("control IN status successfully ACKed");
-    extract_in_xfer()->xfer_acked();
+    xfer_.in->xfer_acked();
+    destroy_in_xfer();
     return;
   case Status::Idle:
   case Status::OutAck:
@@ -216,7 +214,7 @@ void ControlEndpoint::fail_out_xfer() {
     return;
   }
 
-  extract_out_xfer();
+  destroy_out_xfer();
   manager_->stall_control_endpoint(endpoint_num_);
 }
 
@@ -242,7 +240,7 @@ void ControlEndpoint::fail_in_xfer() {
     return;
   }
 
-  extract_in_xfer();
+  destroy_in_xfer();
   manager_->stall_control_endpoint(endpoint_num_);
 }
 
@@ -267,13 +265,15 @@ void ControlEndpoint::invoke_xfer_failed(XferFailReason reason) {
     return;
   case Status::OutXfer:
   case Status::OutAck:
-    extract_out_xfer()->invoke_xfer_failed(reason);
+    xfer_.out->invoke_xfer_failed(reason);
+    destroy_out_xfer();
     return;
   case Status::InSetupReceived:
   case Status::InSendPartial:
   case Status::InSendFinal:
   case Status::InStatus:
-    extract_in_xfer()->invoke_xfer_failed(reason);
+    xfer_.in->invoke_xfer_failed(reason);
+    destroy_in_xfer();
     return;
   }
 
@@ -281,22 +281,20 @@ void ControlEndpoint::invoke_xfer_failed(XferFailReason reason) {
             static_cast<int>(status_));
 }
 
-std::unique_ptr<CtrlInXfer> ControlEndpoint::extract_in_xfer() {
+void ControlEndpoint::destroy_in_xfer() {
   assert(status_ == Status::InSetupReceived ||
          status_ == Status::InSendPartial || status_ == Status::InSendFinal ||
          status_ == Status::InStatus);
-  std::unique_ptr<CtrlInXfer> result = std::move(xfer_.in);
+  delete xfer_.in;
+  xfer_.in = nullptr;
   status_ = Status::Idle;
-  xfer_.in.~unique_ptr();
-  return result;
 }
 
-std::unique_ptr<CtrlOutXfer> ControlEndpoint::extract_out_xfer() {
+void ControlEndpoint::destroy_out_xfer() {
   assert(status_ == Status::OutXfer || status_ == Status::OutAck);
-  std::unique_ptr<CtrlOutXfer> result = std::move(xfer_.out);
+  delete xfer_.out;
+  xfer_.out = nullptr;
   status_ = Status::Idle;
-  xfer_.out.~unique_ptr();
-  return result;
 }
 
 } // namespace ausb::device
