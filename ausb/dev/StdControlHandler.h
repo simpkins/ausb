@@ -13,23 +13,22 @@ public:
                                                        uint16_t index) = 0;
 };
 
-// TODO: rename to StdControlHandler?
 /**
- * ControlHandler processes most standard SETUP requests on the control
- * endpoint.
+ * StdControlHandler processes most standard SETUP requests on the device's
+ * default control endpoint.
  */
-class ControlHandler : public ControlEndpointCallback {
+class StdControlHandler : public ControlEndpointCallback {
 public:
   /**
-   * Create a new ControlHandler.
+   * Create a new StdControlHandler.
    *
-   * The ControlHandler stores a reference to the DescriptorMap, but does not
-   * own it.  It is the caller's responsibility to ensure that the
-   * DescriptorMap is valid for as long as the ControlHandler object is.
+   * The StdControlHandler stores a reference to the DescriptorMap, but does
+   * not own it.  It is the caller's responsibility to ensure that the
+   * DescriptorMap is valid for as long as the StdControlHandler object is.
    * (Typically the descriptor map is a global singleton, like the
-   * ControlHandler itself.)
+   * StdControlHandler itself.)
    */
-  constexpr explicit ControlHandler(ControlHandlerCallback *callback)
+  constexpr explicit StdControlHandler(ControlHandlerCallback *callback)
       : callback_(callback) {}
 
   void on_enum_done(uint8_t max_packet_size) override;
@@ -45,8 +44,8 @@ public:
 #endif
 
 private:
-  ControlHandler(ControlHandler const &) = delete;
-  ControlHandler &operator=(ControlHandler const &) = delete;
+  StdControlHandler(StdControlHandler const &) = delete;
+  StdControlHandler &operator=(StdControlHandler const &) = delete;
 
   std::unique_ptr<CtrlOutXfer>
   process_std_device_out(ControlEndpoint *ep, const SetupPacket &packet);

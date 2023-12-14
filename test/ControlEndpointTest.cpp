@@ -2,8 +2,8 @@
 #include "ausb/dev/ControlEndpoint.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
-#include "ausb/dev/ControlHandler.h"
 #include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/StdControlHandler.h"
 #include "ausb/hw/mock/MockDevice.h"
 
 #include <asel/test/checks.h>
@@ -45,7 +45,7 @@ ASEL_TEST(ControlEndpoint, test_ep0_mps_low_speed) {
   MockDevice hw;
   TestControlHandlerCallback cb;
 
-  ControlHandler ctrl_handler(&cb);
+  StdControlHandler ctrl_handler(&cb);
   EndpointManager ep_mgr(&hw, &ctrl_handler);
 
   auto init_err = ep_mgr.init();
@@ -99,7 +99,7 @@ ASEL_TEST(ControlEndpoint, test_ep0_mps_full_speed) {
   MockDevice hw;
   TestControlHandlerCallback cb;
 
-  ControlHandler ctrl_handler(&cb);
+  StdControlHandler ctrl_handler(&cb);
   EndpointManager ep_mgr(&hw, &ctrl_handler);
 
   auto init_err = ep_mgr.init();

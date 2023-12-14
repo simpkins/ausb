@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/ControlHandler.h"
+#include "ausb/dev/StdControlHandler.h"
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/hw/HWDevice.h"
 
@@ -78,7 +78,7 @@ private:
   static constexpr auto descriptors_ = UsbDeviceImpl::make_descriptor_map();
 
   HWDevice hw_;
-  ControlHandler ctrl_handler{this};
+  StdControlHandler ctrl_handler{this};
   EndpointManager ep_manager_{&hw_, &ctrl_handler};
   UsbDeviceImpl impl_;
 };

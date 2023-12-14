@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ControlHandler.h"
+#include "ausb/dev/StdControlHandler.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/desc/DeviceDescriptor.h"
@@ -19,13 +19,13 @@ using std::make_unique;
 
 namespace ausb::device {
 
-void ControlHandler::on_enum_done(uint8_t max_packet_size) {
+void StdControlHandler::on_enum_done(uint8_t max_packet_size) {
   ep0_max_packet_size_ = max_packet_size;
 }
 
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_out_setup(ControlEndpoint *ep,
-                                  const SetupPacket &packet) {
+StdControlHandler::process_out_setup(ControlEndpoint *ep,
+                                     const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::Out, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
@@ -55,8 +55,8 @@ ControlHandler::process_out_setup(ControlEndpoint *ep,
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_in_setup(ControlEndpoint *ep,
-                                 const SetupPacket &packet) {
+StdControlHandler::process_in_setup(ControlEndpoint *ep,
+                                    const SetupPacket &packet) {
   if (packet.request_type ==
       SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
                                      SetupReqType::Standard)) {
@@ -86,21 +86,22 @@ ControlHandler::process_in_setup(ControlEndpoint *ep,
 }
 
 #if 0
-void ControlHandler::ctrl_out_xfer_done(ControlEndpoint *ep,
-                                        CtrlOutXfer *xfer) {
+void StdControlHandler::ctrl_out_xfer_done(ControlEndpoint *ep,
+                                           CtrlOutXfer *xfer) {
   // TODO: store the current handler in a std::variant rather than a
   // unique_ptr, and reset it here.
 }
 
-void ControlHandler::ctrl_in_xfer_done(ControlEndpoint *ep, CtrlInXfer *xfer) {
+void StdControlHandler::ctrl_in_xfer_done(ControlEndpoint *ep,
+                                          CtrlInXfer *xfer) {
   // TODO: store the current handler in a std::variant rather than a
   // unique_ptr, and reset it here.
 }
 #endif
 
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_std_device_out(ControlEndpoint *ep,
-                                       const SetupPacket &packet) {
+StdControlHandler::process_std_device_out(ControlEndpoint *ep,
+                                          const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
     return make_unique<SetAddress>(ep);
@@ -126,8 +127,8 @@ ControlHandler::process_std_device_out(ControlEndpoint *ep,
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_std_device_in(ControlEndpoint *ep,
-                                      const SetupPacket &packet) {
+StdControlHandler::process_std_device_in(ControlEndpoint *ep,
+                                         const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::GetDescriptor) {
     return process_get_descriptor(ep, packet);
@@ -147,8 +148,8 @@ ControlHandler::process_std_device_in(ControlEndpoint *ep,
 }
 
 std::unique_ptr<CtrlOutXfer>
-ControlHandler::process_set_configuration(ControlEndpoint *ep,
-                                          const SetupPacket &packet) {
+StdControlHandler::process_set_configuration(ControlEndpoint *ep,
+                                             const SetupPacket &packet) {
   if (packet.length > 0) {
     AUSB_LOGW("SET_CONFIGURATION request with non-zero length %d",
               packet.length);
@@ -177,8 +178,8 @@ ControlHandler::process_set_configuration(ControlEndpoint *ep,
 }
 
 std::unique_ptr<CtrlInXfer>
-ControlHandler::process_get_descriptor(ControlEndpoint *ep,
-                                       const SetupPacket &packet) {
+StdControlHandler::process_get_descriptor(ControlEndpoint *ep,
+                                          const SetupPacket &packet) {
   const auto desc = callback_->get_descriptor(packet.value, packet.index);
   if (!desc) {
     // The host requested a descriptor that does not exist.

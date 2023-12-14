@@ -7,10 +7,10 @@ set(
     srcs
     "ausb/desc/StaticDescriptorMapUtils.cpp"
     "ausb/dev/ControlEndpoint.cpp"
-    "ausb/dev/ControlHandler.cpp"
     "ausb/dev/CtrlInXfer.cpp"
     "ausb/dev/CtrlOutXfer.cpp"
     "ausb/dev/EndpointManager.cpp"
+    "ausb/dev/StdControlHandler.cpp"
     "ausb/dev/ctrl/AckEmptyCtrlOut.cpp"
     "ausb/dev/ctrl/GetDevDescriptorModifyEP0.cpp"
     "ausb/dev/ctrl/GetStaticDescriptor.cpp"
