@@ -287,7 +287,7 @@ private:
  */
 class ConfigDescriptorParser {
 public:
-  static constexpr size_t kSize = 18;
+  static constexpr size_t kSize = 9;
 
   /**
    * Create a ConfigDescriptorParser.
@@ -298,14 +298,15 @@ public:
    * called first before calling any other ConfigDescriptorParser methods.
    */
   constexpr ConfigDescriptorParser(const void *data, size_t size)
-      : data_(size < kSize ? static_cast<const uint8_t *>(data) : nullptr),
+      : data_(size >= kSize ? static_cast<const uint8_t *>(data) : nullptr),
         size_(size) {
     if (std::is_constant_evaluated() && size != kSize) {
       abort();
     }
   }
   constexpr ConfigDescriptorParser(asel::buf_view data)
-      : data_(data.size() < kSize ? data.data() : nullptr), size_(data.size()) {
+      : data_(data.size() >= kSize ? data.data() : nullptr),
+        size_(data.size()) {
     if (std::is_constant_evaluated() && data.size() != kSize) {
       abort();
     }

@@ -1,7 +1,6 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/StdControlHandler.h"
 
-#include "ausb/ausb_config.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
@@ -10,8 +9,6 @@
 
 #include <asel/test/checks.h>
 #include <asel/test/TestCase.h>
-
-#if AUSB_CONFIG_HW_MOCK
 
 using namespace ausb::device;
 
@@ -154,5 +151,3 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_full_speed) {
 }
 
 } // namespace ausb::test
-
-#endif // AUSB_CONFIG_HW_MOCK

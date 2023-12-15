@@ -22,7 +22,7 @@ namespace ausb::device {
  * ausb/dev/UsbDeviceExample.h for documentation about the methods that this
  * class needs to provide.
  */
-template<typename UsbDeviceImpl>
+template<typename UsbDeviceImpl, typename HwDeviceType = HWDevice>
 class UsbDevice : private StdControlHandlerCallback {
 public:
   constexpr UsbDevice() noexcept = default;
@@ -54,7 +54,7 @@ public:
     ep_manager_.handle_event(event);
   }
 
-  HWDevice *hw() { return &hw_; }
+  HwDeviceType *hw() { return &hw_; }
 
   /*
    * Get the device's descriptor map.
@@ -77,7 +77,7 @@ private:
 
   static constexpr auto descriptors_ = UsbDeviceImpl::make_descriptor_map();
 
-  HWDevice hw_;
+  HwDeviceType hw_;
   StdControlHandler ctrl_handler{this};
   EndpointManager ep_manager_{&hw_, &ctrl_handler};
   UsbDeviceImpl impl_;

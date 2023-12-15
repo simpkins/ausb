@@ -7,6 +7,7 @@ if(CONFIG_AUSB_HW_MOCK)
         APPEND
         ausb_test_srcs
         "StdControlHandlerTest.cpp"
+        "HidKeyboardTest.cpp"
     )
 endif()
 

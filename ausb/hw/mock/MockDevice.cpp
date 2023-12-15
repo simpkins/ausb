@@ -1,6 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/hw/mock/MockDevice.h"
 
+#include <asel/test/checks.h>
+
 namespace ausb {
 
 std::error_code MockDevice::init() {
@@ -68,5 +70,30 @@ XferStartResult MockDevice::start_read(uint8_t endpoint, void *data,
 }
 
 void MockDevice::stall_control_endpoint(uint8_t endpoint_num) {}
+
+DeviceEvent MockDevice::complete_in_xfer(uint8_t endpoint_num) {
+  if (!ASEL_EXPECT_TRUE(in_eps[endpoint_num].xfer_in_progress)) {
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+  in_eps[endpoint_num].cur_xfer_data = nullptr;
+  in_eps[endpoint_num].cur_xfer_size = 0;
+  in_eps[endpoint_num].xfer_in_progress = false;
+  return InXferCompleteEvent(endpoint_num);
+}
+
+DeviceEvent MockDevice::complete_out_xfer(uint8_t endpoint_num,
+                                          int32_t bytes_read) {
+  if (!ASEL_EXPECT_TRUE(out_eps[endpoint_num].xfer_in_progress)) {
+    return NoEvent(NoEventReason::HwProcessing);
+  }
+
+  uint16_t const bytes_read_reply =
+      bytes_read >= 0 ? bytes_read : out_eps[endpoint_num].cur_xfer_size;
+
+  out_eps[endpoint_num].cur_xfer_data = nullptr;
+  out_eps[endpoint_num].cur_xfer_size = 0;
+  out_eps[endpoint_num].xfer_in_progress = false;
+  return OutXferCompleteEvent(endpoint_num, bytes_read_reply);
+}
 
 } // namespace ausb

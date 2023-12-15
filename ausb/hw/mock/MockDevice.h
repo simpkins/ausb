@@ -39,6 +39,10 @@ public:
 
   constexpr MockDevice() noexcept = default;
 
+  ////////////////////////////////////////////////////////////////////
+  // HWDeviceBase APIs
+  ////////////////////////////////////////////////////////////////////
+
   [[nodiscard]] std::error_code init();
   void reset();
 
@@ -57,6 +61,13 @@ public:
 
   std::array<OutEndpointState, kMaxOutEndpoints> out_eps;
   std::array<InEndpointState, kMaxInEndpoints> in_eps;
+
+  ////////////////////////////////////////////////////////////////////
+  // Methods to be invoked by test code
+  ////////////////////////////////////////////////////////////////////
+
+  DeviceEvent complete_in_xfer(uint8_t endpoint_num);
+  DeviceEvent complete_out_xfer(uint8_t endpoint_num, int32_t bytes_read = -1);
 
 private:
   MockDevice(MockDevice const &) = delete;
