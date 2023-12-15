@@ -29,9 +29,11 @@ if(ESP_PLATFORM)
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/esp.cmake")
 else()
     project(ausb HOMEPAGE_URL https://github.com/simpkins/ausb)
+    if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+        set(AUSB_IS_PRIMARY_PROJECT ON)
+    endif()
 
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/compiler-settings.cmake")
-    add_subdirectory("test")
 
     add_subdirectory("asel")
 
@@ -44,6 +46,15 @@ else()
 
     set(AUSB_CONFIG_HW_MOCK ON)
     set(hw_srcs "ausb/hw/mock/MockDevice.cpp")
+
+    # ESP-IDF's Kconfig system defines variables starting with "CONFIG_AUSB_"
+    # For use in ausb/ausb-config.h we would rather have variables named
+    # AUSB_CONFIG_*.  Translate between the two formats, so that we only have
+    # to use one format when checking in our CMake files.  It is easier to
+    # convert to the ESP-IDF format here, rather than on the ESP-IDF side,
+    # since the ESP-IDF side has multiple components with different entry
+    # points.
+    set(CONFIG_AUSB_HW_MOCK ${AUSB_CONFIG_HW_MOCK})
 
     add_library(ausb STATIC ${srcs} ${hw_srcs})
     target_include_directories(
@@ -59,9 +70,15 @@ else()
     add_executable(ausb_tests test/runner/mock/main.cpp)
     target_link_libraries(ausb_tests PUBLIC ausb_test_cases)
 
-    if(NOT CMAKE_CROSSCOMPILING)
+    if (AUSB_IS_PRIMARY_PROJECT OR AUSB_BUILD_TESTING)
         include(CTest)
-        add_test(NAME ausb COMMAND ausb_tests)
+        if(BUILD_TESTING)
+            add_subdirectory("test")
+            if(NOT CMAKE_CROSSCOMPILING)
+                # Can't run the tests if cross-compiling
+                add_test(NAME ausb COMMAND ausb_tests)
+            endif()
+        endif()
     endif()
 
     configure_file(

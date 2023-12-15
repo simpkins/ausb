@@ -1,8 +1,14 @@
 set(
     ausb_test_srcs
     descriptor_test.cpp
-    StdControlHandlerTest.cpp
 )
+if(CONFIG_AUSB_HW_MOCK)
+    list(
+        APPEND
+        ausb_test_srcs
+        "StdControlHandlerTest.cpp"
+    )
+endif()
 
 if(ESP_PLATFORM)
     idf_component_register(
