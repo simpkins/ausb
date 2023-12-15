@@ -57,10 +57,11 @@ public:
   }
   template <size_t DescLen>
   constexpr StaticDescriptorMap<NumDescriptors + 1, DataLength + DescLen>
-  add_descriptor(DescriptorType type, uint8_t desc_index,
+  add_descriptor(DescriptorType type,
+                 uint8_t desc_index,
                  const std::array<uint8_t, DescLen> &desc) {
-    return add_descriptor_with_setup_ids(desc_setup_value(type, desc_index), 0,
-                                         desc);
+    return add_descriptor_with_setup_ids(
+        desc_setup_value(type, desc_index), 0, desc);
   }
 
   /**
@@ -94,8 +95,8 @@ public:
                                 DataLength + ConfigTotalLength>
   add_config_descriptor(
       const ConfigDescriptor<ConfigTotalLength, NumInterfaces> cfg) {
-    return add_descriptor(DescriptorType::Config,
-                          count_num_config_descriptors(), cfg.data());
+    return add_descriptor(
+        DescriptorType::Config, count_num_config_descriptors(), cfg.data());
   }
   template <size_t ConfigTotalLength, uint8_t NumInterfaces>
   constexpr StaticDescriptorMap<NumDescriptors + 1,
@@ -127,7 +128,8 @@ public:
    */
   template <size_t DescLen>
   constexpr StaticDescriptorMap<NumDescriptors + 1, DataLength + DescLen>
-  add_descriptor_with_setup_ids(uint16_t wvalue, uint16_t windex,
+  add_descriptor_with_setup_ids(uint16_t wvalue,
+                                uint16_t windex,
                                 std::array<uint8_t, DescLen> desc) {
     return StaticDescriptorMap<NumDescriptors + 1, DataLength + DescLen>(
         *this, wvalue, windex, desc);
@@ -176,14 +178,16 @@ private:
   template <uint16_t X, size_t Y>
   friend class StaticDescriptorMap;
 
-  template <size_t DescLen, uint16_t OtherNumDescriptors,
+  template <size_t DescLen,
+            uint16_t OtherNumDescriptors,
             size_t OtherDataLength>
   constexpr StaticDescriptorMap(
       const StaticDescriptorMap<OtherNumDescriptors, OtherDataLength> &other,
       typename std::enable_if<OtherNumDescriptors + 1 == NumDescriptors &&
                                   OtherDataLength + DescLen == DataLength,
                               uint16_t>::type value,
-      uint16_t index, const std::array<uint8_t, DescLen> &desc) {
+      uint16_t index,
+      const std::array<uint8_t, DescLen> &desc) {
     // StaticDescriptorMapEntry uses uint16_t to store the offset.
     // Make sure the total descriptor length fits in this data type.
     static_assert(DataLength <=

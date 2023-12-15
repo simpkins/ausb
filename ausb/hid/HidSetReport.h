@@ -19,7 +19,7 @@ public:
   void xfer_failed(XferFailReason reason) override;
 
 private:
-  HidInterface* intf_ = nullptr;
+  HidInterface *intf_ = nullptr;
 
   // TODO: we probably should let the interface supply the buffer.
   // There can only be one control request outstanding at a time, so they can

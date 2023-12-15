@@ -31,6 +31,7 @@ enum class Led : uint8_t {
   SurroundOn = 0x0f,
   // More values are defined in the HID Usage Tables spec...
 };
-template <> class is_usage_type<Led> : public std::true_type {};
+template <>
+class is_usage_type<Led> : public std::true_type {};
 
 } // namespace ausb::hid

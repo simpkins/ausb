@@ -33,9 +33,15 @@ public:
       : pipe_(mgr, /*endpoint_num*/ 0, callback) {}
   ~EndpointZero();
 
-  EndpointManager* manager() const { return pipe_.manager(); }
-  uint8_t endpoint_num() const { return 0; }
-  MessagePipe::Status status() const { return pipe_.status(); }
+  EndpointManager *manager() const {
+    return pipe_.manager();
+  }
+  uint8_t endpoint_num() const {
+    return 0;
+  }
+  MessagePipe::Status status() const {
+    return pipe_.status();
+  }
 
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by EndpointManager to inform us of events
@@ -80,7 +86,9 @@ public:
    * on_in_xfer_complete() should be called by the EndpointManager when a IN
    * transfer started with EndpointManager::start_ctrl_in_write() has finished.
    */
-  void on_in_xfer_complete() { pipe_.on_in_xfer_complete(); }
+  void on_in_xfer_complete() {
+    pipe_.on_in_xfer_complete();
+  }
   void on_in_xfer_failed(XferFailReason reason) {
     pipe_.on_in_xfer_failed(reason);
   }
@@ -96,7 +104,7 @@ private:
   EndpointZero(EndpointZero const &) = delete;
   EndpointZero &operator=(EndpointZero const &) = delete;
 
-  EndpointZeroCallback* get_callback() {
+  EndpointZeroCallback *get_callback() {
     // We passed our EndpointZeroCallback to the MessagePipe.
     // Rather than storing a second copy of this pointer, just downcast it's
     // handler back to our EndpointZeroCallback type.

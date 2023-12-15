@@ -45,7 +45,9 @@ class UsbDeviceExample {
    * This should return a StaticDescriptorMap object, which will then be placed
    * into the firmware's read-only data segment.
    */
-  static constexpr auto make_descriptor_map() { return StaticDescriptorMap(); }
+  static constexpr auto make_descriptor_map() {
+    return StaticDescriptorMap();
+  }
 };
 
 } // namespace ausb::device::example

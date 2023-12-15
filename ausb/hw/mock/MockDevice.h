@@ -22,7 +22,8 @@ public:
   static constexpr size_t kMaxOutEndpoints = 6;
   static constexpr size_t kMaxInEndpoints = 6;
 
-  template <typename BufType> struct EndpointState {
+  template <typename BufType>
+  struct EndpointState {
     void reset() {
       max_packet_size = 0;
       xfer_in_progress = false;
@@ -36,8 +37,8 @@ public:
     BufType cur_xfer_data = nullptr;
     size_t cur_xfer_size = 0;
   };
-  using OutEndpointState = EndpointState<void*>;
-  using InEndpointState = EndpointState<const void*>;
+  using OutEndpointState = EndpointState<void *>;
+  using InEndpointState = EndpointState<const void *>;
 
   constexpr MockDevice() noexcept = default;
 
@@ -54,10 +55,10 @@ public:
   void set_address_early(uint8_t address);
 
   bool configure_ep0(uint8_t max_packet_size);
-  [[nodiscard]] XferStartResult start_write(uint8_t endpoint, const void *data,
-                                            uint32_t size);
-  [[nodiscard]] XferStartResult start_read(uint8_t endpoint, void *data,
-                                           uint32_t size);
+  [[nodiscard]] XferStartResult
+  start_write(uint8_t endpoint, const void *data, uint32_t size);
+  [[nodiscard]] XferStartResult
+  start_read(uint8_t endpoint, void *data, uint32_t size);
 
   void stall_control_endpoint(uint8_t endpoint_num);
 

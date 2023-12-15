@@ -15,8 +15,8 @@ namespace ausb {
  * full HID report descriptor parsing.
  */
 enum class HidSubclass : uint8_t {
-    None = 0,
-    Boot = 1,
+  None = 0,
+  Boot = 1,
 };
 
 enum class HidRequest : uint8_t {
@@ -33,9 +33,9 @@ enum class HidRequest : uint8_t {
  * HidSubclass::Boot.
  */
 enum class HidProtocol : uint8_t {
-    None = 0,
-    Keyboard = 1,
-    Mouse = 2,
+  None = 0,
+  Keyboard = 1,
+  Mouse = 2,
 };
 
 /**

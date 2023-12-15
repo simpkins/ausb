@@ -41,7 +41,9 @@ public:
    */
   virtual ~CtrlOutXfer() {}
 
-  MessagePipe *pipe() const { return pipe_; }
+  MessagePipe *pipe() const {
+    return pipe_;
+  }
 
   /**
    * Begin processing this transfer.
@@ -51,7 +53,7 @@ public:
    * start_read() to begin reading the OUT data from the host (if the setup
    * length is non-zero).
    */
-  virtual void start(const SetupPacket& packet) = 0;
+  virtual void start(const SetupPacket &packet) = 0;
 
   /**
    * Start reading data from the host.
@@ -142,8 +144,8 @@ private:
 
   friend class MessagePipe;
   void invoke_xfer_failed(XferFailReason reason) {
-      pipe_ = nullptr;
-      xfer_failed(reason);
+    pipe_ = nullptr;
+    xfer_failed(reason);
   }
 
   // The pointer to the MessagePipe.

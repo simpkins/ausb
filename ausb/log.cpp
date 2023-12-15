@@ -9,7 +9,7 @@ namespace ausb {
 
 // TODO: move logging code into the asel library, especially for supporting
 // compiling with no stdlib
-void log_message(const char* fmt, ...) {
+void log_message(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   vprintf(fmt, ap);

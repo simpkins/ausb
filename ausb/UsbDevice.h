@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/StdControlHandler.h"
 #include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/StdControlHandler.h"
 #include "ausb/hw/HWDevice.h"
 
 namespace ausb::device {
@@ -22,7 +22,7 @@ namespace ausb::device {
  * ausb/dev/UsbDeviceExample.h for documentation about the methods that this
  * class needs to provide.
  */
-template<typename UsbDeviceImpl, typename HwDeviceType = HWDevice>
+template <typename UsbDeviceImpl, typename HwDeviceType = HWDevice>
 class UsbDevice : private StdControlHandlerCallback {
 public:
   constexpr UsbDevice() noexcept = default;
@@ -30,7 +30,9 @@ public:
   /**
    * Initialize the USB device and connect to the bus.
    */
-  std::error_code init() { return ep_manager_.init(); }
+  std::error_code init() {
+    return ep_manager_.init();
+  }
 
   /**
    * Run the main USB task loop, processing events from the hardware.
@@ -39,7 +41,9 @@ public:
    * If desired you can implement your own custom task loop instead if you want
    * to perform any additional work.
    */
-  void loop() { ep_manager_.loop(); }
+  void loop() {
+    ep_manager_.loop();
+  }
 
   /**
    * Wait for a USB event to process.
@@ -54,15 +58,23 @@ public:
     ep_manager_.handle_event(event);
   }
 
-  HwDeviceType *hw() { return &hw_; }
-  EndpointManager *manager() { return &ep_manager_; }
+  HwDeviceType *hw() {
+    return &hw_;
+  }
+  EndpointManager *manager() {
+    return &ep_manager_;
+  }
 
   /*
    * Get the device's descriptor map.
    */
-  static constexpr const auto &descriptor_map() { return descriptors_; }
+  static constexpr const auto &descriptor_map() {
+    return descriptors_;
+  }
 
-  UsbDeviceImpl &dev() { return *impl_; }
+  UsbDeviceImpl &dev() {
+    return *impl_;
+  }
 
 private:
   UsbDevice(UsbDevice const &) = delete;

@@ -5,11 +5,11 @@ namespace ausb::detail {
 
 std::optional<asel::buf_view>
 get_usb_descriptor(uint16_t value,
-                    uint16_t index,
-                    const uint8_t *data,
-                    size_t data_size,
-                    const StaticDescriptorMapEntry *entries,
-                    size_t num_entries) {
+                   uint16_t index,
+                   const uint8_t *data,
+                   size_t data_size,
+                   const StaticDescriptorMapEntry *entries,
+                   size_t num_entries) {
   // Do a simple linear scan of all entries.
   //
   // We could sort the entries during construction, but there should usually be
@@ -25,5 +25,4 @@ get_usb_descriptor(uint16_t value,
   return std::nullopt;
 }
 
-
-} // namespace ausb
+} // namespace ausb::detail

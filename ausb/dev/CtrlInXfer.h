@@ -37,7 +37,9 @@ public:
    */
   virtual ~CtrlInXfer() {}
 
-  MessagePipe *pipe() const { return pipe_; }
+  MessagePipe *pipe() const {
+    return pipe_;
+  }
 
   /**
    * Begin processing this transfer.
@@ -46,7 +48,7 @@ public:
    * CtrlInXfer has been created.  The implementation should usually call
    * send_full() to send the desired IN data to the host.
    */
-  virtual void start(const SetupPacket& packet) = 0;
+  virtual void start(const SetupPacket &packet) = 0;
 
   /**
    * Provide the full response to send to the host.
@@ -56,7 +58,9 @@ public:
    *
    * This method may only be invoked from the USB task.
    */
-  void send_full(const void *data, size_t size) { send_final(data, size); }
+  void send_full(const void *data, size_t size) {
+    send_final(data, size);
+  }
 
   /**
    * Provide partial response data to send to the host.
@@ -74,7 +78,7 @@ public:
    * send_final() should be used to send the final portion of the data to the
    * host.
    */
-  void send_partial(const void* data, size_t size);
+  void send_partial(const void *data, size_t size);
 
   /**
    * Provide the final chunk of the response data to send to the host.
@@ -85,7 +89,7 @@ public:
    * The caller must ensure that the data buffer remains valid until
    * xfer_acked() has been called (or until the CtrlInXfer object is destroyed).
    */
-  void send_final(const void* data, size_t size);
+  void send_final(const void *data, size_t size);
 
   /**
    * Send a STALL error to the host, indicating that the transfer failed.
@@ -123,8 +127,8 @@ private:
 
   friend class MessagePipe;
   void invoke_xfer_failed(XferFailReason reason) {
-      pipe_ = nullptr;
-      xfer_failed(reason);
+    pipe_ = nullptr;
+    xfer_failed(reason);
   }
 
   MessagePipe *pipe_{nullptr};

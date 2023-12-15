@@ -232,7 +232,8 @@ enum class Key : uint8_t {
   RightAlt = 0xe6,
   RightGui = 0xe7,
 };
-template <> class is_usage_type<Key> : public std::true_type {};
+template <>
+class is_usage_type<Key> : public std::true_type {};
 
 enum class Modifier : uint8_t {
   None = 0x00,

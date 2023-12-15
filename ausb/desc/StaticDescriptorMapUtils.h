@@ -50,11 +50,11 @@ struct ExternalDescriptorPtr {
 
 std::optional<asel::buf_view>
 get_usb_descriptor(uint16_t value,
-                    uint16_t index,
-                    const uint8_t *data,
-                    size_t data_size,
-                    const StaticDescriptorMapEntry *entries,
-                    size_t num_entries);
+                   uint16_t index,
+                   const uint8_t *data,
+                   size_t data_size,
+                   const StaticDescriptorMapEntry *entries,
+                   size_t num_entries);
 
 [[nodiscard]] constexpr bool
 fill_string_descriptor(uint8_t *buf, size_t buflen, asel::string_view str) {
@@ -164,7 +164,7 @@ make_string_descriptor(const char (&str)[N]) {
   return out;
 }
 
-constexpr void fill_lang_descriptor(uint8_t* desc, Language lang) {
+constexpr void fill_lang_descriptor(uint8_t *desc, Language lang) {
   desc[0] = static_cast<uint16_t>(lang) & 0xff;
   desc[1] = (static_cast<uint16_t>(lang) >> 8) & 0xff;
 }

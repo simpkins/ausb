@@ -11,7 +11,9 @@
 
 namespace ausb::device {
 
-MessagePipe::~MessagePipe() { on_unconfigured(XferFailReason::LocalReset); }
+MessagePipe::~MessagePipe() {
+  on_unconfigured(XferFailReason::LocalReset);
+}
 
 void MessagePipe::on_unconfigured(XferFailReason reason) {
   if (status_ != Status::Idle) {
@@ -22,7 +24,10 @@ void MessagePipe::on_unconfigured(XferFailReason reason) {
 void MessagePipe::on_setup_received(const SetupPacket &packet) {
   AUSB_LOGI("SETUP received: request_type=0x%02x request=0x%02x "
             "value=0x%04x index=0x%04x length=0x%04x",
-            packet.request_type, packet.request, packet.value, packet.index,
+            packet.request_type,
+            packet.request,
+            packet.value,
+            packet.index,
             packet.length);
 
   // Handle receipt of a new SETUP packet if we think that we are currently
@@ -69,7 +74,10 @@ void MessagePipe::on_setup_received(const SetupPacket &packet) {
       AUSB_LOGE(
           "unhandled SETUP OUT packet: request_type=0x%02x request=0x%02x "
           "value=0x%04x index=0x%04x length=0x%04x",
-          packet.request_type, packet.request, packet.value, packet.index,
+          packet.request_type,
+          packet.request,
+          packet.value,
+          packet.index,
           packet.length);
       status_ = Status::Idle;
       manager_->stall_message_pipe(endpoint_num_);
@@ -82,7 +90,10 @@ void MessagePipe::on_setup_received(const SetupPacket &packet) {
     } else {
       AUSB_LOGE("unhandled SETUP IN packet: request_type=0x%02x request=0x%02x "
                 "value=0x%04x index=0x%04x length=0x%04x",
-                packet.request_type, packet.request, packet.value, packet.index,
+                packet.request_type,
+                packet.request,
+                packet.value,
+                packet.index,
                 packet.length);
       status_ = Status::Idle;
       manager_->stall_message_pipe(endpoint_num_);
@@ -115,7 +126,8 @@ void MessagePipe::on_in_xfer_complete() {
   }
 
   AUSB_LOGE("control EP%u received IN xfer complete in unexpected state %d",
-            endpoint_num_, static_cast<int>(status_));
+            endpoint_num_,
+            static_cast<int>(status_));
   fail_current_xfer(XferFailReason::SoftwareError);
 }
 
@@ -123,7 +135,8 @@ void MessagePipe::on_in_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
   // in Status::InSendPartial, Status::InSendFinal, or Status::OutAck.
   AUSB_LOGW("control IN failure: status=%d, reason%d",
-            static_cast<int>(status_), static_cast<int>(reason));
+            static_cast<int>(status_),
+            static_cast<int>(reason));
 
   invoke_xfer_failed(reason);
   manager_->stall_message_pipe(endpoint_num_);
@@ -148,7 +161,8 @@ void MessagePipe::on_out_xfer_complete(uint32_t bytes_read) {
     break;
   }
   AUSB_LOGE("control EP%u received OUT xfer complete in unexpected state %d",
-            endpoint_num_, static_cast<int>(status_));
+            endpoint_num_,
+            static_cast<int>(status_));
   fail_current_xfer(XferFailReason::SoftwareError);
 }
 
@@ -156,7 +170,8 @@ void MessagePipe::on_out_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
   // in Status::InStatus, or Status::OutXfer.
   AUSB_LOGW("control OUT failure: status=%d, reason%d",
-            static_cast<int>(status_), static_cast<int>(reason));
+            static_cast<int>(status_),
+            static_cast<int>(reason));
 
   invoke_xfer_failed(reason);
   manager_->stall_message_pipe(endpoint_num_);

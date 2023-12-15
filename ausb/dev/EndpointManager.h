@@ -35,7 +35,8 @@ public:
    * This accepts any arguments accepted by the underlying hardware device's
    * init() call, and forwards those to the hardware.
    */
-  template <typename... Args> std::error_code init(Args... args) {
+  template <typename... Args>
+  std::error_code init(Args... args) {
     return hw_->init(std::forward<Args>(args)...);
   }
 
@@ -60,9 +61,15 @@ public:
    */
   void handle_event(const DeviceEvent &event);
 
-  DeviceState state() const { return state_; }
-  uint8_t config_id() const { return config_id_; }
-  bool is_suspended() const { return dev_state_is_suspended(state_); }
+  DeviceState state() const {
+    return state_;
+  }
+  uint8_t config_id() const {
+    return config_id_;
+  }
+  bool is_suspended() const {
+    return dev_state_is_suspended(state_);
+  }
 
   /**
    * Set the device address.
@@ -102,7 +109,7 @@ public:
    * Returns false if an interface with this number is already defined.
    * Returns true on success.
    */
-  bool add_interface(uint8_t number, Interface* interface);
+  bool add_interface(uint8_t number, Interface *interface);
 
   Interface *get_interface(uint8_t number);
 
@@ -207,7 +214,9 @@ public:
    */
   void start_ctrl_out_ack(MessagePipe *pipe);
 
-  HWDevice *hw() { return hw_; }
+  HWDevice *hw() {
+    return hw_;
+  }
 
 private:
   EndpointManager(EndpointManager const &) = delete;
@@ -229,10 +238,10 @@ private:
   uint8_t config_id_ = 0;
   bool remote_wakeup_enabled_ = false;
 
-  HWDevice* hw_ = nullptr;
+  HWDevice *hw_ = nullptr;
   EndpointZero ep0_;
 
-  std::vector<Interface*> interfaces_;
+  std::vector<Interface *> interfaces_;
 };
 
 } // namespace ausb::device

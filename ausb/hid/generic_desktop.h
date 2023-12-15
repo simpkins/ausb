@@ -23,6 +23,7 @@ enum class GenericDesktopUsage : uint8_t {
   MultiAxisController = 0x08,
   // More values are defined in the HID Usage Tables spec...
 };
-template <> class is_usage_type<GenericDesktopUsage> : public std::true_type {};
+template <>
+class is_usage_type<GenericDesktopUsage> : public std::true_type {};
 
 } // namespace ausb::hid

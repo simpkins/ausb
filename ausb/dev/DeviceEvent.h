@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/ausb_types.h"
 #include "ausb/SetupPacket.h"
+#include "ausb/ausb_types.h"
 
 #include <type_traits>
 #include <variant>
@@ -10,13 +10,13 @@
 namespace ausb {
 
 enum NoEventReason {
-    // No event occurred before the timeout
-    Timeout,
-    // An event occurred before the timeout, but it only required some
-    // low-level logic to continue processing of an existing transfer
-    // and did not generate an event that needs to be visible to the higher
-    // level application logic.
-    HwProcessing,
+  // No event occurred before the timeout
+  Timeout,
+  // An event occurred before the timeout, but it only required some
+  // low-level logic to continue processing of an existing transfer
+  // and did not generate an event that needs to be visible to the higher
+  // level application logic.
+  HwProcessing,
 };
 
 struct NoEvent {
@@ -33,8 +33,7 @@ enum class UsbSpeed {
 };
 
 struct BusEnumDone {
-  explicit constexpr BusEnumDone(UsbSpeed spd)
-      : speed{spd} {}
+  explicit constexpr BusEnumDone(UsbSpeed spd) : speed{spd} {}
 
   UsbSpeed speed = UsbSpeed::Low;
 };
@@ -104,10 +103,16 @@ struct SetupPacketEvent {
   SetupPacket packet;
 };
 
-using DeviceEvent =
-    std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent, BusEnumDone,
-                 SetupPacketEvent, InXferCompleteEvent, InXferFailedEvent,
-                 OutXferCompleteEvent, OutXferFailedEvent>;
+using DeviceEvent = std::variant<NoEvent,
+                                 BusResetEvent,
+                                 SuspendEvent,
+                                 ResumeEvent,
+                                 BusEnumDone,
+                                 SetupPacketEvent,
+                                 InXferCompleteEvent,
+                                 InXferFailedEvent,
+                                 OutXferCompleteEvent,
+                                 OutXferFailedEvent>;
 static_assert(std::is_trivially_copyable_v<DeviceEvent>,
               "DeviceEvent must be trivially copyable");
 

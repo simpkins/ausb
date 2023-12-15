@@ -26,14 +26,16 @@ namespace ausb::hid {
 template <size_t TotalLength = 0>
 class ReportDescriptor {
 public:
-  constexpr ReportDescriptor() requires (TotalLength == 0) = default;
+  constexpr ReportDescriptor() requires(TotalLength == 0) = default;
 
   static constexpr size_t kTotalLength = TotalLength;
 
   constexpr const std::array<uint8_t, kTotalLength> &data() const {
     return data_;
   }
-  constexpr std::array<uint8_t, kTotalLength> &data() { return data_; }
+  constexpr std::array<uint8_t, kTotalLength> &data() {
+    return data_;
+  }
 
   /************
    * Main Items
@@ -92,8 +94,7 @@ public:
    *
    * end_collection() should be called later to end the collection.
    */
-  constexpr ReportDescriptor<TotalLength + 2>
-  collection(CollectionType type) {
+  constexpr ReportDescriptor<TotalLength + 2> collection(CollectionType type) {
     return collection(static_cast<uint8_t>(type));
   }
   constexpr ReportDescriptor<TotalLength + 2> collection(uint8_t type) {
@@ -114,8 +115,7 @@ public:
   /**
    * Return a new descriptor with a UsagePage item appended.
    */
-  constexpr ReportDescriptor<TotalLength + 2>
-  usage_page(hid::UsagePage value) {
+  constexpr ReportDescriptor<TotalLength + 2> usage_page(hid::UsagePage value) {
     return add_short_item_u8(ItemPrefix::UsagePage,
                              static_cast<uint8_t>(value));
   }
@@ -395,7 +395,8 @@ public:
   }
 
 private:
-  template <size_t X> friend class ReportDescriptor;
+  template <size_t X>
+  friend class ReportDescriptor;
 
   template <size_t OtherLength>
   constexpr ReportDescriptor(const ReportDescriptor<OtherLength> &other,

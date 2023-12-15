@@ -5,7 +5,9 @@
 
 namespace ausb::device {
 
-void StallCtrlIn::start(const SetupPacket &packet) { error(); }
+void StallCtrlIn::start(const SetupPacket &packet) {
+  error();
+}
 
 void StallCtrlIn::xfer_acked() {
   // We don't ever expect xfer_acked() to be called

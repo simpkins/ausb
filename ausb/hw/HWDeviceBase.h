@@ -31,8 +31,8 @@ public:
   virtual bool configure_ep0(uint8_t max_packet_size) = 0;
   [[nodiscard]] virtual XferStartResult
   start_write(uint8_t endpoint, const void *data, uint32_t size) = 0;
-  [[nodiscard]] virtual XferStartResult start_read(uint8_t endpoint, void *data,
-                                                   uint32_t size) = 0;
+  [[nodiscard]] virtual XferStartResult
+  start_read(uint8_t endpoint, void *data, uint32_t size) = 0;
 
   virtual void stall_control_endpoint(uint8_t endpoint_num) = 0;
 #endif

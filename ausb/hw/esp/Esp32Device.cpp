@@ -42,8 +42,12 @@ inline void clear_bits(volatile uint32_t &value, uint32_t bits) {
   value = (value & ~bits);
 }
 
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+template <class... Ts>
+struct overloaded : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
 
 // The definitions for some of the endpoint register fields appears to be
 // incorrect in soc/usb_reg.h.  It looks like some of the settings were
@@ -62,8 +66,7 @@ constexpr uint32_t Correct_USB_D_XFERSIZE1_M =
     (Correct_USB_D_XFERSIZE1_V << USB_D_XFERSIZE1_S);
 
 constexpr uint32_t Correct_USB_MPS1_V = 0x7FF;
-constexpr uint32_t Correct_USB_MPS1_M =
-    (Correct_USB_MPS1_V << USB_MPS1_S);
+constexpr uint32_t Correct_USB_MPS1_M = (Correct_USB_MPS1_V << USB_MPS1_S);
 constexpr uint32_t Correct_USB_PKTCNT1_V = 0x3FF;
 constexpr uint32_t Correct_USB_PKTCNT1_M =
     (Correct_USB_PKTCNT1_V << USB_PKTCNT1_S);
@@ -154,7 +157,8 @@ void Esp32Device::flush_all_transfers_on_reset() {
   disable_all_out_endpoints();
 }
 
-bool Esp32Device::open_in_endpoint(uint8_t endpoint_num, EndpointType type,
+bool Esp32Device::open_in_endpoint(uint8_t endpoint_num,
+                                   EndpointType type,
                                    uint16_t max_packet_size) {
   ESP_LOGV(LogTag, "open IN endpoint %d", endpoint_num);
 
@@ -170,7 +174,8 @@ bool Esp32Device::open_in_endpoint(uint8_t endpoint_num, EndpointType type,
     ESP_LOGE(LogTag,
              "cannot IN endpoint %d: hardware only supports endpoint numbers "
              "up to %d",
-             endpoint_num, USB_IN_EP_NUM - 1);
+             endpoint_num,
+             USB_IN_EP_NUM - 1);
     return false;
   }
   if (in_transfers_[endpoint_num].status != InEPStatus::Unconfigured) {
@@ -180,7 +185,8 @@ bool Esp32Device::open_in_endpoint(uint8_t endpoint_num, EndpointType type,
   if (max_packet_size == 0 || max_packet_size > Correct_USB_MPS1_V) {
     ESP_LOGE(LogTag,
              "error opening IN endpoint %d: invalid max packet size %" PRIu16,
-             endpoint_num, max_packet_size);
+             endpoint_num,
+             max_packet_size);
     return false;
   }
 
@@ -211,7 +217,8 @@ bool Esp32Device::open_in_endpoint(uint8_t endpoint_num, EndpointType type,
   return true;
 }
 
-bool Esp32Device::open_out_endpoint(uint8_t endpoint_num, EndpointType type,
+bool Esp32Device::open_out_endpoint(uint8_t endpoint_num,
+                                    EndpointType type,
                                     uint16_t max_packet_size) {
   ESP_LOGV(LogTag, "open OUT endpoint %d", endpoint_num);
 
@@ -220,18 +227,21 @@ bool Esp32Device::open_out_endpoint(uint8_t endpoint_num, EndpointType type,
     ESP_LOGE(LogTag,
              "cannot OUT endpoint %d: hardware only supports endpoint numbers "
              "up to %d",
-             endpoint_num, USB_OUT_EP_NUM - 1);
+             endpoint_num,
+             USB_OUT_EP_NUM - 1);
     return false;
   }
   if (out_transfers_[endpoint_num].status != OutEPStatus::Unconfigured) {
-    ESP_LOGE(LogTag, "error opening OUT endpoint %d: endpoint is already open",
+    ESP_LOGE(LogTag,
+             "error opening OUT endpoint %d: endpoint is already open",
              endpoint_num);
     return false;
   }
   if (max_packet_size == 0 || max_packet_size > Correct_USB_MPS1_V) {
     ESP_LOGE(LogTag,
              "error opening OUT endpoint %d: invalid max packet size %" PRIu16,
-             endpoint_num, max_packet_size);
+             endpoint_num,
+             max_packet_size);
     return false;
   }
 
@@ -295,8 +305,8 @@ void Esp32Device::disable_all_out_endpoints() {
   // to disabling any OUT endpoints.
   const bool goutnak_already_set = ((usb_->gintsts & USB_GOUTNAKEFF_M) != 0);
   if (!goutnak_already_set) {
-    ESP_LOGI(LogTag, "prepare to set SGOUTNAK flag: dctl=%#" PRIx32,
-             usb_->dctl);
+    ESP_LOGI(
+        LogTag, "prepare to set SGOUTNAK flag: dctl=%#" PRIx32, usb_->dctl);
     set_bits(usb_->dctl, USB_SGOUTNAK_M);
     ESP_LOGI(LogTag, "set SGOUTNAK flag: dctl=%#" PRIx32, usb_->dctl);
     ESP_LOGI(LogTag, "waiting for GOUTNAKEFF...");
@@ -443,8 +453,8 @@ DeviceEvent Esp32Device::process_in_ep_interrupt(uint8_t endpoint_num,
   }
 
   // It's sort of unexpected to reach here with no flags set.
-  ESP_LOGD(LogTag, "IN interrupt on endpoint %d, but no flags set",
-           endpoint_num);
+  ESP_LOGD(
+      LogTag, "IN interrupt on endpoint %d, but no flags set", endpoint_num);
   return NoEvent(NoEventReason::HwProcessing);
 }
 
@@ -538,7 +548,7 @@ DeviceEvent Esp32Device::process_out_xfer_complete(uint8_t endpoint_num) {
   return OutXferCompleteEvent(endpoint_num, xfer.bytes_read);
 }
 
-void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
+void Esp32Device::send_event_from_isr(const Esp32DeviceEvent &event) {
   BaseType_t higher_prio_task_woken;
   BaseType_t res =
       xQueueSendToBackFromISR(event_queue_, &event, &higher_prio_task_woken);
@@ -558,17 +568,19 @@ void Esp32Device::send_event_from_isr(const Esp32DeviceEvent& event) {
 }
 
 std::error_code Esp32Device::init(EspPhyType phy_type,
-                            std::optional<gpio_num_t> vbus_monitor) {
+                                  std::optional<gpio_num_t> vbus_monitor) {
   const auto esp_err = esp_init(phy_type, vbus_monitor);
   return make_esp_error(esp_err);
 }
 
 esp_err_t Esp32Device::esp_init(EspPhyType phy_type,
-                            std::optional<gpio_num_t> vbus_monitor) {
+                                std::optional<gpio_num_t> vbus_monitor) {
   ESP_LOGI(LogTag, "USB device init");
 
-  event_queue_ = xQueueCreateStatic(kMaxEventQueueSize, sizeof(DeviceEvent),
-                                    queue_buffer_.data(), &queue_storage_);
+  event_queue_ = xQueueCreateStatic(kMaxEventQueueSize,
+                                    sizeof(DeviceEvent),
+                                    queue_buffer_.data(),
+                                    &queue_storage_);
 
   const auto err = init_phy(phy_type, vbus_monitor);
   if (err != ESP_OK) {
@@ -626,24 +638,24 @@ esp_err_t Esp32Device::esp_init(EspPhyType phy_type,
   //
   // We set 208 bytes for the RX FIFO.  This should generally be reasonable if
   // the max packet size on any endpoint is 64 bytes.
-  ESP_RETURN_ON_ERROR(configure_rx_fifo(208), LogTag,
-                      "error configuring RX FIFO");
+  ESP_RETURN_ON_ERROR(
+      configure_rx_fifo(208), LogTag, "error configuring RX FIFO");
   // Set 64 bytes for the EP0 TX FIFO.  This is the max allowed max packet size
   // for endpoint 0, regardless of whether the bus is using low speed, full
   // speed, or high speed.
   //
-  ESP_RETURN_ON_ERROR(configure_tx_fifo0(64), LogTag,
-                      "error configuring TX FIFO 0");
+  ESP_RETURN_ON_ERROR(
+      configure_tx_fifo0(64), LogTag, "error configuring TX FIFO 0");
   // Configure reasonable defaults for the TX FIFOs.
   // Split the remaining FIFO space among them evenly.
-  ESP_RETURN_ON_ERROR(configure_tx_fifo1(188), LogTag,
-                      "error configuring TX FIFO 1");
-  ESP_RETURN_ON_ERROR(configure_tx_fifo2(188), LogTag,
-                      "error configuring TX FIFO 2");
-  ESP_RETURN_ON_ERROR(configure_tx_fifo3(188), LogTag,
-                      "error configuring TX FIFO 3");
-  ESP_RETURN_ON_ERROR(configure_tx_fifo4(188), LogTag,
-                      "error configuring TX FIFO 4");
+  ESP_RETURN_ON_ERROR(
+      configure_tx_fifo1(188), LogTag, "error configuring TX FIFO 1");
+  ESP_RETURN_ON_ERROR(
+      configure_tx_fifo2(188), LogTag, "error configuring TX FIFO 2");
+  ESP_RETURN_ON_ERROR(
+      configure_tx_fifo3(188), LogTag, "error configuring TX FIFO 3");
+  ESP_RETURN_ON_ERROR(
+      configure_tx_fifo4(188), LogTag, "error configuring TX FIFO 4");
 
   // Interrupt configuration
   usb_->gintmsk = 0;          // mask all interrupts
@@ -737,8 +749,10 @@ void Esp32Device::nak_all_in_endpoints() {
 }
 
 esp_err_t Esp32Device::enable_interrupts() {
-  return esp_intr_alloc(ETS_USB_INTR_SOURCE, ESP_INTR_FLAG_LOWMED,
-                        Esp32Device::static_interrupt_handler, this,
+  return esp_intr_alloc(ETS_USB_INTR_SOURCE,
+                        ESP_INTR_FLAG_LOWMED,
+                        Esp32Device::static_interrupt_handler,
+                        this,
                         &interrupt_handle_);
 }
 
@@ -760,8 +774,9 @@ esp_err_t Esp32Device::configure_rx_fifo(uint16_t rx_size) {
   // This method should only be called when EP0 is disabled and has not yet
   // been configured.  (e.g., after a bus reset)
   if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
-    ESP_LOGE(LogTag, "configure_rx_fifo() called after endpoint 0 has already "
-                     "been configured");
+    ESP_LOGE(LogTag,
+             "configure_rx_fifo() called after endpoint 0 has already "
+             "been configured");
     return ESP_ERR_INVALID_STATE;
   }
   if (rx_size >= kFifoMaxAddress) {
@@ -778,8 +793,9 @@ esp_err_t Esp32Device::configure_rx_fifo(uint16_t rx_size) {
   // This method should only be called when EP0 is disabled and has not yet
   // been configured.  (e.g., after a bus reset)
   if (usb_->daintmsk & (USB_OUTEPMSK0_M | USB_INEPMSK0_M)) {
-    ESP_LOGE(LogTag, "configure_tx_fifo0() called after endpoint 0 has already "
-                     "been configured");
+    ESP_LOGE(LogTag,
+             "configure_tx_fifo0() called after endpoint 0 has already "
+             "been configured");
     return ESP_ERR_INVALID_STATE;
   }
   if ((size & 0x3) || (start_offset & 0x3)) {
@@ -800,27 +816,32 @@ esp_err_t Esp32Device::configure_rx_fifo(uint16_t rx_size) {
   return ESP_OK;
 }
 
-esp_err_t Esp32Device::configure_tx_fifo1(uint16_t size, uint16_t endpoint_num,
+esp_err_t Esp32Device::configure_tx_fifo1(uint16_t size,
+                                          uint16_t endpoint_num,
                                           uint16_t start_offset) {
   return configure_tx_fifo(1, size, endpoint_num, start_offset);
 }
 
-esp_err_t Esp32Device::configure_tx_fifo2(uint16_t size, uint16_t endpoint_num,
+esp_err_t Esp32Device::configure_tx_fifo2(uint16_t size,
+                                          uint16_t endpoint_num,
                                           uint16_t start_offset) {
   return configure_tx_fifo(2, size, endpoint_num, start_offset);
 }
 
-esp_err_t Esp32Device::configure_tx_fifo3(uint16_t size, uint16_t endpoint_num,
+esp_err_t Esp32Device::configure_tx_fifo3(uint16_t size,
+                                          uint16_t endpoint_num,
                                           uint16_t start_offset) {
   return configure_tx_fifo(3, size, endpoint_num, start_offset);
 }
 
-esp_err_t Esp32Device::configure_tx_fifo4(uint16_t size, uint16_t endpoint_num,
+esp_err_t Esp32Device::configure_tx_fifo4(uint16_t size,
+                                          uint16_t endpoint_num,
                                           uint16_t start_offset) {
   return configure_tx_fifo(4, size, endpoint_num, start_offset);
 }
 
-esp_err_t Esp32Device::configure_tx_fifo(uint8_t fifo_num, uint16_t size,
+esp_err_t Esp32Device::configure_tx_fifo(uint8_t fifo_num,
+                                         uint16_t size,
                                          uint16_t endpoint_num,
                                          uint16_t start_offset) {
   if ((size & 0x3) || (start_offset & 0x3)) {
@@ -829,19 +850,19 @@ esp_err_t Esp32Device::configure_tx_fifo(uint8_t fifo_num, uint16_t size,
 
   uint16_t start_words;
   if (start_offset == 0) {
-      uint16_t prev_size;
-      uint16_t prev_start;
-      if (fifo_num == 1) {
-        prev_size = (usb_->gnptxfsiz >> USB_NPTXFDEP_S) & USB_NPTXFDEP_V;
-        prev_start = (usb_->gnptxfsiz >> USB_NPTXFSTADDR_S) & USB_NPTXFSTADDR_V;
-      } else {
-        const auto prev_cfg = usb_->dieptxf[fifo_num - 2];
-        prev_size = (prev_cfg >> USB_INEP1TXFDEP_S) & USB_INEP1TXFDEP_V;
-        prev_start = (prev_cfg >> USB_INEP1TXFSTADDR_S) & USB_INEP1TXFSTADDR_V;
-      }
-      start_words = prev_size + prev_start;
+    uint16_t prev_size;
+    uint16_t prev_start;
+    if (fifo_num == 1) {
+      prev_size = (usb_->gnptxfsiz >> USB_NPTXFDEP_S) & USB_NPTXFDEP_V;
+      prev_start = (usb_->gnptxfsiz >> USB_NPTXFSTADDR_S) & USB_NPTXFSTADDR_V;
+    } else {
+      const auto prev_cfg = usb_->dieptxf[fifo_num - 2];
+      prev_size = (prev_cfg >> USB_INEP1TXFDEP_S) & USB_INEP1TXFDEP_V;
+      prev_start = (prev_cfg >> USB_INEP1TXFSTADDR_S) & USB_INEP1TXFSTADDR_V;
+    }
+    start_words = prev_size + prev_start;
   } else {
-      start_words = start_offset >> 2;
+    start_words = start_offset >> 2;
   }
 
   uint16_t const size_words = size >> 2;
@@ -858,7 +879,7 @@ esp_err_t Esp32Device::configure_tx_fifo(uint8_t fifo_num, uint16_t size,
 }
 
 uint8_t Esp32Device::allocate_tx_fifo(uint8_t endpoint_num,
-                                         uint16_t max_packet_size) {
+                                      uint16_t max_packet_size) {
   // If this endpoint already has a FIFO assigned, use it.
   for (uint8_t idx = 0; idx < tx_fifo_allocations_.size(); ++idx) {
     const auto fifo_num = idx + 1;
@@ -869,7 +890,9 @@ uint8_t Esp32Device::allocate_tx_fifo(uint8_t endpoint_num,
                  "TX FIFO %d has been explicitly assigned to endpoint %d, but "
                  "is too small for the endpoint's max packet size (FIFO "
                  "size=%d, MPS=%d)",
-                 fifo_num, endpoint_num, get_tx_fifo_size(fifo_num),
+                 fifo_num,
+                 endpoint_num,
+                 get_tx_fifo_size(fifo_num),
                  max_packet_size);
         return 0;
       }
@@ -934,19 +957,19 @@ uint16_t Esp32Device::get_tx_fifo0_start() const {
 }
 
 uint16_t Esp32Device::get_tx_fifo1_start() const {
-    return get_tx_fifo_start(1);
+  return get_tx_fifo_start(1);
 }
 
 uint16_t Esp32Device::get_tx_fifo2_start() const {
-    return get_tx_fifo_start(2);
+  return get_tx_fifo_start(2);
 }
 
 uint16_t Esp32Device::get_tx_fifo3_start() const {
-    return get_tx_fifo_start(3);
+  return get_tx_fifo_start(3);
 }
 
 uint16_t Esp32Device::get_tx_fifo4_start() const {
-    return get_tx_fifo_start(4);
+  return get_tx_fifo_start(4);
 }
 
 uint16_t Esp32Device::get_tx_fifo_start(uint8_t fifo_num) const {
@@ -978,7 +1001,8 @@ bool Esp32Device::configure_ep0(uint8_t max_packet_size) {
   } else if (max_packet_size == 8) {
     mps_bits = EP0MaxPktSize::Mps8;
   } else {
-    ESP_LOGE(LogTag, "configure_ep0() called with invalid max packet size %d",
+    ESP_LOGE(LogTag,
+             "configure_ep0() called with invalid max packet size %d",
              max_packet_size);
     return false;
   }
@@ -1034,10 +1058,10 @@ void Esp32Device::stall_control_endpoint(uint8_t endpoint_num) {
   flush_tx_fifo(endpoint_num);
 }
 
-XferStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
-                                         uint32_t size) {
-  ESP_LOGD(LogTag, "start_write() %" PRIu32 " bytes on endpoint %d", size,
-           endpoint);
+XferStartResult
+Esp32Device::start_write(uint8_t endpoint, const void *data, uint32_t size) {
+  ESP_LOGD(
+      LogTag, "start_write() %" PRIu32 " bytes on endpoint %d", size, endpoint);
   const auto ep_status = in_transfers_[endpoint].status;
   if (ep_status != InEPStatus::Idle) {
     if (ep_status == InEPStatus::Busy) {
@@ -1048,8 +1072,10 @@ XferStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
           endpoint);
       return XferStartResult::Busy;
     }
-    ESP_LOGW(LogTag, "start_write called on endpoint %d in bad state %d",
-             endpoint, static_cast<int>(in_transfers_[endpoint].status));
+    ESP_LOGW(LogTag,
+             "start_write called on endpoint %d in bad state %d",
+             endpoint,
+             static_cast<int>(in_transfers_[endpoint].status));
     return XferStartResult::EndpointNotConfigured;
   }
 
@@ -1060,22 +1086,25 @@ XferStartResult Esp32Device::start_write(uint8_t endpoint, const void *data,
   return XferStartResult::Ok;
 }
 
-XferStartResult Esp32Device::start_read(uint8_t endpoint, void *data,
-                                        uint32_t size) {
-  ESP_LOGD(LogTag, "start_read() up to %" PRIu32 " bytes on endpoint %d", size,
+XferStartResult
+Esp32Device::start_read(uint8_t endpoint, void *data, uint32_t size) {
+  ESP_LOGD(LogTag,
+           "start_read() up to %" PRIu32 " bytes on endpoint %d",
+           size,
            endpoint);
   const auto ep_status = out_transfers_[endpoint].status;
   if (ep_status != OutEPStatus::Idle) {
     if (ep_status == OutEPStatus::Busy) {
-      ESP_LOGW(
-          LogTag,
-          "start_read called on endpoint %d while an existing transfer is "
-          "still in progress",
-          endpoint);
+      ESP_LOGW(LogTag,
+               "start_read called on endpoint %d while an existing transfer is "
+               "still in progress",
+               endpoint);
       return XferStartResult::Busy;
     }
-    ESP_LOGW(LogTag, "start_read called on endpoint %d in bad state %d",
-             endpoint, static_cast<int>(out_transfers_[endpoint].status));
+    ESP_LOGW(LogTag,
+             "start_read called on endpoint %d in bad state %d",
+             endpoint,
+             static_cast<int>(out_transfers_[endpoint].status));
     return XferStartResult::EndpointNotConfigured;
   }
 
@@ -1115,7 +1144,7 @@ XferStartResult Esp32Device::ack_ctrl_in() {
 void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
   usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
   uint32_t diepctl = in_ep->diepctl;
-  auto& xfer = in_transfers_[endpoint_num];
+  auto &xfer = in_transfers_[endpoint_num];
 
   assert(xfer.status == InEPStatus::Busy);
   // We should only invoke initiate_next_write_xfer() when the hardware
@@ -1166,7 +1195,9 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
   ESP_LOGV(LogTag,
            "start IN XFER on endpoint %d: %" PRIu16 " packets, %" PRIu32
            " bytes",
-           endpoint_num, pkts_to_send, bytes_to_send);
+           endpoint_num,
+           pkts_to_send,
+           bytes_to_send);
   xfer.cur_xfer_end += bytes_to_send;
 
   // Now start the HW transfer
@@ -1184,7 +1215,7 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
 void Esp32Device::initiate_next_read_xfer(uint8_t endpoint_num) {
   usb_out_endpoint_t *const out_ep = &(usb_->out_ep_reg[endpoint_num]);
   uint32_t doepctl = out_ep->doepctl;
-  auto& xfer = out_transfers_[endpoint_num];
+  auto &xfer = out_transfers_[endpoint_num];
 
   assert(xfer.status == OutEPStatus::Busy);
   // We should only invoke initiate_next_write_xfer() when the hardware
@@ -1237,16 +1268,20 @@ void Esp32Device::initiate_next_read_xfer(uint8_t endpoint_num) {
   ESP_LOGV(LogTag,
            "start OUT XFER on endpoint %d: up to %" PRIu32 " packets, %" PRIu32
            " bytes",
-           endpoint_num, pkts_to_read, bytes_to_read);
+           endpoint_num,
+           pkts_to_read,
+           bytes_to_read);
 
   // Now set doeptsiz and doepctl to ask the hardware to
   // start accepting OUT packets
-  set_bits(out_ep->doeptsiz, (pkts_to_read << USB_PKTCNT1_S) |
-                                 (bytes_to_read << USB_XFERSIZE1_S));
+  set_bits(out_ep->doeptsiz,
+           (pkts_to_read << USB_PKTCNT1_S) |
+               (bytes_to_read << USB_XFERSIZE1_S));
   set_bits(out_ep->doepctl, USB_EPENA0_M | USB_CNAK0_M);
 }
 
-uint16_t Esp32Device::get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl) {
+uint16_t Esp32Device::get_max_in_pkt_size(uint8_t endpoint_num,
+                                          uint32_t diepctl) {
   if (endpoint_num == 0) {
     const auto mps_bits =
         static_cast<EP0MaxPktSize>((diepctl >> USB_D_MPS0_S) & USB_D_MPS0_V);
@@ -1286,7 +1321,7 @@ uint8_t Esp32Device::get_ep0_max_packet_size(EP0MaxPktSize mps_bits) {
 void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
   usb_in_endpoint_t *const in_ep = &(usb_->in_ep_reg[endpoint_num]);
   uint32_t diepctl = in_ep->diepctl;
-  auto& xfer = in_transfers_[endpoint_num];
+  auto &xfer = in_transfers_[endpoint_num];
 
   assert((diepctl & USB_D_EPENA1_M) != 0);
   uint8_t const fifo_num = ((diepctl >> USB_D_TXFNUM1_S) & USB_D_TXFNUM1_V);
@@ -1294,8 +1329,10 @@ void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
   const auto tx_words_avail =
       (in_ep->dtxfsts & USB_D_INEPTXFSPCAVAIL0_M) >> USB_D_INEPTXFSPCAVAIL0_S;
   auto tx_space_avail = tx_words_avail * 4;
-  ESP_LOGV(LogTag, "write_to_fifo() on endpoint %d: tx_space_avail=%" PRIu32,
-           endpoint_num, tx_space_avail);
+  ESP_LOGV(LogTag,
+           "write_to_fifo() on endpoint %d: tx_space_avail=%" PRIu32,
+           endpoint_num,
+           tx_space_avail);
 
   while (true) {
     const auto bytes_left = xfer.cur_xfer_end - xfer.cur_fifo_ptr;
@@ -1316,32 +1353,37 @@ void Esp32Device::write_to_fifo(uint8_t endpoint_num) {
       return;
     }
 
-    copy_pkt_to_fifo(
-        fifo_num, static_cast<const uint8_t *>(xfer.data) + xfer.cur_fifo_ptr,
-        pkt_size);
+    copy_pkt_to_fifo(fifo_num,
+                     static_cast<const uint8_t *>(xfer.data) +
+                         xfer.cur_fifo_ptr,
+                     pkt_size);
     xfer.cur_fifo_ptr += pkt_size;
     tx_space_avail -= pkt_size;
-    ESP_LOGV(LogTag, "copied packet of size %" PRIu16 " to endpoint %d FIFO %d",
-             pkt_size, endpoint_num, fifo_num);
+    ESP_LOGV(LogTag,
+             "copied packet of size %" PRIu16 " to endpoint %d FIFO %d",
+             pkt_size,
+             endpoint_num,
+             fifo_num);
   }
 }
 
 /*
  * Copy a single packet into a TX FIFO.
  */
-void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num, const void *data,
+void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num,
+                                   const void *data,
                                    uint16_t pkt_size) {
   volatile uint32_t *tx_fifo = usb_->fifo[fifo_num];
   const uint16_t whole_words = pkt_size / 4;
   if ((reinterpret_cast<intptr_t>(data) % 4) == 0) {
-    const uint32_t* data32 = static_cast<const uint32_t*>(data);
+    const uint32_t *data32 = static_cast<const uint32_t *>(data);
     for (uint16_t n = 0; n < whole_words; ++n) {
       (*tx_fifo) = data32[n];
       ESP_LOGV(LogTag, "  aligned write word %" PRIu16, n);
     }
   } else {
     // Handle writing unaligned input data
-    const uint8_t* data8 = static_cast<const uint8_t*>(data);
+    const uint8_t *data8 = static_cast<const uint8_t *>(data);
     const uint16_t end = whole_words * 4;
     for (uint16_t n = 0; n < end; n += 4) {
       uint32_t word = data8[n] | (data8[n + 1] << 8) | (data8[n + 2] << 16) |
@@ -1354,9 +1396,11 @@ void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num, const void *data,
   // Handle any remaining data less than a full word
   const uint16_t idx = whole_words * 4;
   if (idx < pkt_size) {
-    ESP_LOGV(LogTag, "  write tail difference %" PRIu16 " - %" PRIu16, pkt_size,
+    ESP_LOGV(LogTag,
+             "  write tail difference %" PRIu16 " - %" PRIu16,
+             pkt_size,
              idx);
-    const uint8_t* tail = static_cast<const uint8_t*>(data) + idx;
+    const uint8_t *tail = static_cast<const uint8_t *>(data) + idx;
     uint32_t word = tail[0];
     if (idx + 1 < pkt_size) {
       word |= (tail[1] << 8);
@@ -1388,8 +1432,7 @@ void Esp32Device::stall_in_endpoint(uint8_t endpoint_num) {
 
     // Disable the endpoint and also set the STALL flag.
     // NAK is also still set.
-    set_bits(in_ep->diepctl,
-             USB_DI_SNAK1_M | USB_D_STALL1_M | USB_D_EPDIS1_M);
+    set_bits(in_ep->diepctl, USB_DI_SNAK1_M | USB_D_STALL1_M | USB_D_EPDIS1_M);
     while ((in_ep->diepint & USB_D_EPDISBLD0_M) == 0) {
       // Busy loop until we observe the USB_D_EPDISBLD0_M interrupt flag.
     }
@@ -1655,8 +1698,10 @@ DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
   case Pktsts::PktReceived: {
     uint8_t const endpoint_num = (ctrl_word & USB_CHNUM_M) >> USB_CHNUM_S;
     uint16_t const byte_count = (ctrl_word & USB_BCNT_M) >> USB_BCNT_S;
-    ESP_LOGD(LogTag, "USB RX: OUT packet received on EP%u; size=%u",
-             endpoint_num, byte_count);
+    ESP_LOGD(LogTag,
+             "USB RX: OUT packet received on EP%u; size=%u",
+             endpoint_num,
+             byte_count);
     receive_packet(endpoint_num, byte_count);
     return NoEvent(NoEventReason::HwProcessing);
   }
@@ -1703,8 +1748,10 @@ DeviceEvent Esp32Device::process_one_rx_entry(uint32_t ctrl_word) {
 
     setup_packet_.u32[0] = (*rx_fifo);
     setup_packet_.u32[1] = (*rx_fifo);
-    ESP_LOGD(LogTag, "USB RX: setup packet: 0x%08" PRIx32" 0x%08" PRIx32,
-             setup_packet_.u32[0], setup_packet_.u32[1]);
+    ESP_LOGD(LogTag,
+             "USB RX: setup packet: 0x%08" PRIx32 " 0x%08" PRIx32,
+             setup_packet_.u32[0],
+             setup_packet_.u32[1]);
     return NoEvent(NoEventReason::HwProcessing);
   }
   case Pktsts::GlobalOutNak:
@@ -1791,7 +1838,8 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
     ESP_LOGD(LogTag,
              "OUT data available endpoint %d (%" PRIu16 " bytes), but transfer "
              "is no longer in progress",
-             endpoint_num, packet_size);
+             endpoint_num,
+             packet_size);
     // Read and discard the data
     for (size_t n = 0; n < packet_size; n += sizeof(uint32_t)) {
       const uint32_t ignored = (*rx_fifo);
@@ -1808,9 +1856,11 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   const uint32_t full_words_to_copy =
       std::min(static_cast<uint32_t>(packet_size), capacity_left) /
       sizeof(uint32_t);
-  ESP_LOGV(LogTag, "EP%d out: copy %" PRIu32 " full words", endpoint_num,
+  ESP_LOGV(LogTag,
+           "EP%d out: copy %" PRIu32 " full words",
+           endpoint_num,
            full_words_to_copy);
-  auto* buf = static_cast<uint8_t*>(xfer.data) + xfer.bytes_read;
+  auto *buf = static_cast<uint8_t *>(xfer.data) + xfer.bytes_read;
   xfer.bytes_read += packet_size;
   for (uint32_t n = 0; n < full_words_to_copy; ++n) {
     const uint32_t word = (*rx_fifo);
@@ -1833,8 +1883,10 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   // We may have more capacity for a partial packet
   auto words_read = full_words_to_copy;
   if (capacity_left > 0) {
-    ESP_LOGV(LogTag, "EP%d out: copy partial word of %" PRIu32 " bytes",
-             endpoint_num, std::min(capacity_left, bytes_left));
+    ESP_LOGV(LogTag,
+             "EP%d out: copy partial word of %" PRIu32 " bytes",
+             endpoint_num,
+             std::min(capacity_left, bytes_left));
     assert(capacity_left < sizeof(uint32_t));
     const uint32_t word = (*rx_fifo);
     memcpy(buf, &word, std::min(capacity_left, bytes_left));

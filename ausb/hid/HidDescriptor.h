@@ -35,8 +35,12 @@ public:
             0     // wDescriptorLength (upper half)
         }} {}
 
-  constexpr const std::array<uint8_t, kSize> &data() const { return data_; }
-  constexpr std::array<uint8_t, kSize> &data() { return data_; }
+  constexpr const std::array<uint8_t, kSize> &data() const {
+    return data_;
+  }
+  constexpr std::array<uint8_t, kSize> &data() {
+    return data_;
+  }
 
   constexpr HidDescriptor &set_country(HidCountry country) {
     data_[4] = static_cast<uint8_t>(country);
@@ -50,7 +54,9 @@ public:
     data_[5] = idx;
     return *this;
   }
-  constexpr uint8_t num_descriptors() const { return data_[5]; }
+  constexpr uint8_t num_descriptors() const {
+    return data_[5];
+  }
 
   constexpr HidDescriptor &set_report_descriptor_type(DescriptorType type) {
     data_[6] = static_cast<uint8_t>(type);
@@ -60,7 +66,7 @@ public:
     return static_cast<DescriptorType>(data_[6]);
   }
 
-  constexpr HidDescriptor& set_report_descriptor_length(uint16_t length) {
+  constexpr HidDescriptor &set_report_descriptor_length(uint16_t length) {
     data_[7] = static_cast<uint8_t>(length & 0xff);
     data_[8] = static_cast<uint8_t>((length >> 8) & 0xff);
     return *this;
@@ -121,15 +127,21 @@ public:
     }
   }
 
-  constexpr bool valid() const { return data_ != nullptr; }
-  constexpr explicit operator bool() const { return data_ != nullptr; }
+  constexpr bool valid() const {
+    return data_ != nullptr;
+  }
+  constexpr explicit operator bool() const {
+    return data_ != nullptr;
+  }
 
-  constexpr asel::buf_view data() const { return asel::buf_view(data_, kSize); }
+  constexpr asel::buf_view data() const {
+    return asel::buf_view(data_, kSize);
+  }
 
   // TODO: accessor methods
 
 private:
-  const uint8_t* data_ = nullptr;
+  const uint8_t *data_ = nullptr;
 };
 
 } // namespace ausb

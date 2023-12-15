@@ -64,7 +64,7 @@ enum class CollectionType {
   // Values 0x80 - 0xff are for vendor-defined values
 };
 
-template<typename Self, typename T>
+template <typename Self, typename T>
 class MainTypeBase {
 public:
   using data_type = T;
@@ -72,35 +72,63 @@ public:
   constexpr MainTypeBase() noexcept = default;
   constexpr explicit MainTypeBase(T value) noexcept : value_(value) {}
 
-  constexpr Self &data() { return clear_bit(0); }
-  constexpr Self &constant() { return set_bit(0); }
+  constexpr Self &data() {
+    return clear_bit(0);
+  }
+  constexpr Self &constant() {
+    return set_bit(0);
+  }
 
-  constexpr Self &array() { return clear_bit(1); }
-  constexpr Self &variable() { return set_bit(1); }
+  constexpr Self &array() {
+    return clear_bit(1);
+  }
+  constexpr Self &variable() {
+    return set_bit(1);
+  }
 
-  constexpr Self &absolute() { return clear_bit(2); }
-  constexpr Self &relative() { return set_bit(2); }
+  constexpr Self &absolute() {
+    return clear_bit(2);
+  }
+  constexpr Self &relative() {
+    return set_bit(2);
+  }
 
-  constexpr Self &no_wrap() { return clear_bit(3); }
-  constexpr Self &wrap() { return set_bit(3); }
+  constexpr Self &no_wrap() {
+    return clear_bit(3);
+  }
+  constexpr Self &wrap() {
+    return set_bit(3);
+  }
 
-  constexpr Self &linear() { return clear_bit(4); }
-  constexpr Self &non_linear() { return set_bit(4); }
+  constexpr Self &linear() {
+    return clear_bit(4);
+  }
+  constexpr Self &non_linear() {
+    return set_bit(4);
+  }
 
-  constexpr Self &preferred_state() { return clear_bit(5); }
-  constexpr Self &no_preferred_state() { return set_bit(5); }
+  constexpr Self &preferred_state() {
+    return clear_bit(5);
+  }
+  constexpr Self &no_preferred_state() {
+    return set_bit(5);
+  }
 
-  constexpr Self &no_null_position() { return clear_bit(6); }
-  constexpr Self &null_position() { return set_bit(6); }
+  constexpr Self &no_null_position() {
+    return clear_bit(6);
+  }
+  constexpr Self &null_position() {
+    return set_bit(6);
+  }
 
 protected:
   constexpr Self &set_bit(uint8_t n) {
-      value_ |= (1 << n);
-      return *static_cast<Self *>(this);
+    value_ |= (1 << n);
+    return *static_cast<Self *>(this);
   }
   constexpr Self &clear_bit(uint8_t n) {
-      value_ &= ~(1 << n);
-      return *static_cast<Self *>(this);
+    value_ &= ~(1 << n);
+    return *static_cast<Self *>(this);
   }
 
   T value_ = 0;
@@ -110,63 +138,103 @@ class Input : public MainTypeBase<Input, uint8_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr uint8_t u8() const { return value_; }
+  constexpr uint8_t u8() const {
+    return value_;
+  }
 };
 
 class InputU16 : public MainTypeBase<InputU16, uint16_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr uint8_t u16() const { return value_; }
+  constexpr uint8_t u16() const {
+    return value_;
+  }
 
-  constexpr InputU16 &bit_field() { return clear_bit(8); }
-  constexpr InputU16 &buffered_bytes() { return set_bit(8); }
+  constexpr InputU16 &bit_field() {
+    return clear_bit(8);
+  }
+  constexpr InputU16 &buffered_bytes() {
+    return set_bit(8);
+  }
 };
 
 class Output : public MainTypeBase<Output, uint8_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr Output &non_volatile() { return clear_bit(7); }
-  constexpr Output &is_volatile() { return set_bit(7); }
+  constexpr Output &non_volatile() {
+    return clear_bit(7);
+  }
+  constexpr Output &is_volatile() {
+    return set_bit(7);
+  }
 
-  constexpr uint8_t u8() const { return value_; }
+  constexpr uint8_t u8() const {
+    return value_;
+  }
 };
 
 class OutputU16 : public MainTypeBase<OutputU16, uint16_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr uint8_t u16() const { return value_; }
+  constexpr uint8_t u16() const {
+    return value_;
+  }
 
-  constexpr OutputU16 &non_volatile() { return clear_bit(7); }
-  constexpr OutputU16 &is_volatile() { return set_bit(7); }
+  constexpr OutputU16 &non_volatile() {
+    return clear_bit(7);
+  }
+  constexpr OutputU16 &is_volatile() {
+    return set_bit(7);
+  }
 
-  constexpr OutputU16 &bit_field() { return clear_bit(8); }
-  constexpr OutputU16 &buffered_bytes() { return set_bit(8); }
+  constexpr OutputU16 &bit_field() {
+    return clear_bit(8);
+  }
+  constexpr OutputU16 &buffered_bytes() {
+    return set_bit(8);
+  }
 };
 
 class Feature : public MainTypeBase<Feature, uint8_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr Feature &non_volatile() { return clear_bit(7); }
-  constexpr Feature &is_volatile() { return set_bit(7); }
+  constexpr Feature &non_volatile() {
+    return clear_bit(7);
+  }
+  constexpr Feature &is_volatile() {
+    return set_bit(7);
+  }
 
-  constexpr uint8_t u8() const { return value_; }
+  constexpr uint8_t u8() const {
+    return value_;
+  }
 };
 
 class FeatureU16 : public MainTypeBase<FeatureU16, uint16_t> {
 public:
   using MainTypeBase::MainTypeBase;
 
-  constexpr uint8_t u16() const { return value_; }
+  constexpr uint8_t u16() const {
+    return value_;
+  }
 
-  constexpr FeatureU16 &non_volatile() { return clear_bit(7); }
-  constexpr FeatureU16 &is_volatile() { return set_bit(7); }
+  constexpr FeatureU16 &non_volatile() {
+    return clear_bit(7);
+  }
+  constexpr FeatureU16 &is_volatile() {
+    return set_bit(7);
+  }
 
-  constexpr FeatureU16 &bit_field() { return clear_bit(8); }
-  constexpr FeatureU16 &buffered_bytes() { return set_bit(8); }
+  constexpr FeatureU16 &bit_field() {
+    return clear_bit(8);
+  }
+  constexpr FeatureU16 &buffered_bytes() {
+    return set_bit(8);
+  }
 };
 
 } // namespace ausb::hid

@@ -4,8 +4,8 @@
 #include "ausb/dev/EndpointZero.h"
 
 #include <asel/buf_view.h>
-#include <optional>
 #include <cinttypes>
+#include <optional>
 
 namespace ausb::device {
 
@@ -62,7 +62,7 @@ private:
   CtrlInXfer *process_get_descriptor(MessagePipe *pipe,
                                      const SetupPacket &packet);
 
-  StdControlHandlerCallback* const callback_ = nullptr;
+  StdControlHandlerCallback *const callback_ = nullptr;
   uint8_t ep0_max_packet_size_ = 64;
 };
 

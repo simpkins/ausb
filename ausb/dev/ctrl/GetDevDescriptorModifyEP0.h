@@ -22,7 +22,8 @@ namespace device {
  */
 class GetDevDescriptorModifyEP0 : public CtrlInXfer {
 public:
-  GetDevDescriptorModifyEP0(MessagePipe *ep, asel::buf_view buf,
+  GetDevDescriptorModifyEP0(MessagePipe *ep,
+                            asel::buf_view buf,
                             uint8_t correct_ep0_mps);
 
   void start(const SetupPacket &packet) override;

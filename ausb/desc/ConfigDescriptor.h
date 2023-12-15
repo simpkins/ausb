@@ -1,9 +1,9 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/desc/types.h"
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/InterfaceDescriptor.h"
+#include "ausb/desc/types.h"
 
 #include <asel/buf_view.h>
 
@@ -55,7 +55,9 @@ public:
   constexpr const std::array<uint8_t, kTotalLength> &data() const {
     return data_;
   }
-  constexpr std::array<uint8_t, TotalLength> &data() { return data_; }
+  constexpr std::array<uint8_t, TotalLength> &data() {
+    return data_;
+  }
 
   /**
    * Return a new ConfigDescriptor object created by appending
@@ -142,7 +144,9 @@ public:
     return (static_cast<uint16_t>(data_[3]) << 8) |
            static_cast<uint16_t>(data_[2]);
   }
-  constexpr uint8_t num_interfaces() const { return data_[4]; }
+  constexpr uint8_t num_interfaces() const {
+    return data_[4];
+  }
 
   /**
    * Explicitly set the bNumInterfaces field.
@@ -160,7 +164,9 @@ public:
     data_[5] = v;
     return *this;
   }
-  constexpr uint8_t value() const { return data_[5]; }
+  constexpr uint8_t value() const {
+    return data_[5];
+  }
 
   // string index is the index of a string descriptor describing this
   // configuration.
@@ -168,9 +174,11 @@ public:
     data_[6] = index;
     return *this;
   }
-  constexpr uint8_t string_index() const { return data_[6]; }
+  constexpr uint8_t string_index() const {
+    return data_[6];
+  }
 
-  constexpr ConfigDescriptor& set_attributes(ConfigAttr attr) {
+  constexpr ConfigDescriptor &set_attributes(ConfigAttr attr) {
     data_[7] = static_cast<uint8_t>(attr);
     return *this;
   }
@@ -181,9 +189,11 @@ public:
     data_[7] = attr;
     return *this;
   }
-  constexpr uint8_t attributes_u8() const { return data_[7]; }
+  constexpr uint8_t attributes_u8() const {
+    return data_[7];
+  }
 
-  constexpr ConfigDescriptor& set_max_power(UsbMilliamps ma) {
+  constexpr ConfigDescriptor &set_max_power(UsbMilliamps ma) {
     data_[8] = ma.value_in_2ma();
   }
   constexpr UsbMilliamps max_power() const {
@@ -193,10 +203,13 @@ public:
     data_[8] = power_2ma;
     return *this;
   }
-  constexpr uint8_t max_power_2ma() const { return data_[8]; }
+  constexpr uint8_t max_power_2ma() const {
+    return data_[8];
+  }
 
 private:
-  template <size_t X, uint8_t Y> friend class ConfigDescriptor;
+  template <size_t X, uint8_t Y>
+  friend class ConfigDescriptor;
 
   // Constructor for appending an InterfaceDescriptor to an existing
   // ConfigDescriptor
@@ -312,32 +325,48 @@ public:
     }
   }
 
-  constexpr bool valid() const { return data_ != nullptr; }
-  constexpr explicit operator bool() const { return data_ != nullptr; }
+  constexpr bool valid() const {
+    return data_ != nullptr;
+  }
+  constexpr explicit operator bool() const {
+    return data_ != nullptr;
+  }
 
-  constexpr asel::buf_view data() const { return asel::buf_view(data_, size_); }
+  constexpr asel::buf_view data() const {
+    return asel::buf_view(data_, size_);
+  }
 
   constexpr uint16_t total_length() const {
     return (static_cast<uint16_t>(data_[2]) << 8) |
            static_cast<uint16_t>(data_[3]);
   }
 
-  constexpr uint8_t num_interfaces() const { return data_[4]; }
-  constexpr uint8_t value() const { return data_[5]; }
-  constexpr uint8_t string_index() const { return data_[6]; }
+  constexpr uint8_t num_interfaces() const {
+    return data_[4];
+  }
+  constexpr uint8_t value() const {
+    return data_[5];
+  }
+  constexpr uint8_t string_index() const {
+    return data_[6];
+  }
 
   constexpr ConfigAttr attributes() const {
     return static_cast<ConfigAttr>(data_[6]);
   }
-  constexpr uint8_t attributes_u8() const { return data_[7]; }
+  constexpr uint8_t attributes_u8() const {
+    return data_[7];
+  }
 
   constexpr UsbMilliamps max_power() const {
     return UsbMilliamps(data_[8] * 2);
   }
-  constexpr uint8_t max_power_2ma() const { return data_[8]; }
+  constexpr uint8_t max_power_2ma() const {
+    return data_[8];
+  }
 
 private:
-  const uint8_t* data_ = nullptr;
+  const uint8_t *data_ = nullptr;
   size_t size_ = 0;
 };
 

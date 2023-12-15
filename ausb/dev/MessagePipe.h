@@ -66,15 +66,24 @@ public:
     InStatus,
   };
 
-  constexpr MessagePipe(EndpointManager *mgr, uint8_t endpoint_num,
+  constexpr MessagePipe(EndpointManager *mgr,
+                        uint8_t endpoint_num,
                         ControlMessageHandler *handler) noexcept
       : manager_(mgr), handler_(handler), endpoint_num_(endpoint_num) {}
   ~MessagePipe();
 
-  EndpointManager* manager() const { return manager_; }
-  ControlMessageHandler *handler() const { return handler_; }
-  uint8_t endpoint_num() const { return endpoint_num_; }
-  Status status() const { return status_; }
+  EndpointManager *manager() const {
+    return manager_;
+  }
+  ControlMessageHandler *handler() const {
+    return handler_;
+  }
+  uint8_t endpoint_num() const {
+    return endpoint_num_;
+  }
+  Status status() const {
+    return status_;
+  }
 
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by EndpointManager to inform us of events
@@ -178,8 +187,10 @@ private:
   // need to store this state.
   class SetupRetransmitDetector {
   public:
-    bool is_retransmit(const SetupPacket &packet) { return false; }
-    void on_setup(const SetupPacket& packet) {}
+    bool is_retransmit(const SetupPacket &packet) {
+      return false;
+    }
+    void on_setup(const SetupPacket &packet) {}
   };
 
   MessagePipe(MessagePipe const &) = delete;
@@ -213,7 +224,7 @@ private:
     ~CurrentXfer() {}
 
     // Idle is set when status_ is Idle
-    void* idle;
+    void *idle;
     // Out is set during OUT transfers (status is Out*)
     CtrlOutXfer *out;
     // Out is set during IN transfers (status in In*)

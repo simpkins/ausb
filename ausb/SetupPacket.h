@@ -61,7 +61,7 @@ struct SetupPacket {
     return static_cast<StdRequestType>(request);
   }
 
-  bool operator==(const SetupPacket&) const = default;
+  bool operator==(const SetupPacket &) const = default;
 
   static constexpr uint8_t make_request_type(Direction dir,
                                              SetupRecipient recipient,

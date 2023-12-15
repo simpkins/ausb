@@ -6,7 +6,7 @@
 namespace ausb {
 
 std::error_code MockDevice::init() {
-    return {};
+  return {};
 }
 
 void MockDevice::reset() {
@@ -35,8 +35,8 @@ bool MockDevice::configure_ep0(uint8_t max_packet_size) {
   return true;
 }
 
-XferStartResult MockDevice::start_write(uint8_t endpoint, const void *data,
-                                        uint32_t size) {
+XferStartResult
+MockDevice::start_write(uint8_t endpoint, const void *data, uint32_t size) {
   if (endpoint >= in_eps.size()) {
     return XferStartResult::EndpointNotConfigured;
   }
@@ -52,8 +52,8 @@ XferStartResult MockDevice::start_write(uint8_t endpoint, const void *data,
   return XferStartResult::Ok;
 }
 
-XferStartResult MockDevice::start_read(uint8_t endpoint, void *data,
-                                       uint32_t size) {
+XferStartResult
+MockDevice::start_read(uint8_t endpoint, void *data, uint32_t size) {
   if (endpoint >= out_eps.size()) {
     return XferStartResult::EndpointNotConfigured;
   }

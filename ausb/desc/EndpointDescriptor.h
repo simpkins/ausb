@@ -35,8 +35,12 @@ public:
             0,                                 // bInterval
         }} {}
 
-  constexpr const std::array<uint8_t, kSize> &data() const { return data_; }
-  constexpr std::array<uint8_t, kSize> &data() { return data_; }
+  constexpr const std::array<uint8_t, kSize> &data() const {
+    return data_;
+  }
+  constexpr std::array<uint8_t, kSize> &data() {
+    return data_;
+  }
 
   constexpr EndpointDescriptor &set_address(Direction dir,
                                             uint8_t endpoint_num) {
@@ -47,8 +51,12 @@ public:
     data_[2] = address;
     return *this;
   }
-  constexpr uint8_t address() const { return data_[2]; }
-  constexpr uint8_t endpoint_number() const { return data_[2] & 0x7f; }
+  constexpr uint8_t address() const {
+    return data_[2];
+  }
+  constexpr uint8_t endpoint_number() const {
+    return data_[2] & 0x7f;
+  }
   constexpr Direction direction() const {
     return static_cast<Direction>(data_[2] & 0x80);
   }
@@ -56,7 +64,8 @@ public:
   // Note that set_type() also sets the sync and usage fields of the
   // attributes, since these are tied to the type.
   constexpr EndpointDescriptor &
-  set_type(EndpointType type, EndpointSync sync = EndpointSync::NoSync,
+  set_type(EndpointType type,
+           EndpointSync sync = EndpointSync::NoSync,
            EndpointUsage usage = EndpointUsage::Data) {
     return set_attributes(type, sync, usage);
   }
@@ -75,9 +84,11 @@ public:
   constexpr EndpointUsage usage() const {
     return static_cast<EndpointUsage>(data_[3] & 0x30);
   }
-  constexpr uint8_t attributes() const { return data_[3]; }
+  constexpr uint8_t attributes() const {
+    return data_[3];
+  }
 
-  constexpr EndpointDescriptor& set_max_packet_size(uint16_t mps) {
+  constexpr EndpointDescriptor &set_max_packet_size(uint16_t mps) {
     data_[4] = static_cast<uint8_t>(mps & 0xff);
     data_[5] = static_cast<uint8_t>((mps >> 8) & 0xff);
     return *this;
@@ -91,7 +102,9 @@ public:
     data_[6] = interval;
     return *this;
   }
-  constexpr uint8_t interval() const { return data_[6]; }
+  constexpr uint8_t interval() const {
+    return data_[6];
+  }
 
 private:
   std::array<uint8_t, kSize> data_ = {};
@@ -126,13 +139,23 @@ public:
     }
   }
 
-  constexpr bool valid() const { return data_ != nullptr; }
-  constexpr explicit operator bool() const { return data_ != nullptr; }
+  constexpr bool valid() const {
+    return data_ != nullptr;
+  }
+  constexpr explicit operator bool() const {
+    return data_ != nullptr;
+  }
 
-  constexpr asel::buf_view data() const { return asel::buf_view(data_, kSize); }
+  constexpr asel::buf_view data() const {
+    return asel::buf_view(data_, kSize);
+  }
 
-  constexpr uint8_t address() const { return data_[2]; }
-  constexpr uint8_t endpoint_number() const { return data_[2] & 0x7f; }
+  constexpr uint8_t address() const {
+    return data_[2];
+  }
+  constexpr uint8_t endpoint_number() const {
+    return data_[2] & 0x7f;
+  }
   constexpr Direction direction() const {
     return static_cast<Direction>(data_[2] & 0x80);
   }
@@ -146,16 +169,20 @@ public:
   constexpr EndpointUsage usage() const {
     return static_cast<EndpointUsage>(data_[3] & 0x30);
   }
-  constexpr uint8_t attributes() const { return data_[3]; }
+  constexpr uint8_t attributes() const {
+    return data_[3];
+  }
 
   constexpr uint16_t max_packet_size() const {
     return (static_cast<uint16_t>(data_[5]) << 8) |
            static_cast<uint16_t>(data_[4]);
   }
-  constexpr uint8_t interval() const { return data_[6]; }
+  constexpr uint8_t interval() const {
+    return data_[6];
+  }
 
 private:
-  const uint8_t* data_ = nullptr;
+  const uint8_t *data_ = nullptr;
 };
 
 } // namespace ausb

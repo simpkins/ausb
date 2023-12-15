@@ -8,9 +8,13 @@
 using namespace std::chrono_literals;
 
 namespace {
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-}
+template <class... Ts>
+struct overloaded : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
+} // namespace
 
 namespace ausb::device {
 
@@ -25,32 +29,31 @@ void EndpointManager::loop() {
 }
 
 void EndpointManager::handle_event(const DeviceEvent &event) {
-  std::visit(
-      overloaded{
-          [this](const NoEvent &) {
-            // Nothing to do.  NoEvent can be returned if
-            // wait_for_event() was called with a timeout and the timeout
-            // expired before an event occured.
-          },
-          [this](const BusResetEvent &) { on_bus_reset(); },
-          [this](const SuspendEvent &) { on_suspend(); },
-          [this](const ResumeEvent &) { on_resume(); },
-          [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
-          [this](const SetupPacketEvent &ev) { on_setup_received(ev); },
-          [this](const InXferCompleteEvent &ev) {
-            on_in_xfer_complete(ev.endpoint_num);
-          },
-          [this](const InXferFailedEvent &ev) {
-            on_in_xfer_failed(ev.endpoint_num, ev.reason);
-          },
-          [this](const OutXferCompleteEvent &ev) {
-            on_out_xfer_complete(ev.endpoint_num, ev.bytes_read);
-          },
-          [this](const OutXferFailedEvent &ev) {
-            on_out_xfer_failed(ev.endpoint_num, ev.reason);
-          },
-      },
-      event);
+  std::visit(overloaded{
+                 [this](const NoEvent &) {
+                   // Nothing to do.  NoEvent can be returned if
+                   // wait_for_event() was called with a timeout and the timeout
+                   // expired before an event occured.
+                 },
+                 [this](const BusResetEvent &) { on_bus_reset(); },
+                 [this](const SuspendEvent &) { on_suspend(); },
+                 [this](const ResumeEvent &) { on_resume(); },
+                 [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
+                 [this](const SetupPacketEvent &ev) { on_setup_received(ev); },
+                 [this](const InXferCompleteEvent &ev) {
+                   on_in_xfer_complete(ev.endpoint_num);
+                 },
+                 [this](const InXferFailedEvent &ev) {
+                   on_in_xfer_failed(ev.endpoint_num, ev.reason);
+                 },
+                 [this](const OutXferCompleteEvent &ev) {
+                   on_out_xfer_complete(ev.endpoint_num, ev.bytes_read);
+                 },
+                 [this](const OutXferFailedEvent &ev) {
+                   on_out_xfer_failed(ev.endpoint_num, ev.reason);
+                 },
+             },
+             event);
 }
 
 void EndpointManager::reset() {
@@ -219,7 +222,8 @@ void EndpointManager::unconfigure() {
 }
 
 void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
-                                          const void *data, uint32_t size) {
+                                          const void *data,
+                                          uint32_t size) {
   auto status = hw_->start_write(pipe->endpoint_num(), data, size);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting control IN transfer: %d",
@@ -229,7 +233,7 @@ void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
   }
 }
 
-void EndpointManager::start_ctrl_in_ack(MessagePipe* pipe) {
+void EndpointManager::start_ctrl_in_ack(MessagePipe *pipe) {
   auto status = hw_->start_read(pipe->endpoint_num(), nullptr, 0);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting receipt of control IN ACK: %d",
@@ -239,7 +243,8 @@ void EndpointManager::start_ctrl_in_ack(MessagePipe* pipe) {
   }
 }
 
-void EndpointManager::start_ctrl_out_read(MessagePipe *pipe, void *data,
+void EndpointManager::start_ctrl_out_read(MessagePipe *pipe,
+                                          void *data,
                                           uint32_t size) {
   auto status = hw_->start_read(pipe->endpoint_num(), data, size);
   if (status != XferStartResult::Ok) {

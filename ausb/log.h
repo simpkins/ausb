@@ -34,8 +34,8 @@ namespace ausb {
     }                                                                          \
   } while (0)
 
-__attribute__((__format__ (__printf__, 1, 2)))
-void log_message(const char* fmt, ...);
+__attribute__((__format__(__printf__, 1, 2))) void log_message(const char *fmt,
+                                                               ...);
 
 #endif
 

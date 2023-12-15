@@ -19,7 +19,7 @@ void GetStaticDescriptor::xfer_acked() {
   AUSB_LOGV("GET_DESCRIPTOR xfer acked");
 }
 
-void GetStaticDescriptor::xfer_failed(XferFailReason reason)  {
+void GetStaticDescriptor::xfer_failed(XferFailReason reason) {
   AUSB_LOGW("GET_DESCRIPTOR xfer failed: reason=%d", static_cast<int>(reason));
 }
 

@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/Interface.h"
 #include "ausb/ausb_types.h"
+#include "ausb/dev/Interface.h"
 
 namespace ausb::hid {
 

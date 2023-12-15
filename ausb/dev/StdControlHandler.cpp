@@ -26,15 +26,19 @@ void StdControlHandler::on_enum_done(uint8_t max_packet_size) {
   ep0_max_packet_size_ = max_packet_size;
 }
 
-void StdControlHandler::on_suspend() { callback_->on_suspend(); }
+void StdControlHandler::on_suspend() {
+  callback_->on_suspend();
+}
 
-void StdControlHandler::on_resume() { callback_->on_resume(); }
+void StdControlHandler::on_resume() {
+  callback_->on_resume();
+}
 
 CtrlOutXfer *StdControlHandler::process_out_setup(MessagePipe *pipe,
                                                   const SetupPacket &packet) {
   if (packet.request_type ==
-      SetupPacket::make_request_type(Direction::Out, SetupRecipient::Device,
-                                     SetupReqType::Standard)) {
+      SetupPacket::make_request_type(
+          Direction::Out, SetupRecipient::Device, SetupReqType::Standard)) {
     return process_std_device_out(pipe, packet);
   }
 
@@ -63,8 +67,8 @@ CtrlOutXfer *StdControlHandler::process_out_setup(MessagePipe *pipe,
 CtrlInXfer *StdControlHandler::process_in_setup(MessagePipe *pipe,
                                                 const SetupPacket &packet) {
   if (packet.request_type ==
-      SetupPacket::make_request_type(Direction::In, SetupRecipient::Device,
-                                     SetupReqType::Standard)) {
+      SetupPacket::make_request_type(
+          Direction::In, SetupRecipient::Device, SetupReqType::Standard)) {
     return process_std_device_in(pipe, packet);
   }
 
@@ -178,12 +182,13 @@ StdControlHandler::process_get_descriptor(MessagePipe *pipe,
     // DeviceQualifier descriptor.
     AUSB_LOGI(
         "GET_DESCRIPTOR request for non-existent descriptor 0x%04x 0x%04x",
-        packet.value, packet.index);
+        packet.value,
+        packet.index);
     return pipe->new_in_handler<StallCtrlIn>(pipe);
   }
 
-  AUSB_LOGI("GET_DESCRIPTOR request for 0x%04x 0x%04x", packet.value,
-            packet.index);
+  AUSB_LOGI(
+      "GET_DESCRIPTOR request for 0x%04x 0x%04x", packet.value, packet.index);
 
   // We do special handling for the device descriptor.
   // If the max endpoint size in the device descriptor does not match the
@@ -202,14 +207,15 @@ StdControlHandler::process_get_descriptor(MessagePipe *pipe,
     if (dd.valid() && dd.ep0_max_pkt_size() != ep0_max_packet_size_) {
       AUSB_LOGV("GET_DESCRIPTOR explicitly modifying device descriptor to set "
                 "correct EP0 max packet size (%u -> %u)",
-                (*desc)[7], ep0_max_packet_size_);
+                (*desc)[7],
+                ep0_max_packet_size_);
       return pipe->new_in_handler<GetDevDescriptorModifyEP0>(
           pipe, *desc, ep0_max_packet_size_);
     }
   }
 
-  return pipe->new_in_handler<GetStaticDescriptor>(pipe, desc->data(),
-                                                   desc->size());
+  return pipe->new_in_handler<GetStaticDescriptor>(
+      pipe, desc->data(), desc->size());
 }
 
 } // namespace ausb::device

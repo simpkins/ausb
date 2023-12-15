@@ -62,6 +62,7 @@ enum class UsagePage : uint8_t {
  * This traits type allows ReportDescriptor::usage() to accept only valid usage
  * enum types.
  */
-template <typename T> class is_usage_type : public std::false_type {};
+template <typename T>
+class is_usage_type : public std::false_type {};
 
 } // namespace ausb::hid

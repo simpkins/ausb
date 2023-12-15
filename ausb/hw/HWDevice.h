@@ -18,16 +18,22 @@
 
 #if AUSB_CONFIG_HW_MULTI
 
-namespace ausb { using HWDevice = HWDeviceBase; }
+namespace ausb {
+using HWDevice = HWDeviceBase;
+}
 
 #else // !AUSB_CONFIG_HW_MULTI
 
 #if AUSB_CONFIG_HW_ESP
 #include "ausb/hw/esp/Esp32Device.h"
-namespace ausb { using HWDevice = Esp32Device; }
+namespace ausb {
+using HWDevice = Esp32Device;
+}
 #elif AUSB_CONFIG_HW_MOCK
 #include "ausb/hw/mock/MockDevice.h"
-namespace ausb { using HWDevice = MockDevice; }
+namespace ausb {
+using HWDevice = MockDevice;
+}
 #else
 #error "No hardware implementation selected!"
 #endif

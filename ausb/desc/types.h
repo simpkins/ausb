@@ -89,7 +89,7 @@ inline constexpr ConfigAttr operator&(ConfigAttr a1, ConfigAttr a2) {
                                  static_cast<uint8_t>(a2));
 }
 
-inline constexpr ConfigAttr& operator|=(ConfigAttr& a1, ConfigAttr a2) {
+inline constexpr ConfigAttr &operator|=(ConfigAttr &a1, ConfigAttr a2) {
   a1 = a1 | a2;
   return a1;
 }
@@ -115,7 +115,9 @@ public:
     }
   }
 
-  constexpr uint8_t value_in_2ma() const { return value_; }
+  constexpr uint8_t value_in_2ma() const {
+    return value_;
+  }
   constexpr uint16_t milliamps() const {
     return static_cast<uint16_t>(value_) * 2;
   }

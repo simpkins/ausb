@@ -98,7 +98,9 @@ public:
    * This can be used if the caller wishes to manually fetch events, rather
    * than using the wait_for_event() function.
    */
-  QueueHandle_t event_queue() const { return event_queue_; }
+  QueueHandle_t event_queue() const {
+    return event_queue_;
+  }
 
   /**
    * set_address() will be called after the status phase of a SET_ADDRESS
@@ -126,9 +128,11 @@ public:
    */
   bool configure_ep0(uint8_t max_packet_size);
 
-  [[nodiscard]] bool open_in_endpoint(uint8_t endpoint_num, EndpointType type,
+  [[nodiscard]] bool open_in_endpoint(uint8_t endpoint_num,
+                                      EndpointType type,
                                       uint16_t max_packet_size);
-  [[nodiscard]] bool open_out_endpoint(uint8_t endpoint_num, EndpointType type,
+  [[nodiscard]] bool open_out_endpoint(uint8_t endpoint_num,
+                                       EndpointType type,
                                        uint16_t max_packet_size);
 
   /**
@@ -162,8 +166,8 @@ public:
   void flush_tx_fifo(uint8_t endpoint_num);
 
   struct TxPacket {
-      const void* data = nullptr;
-      uint16_t size = 0;
+    const void *data = nullptr;
+    uint16_t size = 0;
   };
 
   /**
@@ -199,8 +203,8 @@ public:
    * - InXferFailedEvent
    * - BusResetEvent (aborts all transfers on all endpoints)
    */
-  [[nodiscard]] XferStartResult start_write(uint8_t endpoint, const void *data,
-                                            uint32_t size);
+  [[nodiscard]] XferStartResult
+  start_write(uint8_t endpoint, const void *data, uint32_t size);
 
   /**
    * Start reading data from an OUT endpoint.
@@ -242,8 +246,8 @@ public:
    * - OutXferFailedEvent
    * - BusResetEvent (aborts all transfers on all endpoints)
    */
-  [[nodiscard]] XferStartResult start_read(uint8_t endpoint, void *data,
-                                           uint32_t size);
+  [[nodiscard]] XferStartResult
+  start_read(uint8_t endpoint, void *data, uint32_t size);
 
   /**
    * Acknowledge a control IN transfer on endpoint 0, by ACK'ing the next
@@ -393,8 +397,12 @@ private:
   };
 
   struct InTransfer {
-    void unconfigure() { reset(InEPStatus::Unconfigured); }
-    void reset() { reset(InEPStatus::Idle); }
+    void unconfigure() {
+      reset(InEPStatus::Unconfigured);
+    }
+    void reset() {
+      reset(InEPStatus::Idle);
+    }
     void reset(InEPStatus st) {
       status = st;
       data = nullptr;
@@ -402,7 +410,7 @@ private:
       cur_xfer_end = 0;
       cur_fifo_ptr = 0;
     }
-    void start(const void* buf, uint16_t len) {
+    void start(const void *buf, uint16_t len) {
       assert(status == InEPStatus::Idle);
       status = InEPStatus::Busy;
       data = buf;
@@ -426,15 +434,19 @@ private:
   };
 
   struct OutTransfer {
-    void unconfigure() { reset(OutEPStatus::Unconfigured); }
-    void reset() { reset(OutEPStatus::Idle); }
+    void unconfigure() {
+      reset(OutEPStatus::Unconfigured);
+    }
+    void reset() {
+      reset(OutEPStatus::Idle);
+    }
     void reset(OutEPStatus st) {
       status = st;
       data = nullptr;
       capacity = 0;
       bytes_read = 0;
     }
-    void start(void* buf, uint16_t len) {
+    void start(void *buf, uint16_t len) {
       assert(status == OutEPStatus::Idle);
       status = OutEPStatus::Busy;
       data = buf;
@@ -470,19 +482,24 @@ private:
   };
   struct RxFifoNonEmpty {};
 
-  using Esp32DeviceEvent =
-      std::variant<NoEvent, BusResetEvent, SuspendEvent, ResumeEvent,
-                   BusEnumDone, SetupPacketEvent, InEndpointInterrupt,
-                   OutEndpointInterrupt, RxFifoNonEmpty>;
+  using Esp32DeviceEvent = std::variant<NoEvent,
+                                        BusResetEvent,
+                                        SuspendEvent,
+                                        ResumeEvent,
+                                        BusEnumDone,
+                                        SetupPacketEvent,
+                                        InEndpointInterrupt,
+                                        OutEndpointInterrupt,
+                                        RxFifoNonEmpty>;
   static_assert(std::is_trivially_copyable_v<Esp32DeviceEvent>,
                 "Esp32DeviceEvent must be trivially copyable");
 
   Esp32Device(Esp32Device const &) = delete;
   Esp32Device &operator=(Esp32Device const &) = delete;
 
-  void send_event_from_isr(const Esp32DeviceEvent& event);
+  void send_event_from_isr(const Esp32DeviceEvent &event);
   template <typename T, typename... Args>
-  void send_event_from_isr(Args &&... args) {
+  void send_event_from_isr(Args &&...args) {
     Esp32DeviceEvent e{std::in_place_type<T>, std::forward<Args>(args)...};
     send_event_from_isr(e);
   }
@@ -534,7 +551,8 @@ private:
   void disable_all_in_endpoints();
   void flush_rx_fifo_helper();
 
-  [[nodiscard]] esp_err_t configure_tx_fifo(uint8_t fifo_num, uint16_t size,
+  [[nodiscard]] esp_err_t configure_tx_fifo(uint8_t fifo_num,
+                                            uint16_t size,
                                             uint16_t endpoint_num,
                                             uint16_t start_offset);
   [[nodiscard]] uint8_t allocate_tx_fifo(uint8_t endpoint_num,
