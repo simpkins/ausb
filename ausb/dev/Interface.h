@@ -3,15 +3,7 @@
 
 #include "ausb/dev/ControlMessageHandler.h"
 
-namespace ausb {
-class SetupPacket;
-}
-
 namespace ausb::device {
-
-class ControlEndpoint;
-class CtrlInXfer;
-class CtrlOutXfer;
 
 /**
  * A pure virtual class defining the API that any device interface must
