@@ -49,19 +49,29 @@ CtrlOutXfer *StdControlHandler::process_out_setup(MessagePipe *pipe,
     if (!intf) {
       AUSB_LOGW("received SETUP OUT request for unknown interface %d",
                 interface_num);
-      return nullptr;
+      return pipe->new_out_handler<StallCtrlOut>(pipe);
     }
 
     return intf->process_out_setup(pipe, packet);
   } else if (recip == SetupRecipient::Endpoint) {
     const uint8_t endpoint_addr = packet.index & 0xff;
     // TODO
-    (void)endpoint_addr;
+    AUSB_LOGE("TODO: process SETUP OUT request for endpoint 0x%02x",
+              endpoint_addr);
+    return nullptr;
   }
 
-  // TODO:
-  AUSB_LOGE("TODO: process OUT setup packet");
-  return nullptr;
+  // We do not process any other request types:
+  // - We only handle standard requests to the device
+  // - We do not handle any vendor-specific requests.
+  //   Users that wish to support vendor-specific requests should provide their
+  //   own EndpointZeroCallback.  Their callback can delegate any requests they
+  //   do not explicitly handle to a StdControlHandler in order to still get
+  //   normal processing of all standard requests.
+  AUSB_LOGW("rejecting unsupported SETUP OUT request 0x%02x 0x%02x",
+            packet.request_type,
+            packet.request);
+  return pipe->new_out_handler<StallCtrlOut>(pipe);
 }
 
 CtrlInXfer *StdControlHandler::process_in_setup(MessagePipe *pipe,
@@ -79,19 +89,23 @@ CtrlInXfer *StdControlHandler::process_in_setup(MessagePipe *pipe,
     if (!intf) {
       AUSB_LOGW("received SETUP IN request for unknown interface %d",
                 interface_num);
-      return nullptr;
+      return pipe->new_in_handler<StallCtrlIn>(pipe);
     }
 
     return intf->process_in_setup(pipe, packet);
   } else if (recip == SetupRecipient::Endpoint) {
     const uint8_t endpoint_addr = packet.index & 0xff;
     // TODO
-    (void)endpoint_addr;
+    AUSB_LOGE("TODO: process SETUP IN request for endpoint 0x%02x",
+              endpoint_addr);
+    return nullptr;
   }
 
-  // TODO:
-  AUSB_LOGE("TODO: handle control IN transfer");
-  return nullptr;
+  // As above for OUT requests, we do not support any other request types
+  AUSB_LOGW("rejecting unsupported SETUP IN request 0x%02x 0x%02x",
+            packet.request_type,
+            packet.request);
+  return pipe->new_in_handler<StallCtrlIn>(pipe);
 }
 
 CtrlOutXfer *
