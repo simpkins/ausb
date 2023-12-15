@@ -111,9 +111,15 @@ StdControlHandler::process_std_device_out(MessagePipe *pipe,
     AUSB_LOGE("TODO: handle CLEAR_FEATURE");
     return nullptr;
   } else if (std_req_type == StdRequestType::SetDescriptor) {
-    // TODO
-    AUSB_LOGE("TODO: handle SET_DESCRIPTOR");
-    return nullptr;
+    // We don't support SET_DESCRIPTOR calls targeted at the device.
+    // Some device classes might support this for some interfaces (e.g., HID
+    // devices might allow SET_DESCRIPTOR calls for HID descriptors), but we
+    // don't allow changing any of the device-level descriptors.
+    AUSB_LOGW("rejecting SET_DESCRIPTOR call for device-level descriptor "
+              "0x%04x 0x%04x",
+              packet.value,
+              packet.index);
+    return pipe->new_out_handler<StallCtrlOut>(pipe);
   }
 
   AUSB_LOGW("unknown standard device OUT request %u",
