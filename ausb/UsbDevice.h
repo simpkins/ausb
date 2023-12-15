@@ -55,6 +55,7 @@ public:
   }
 
   HwDeviceType *hw() { return &hw_; }
+  EndpointManager *manager() { return &ep_manager_; }
 
   /*
    * Get the device's descriptor map.
