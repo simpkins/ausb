@@ -23,7 +23,7 @@ namespace ausb::device {
  * class needs to provide.
  */
 template<typename UsbDeviceImpl>
-class UsbDevice : private ControlHandlerCallback {
+class UsbDevice : private StdControlHandlerCallback {
 public:
   constexpr UsbDevice() noexcept = default;
 

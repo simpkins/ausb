@@ -9,7 +9,7 @@
 
 namespace ausb::device {
 
-class ControlHandlerCallback {
+class StdControlHandlerCallback {
 public:
   virtual bool set_configuration(uint8_t config_id) = 0;
   virtual std::optional<asel::buf_view> get_descriptor(uint16_t value,
@@ -35,7 +35,7 @@ public:
    * (Typically the descriptor map is a global singleton, like the
    * StdControlHandler itself.)
    */
-  constexpr explicit StdControlHandler(ControlHandlerCallback *callback)
+  constexpr explicit StdControlHandler(StdControlHandlerCallback *callback)
       : callback_(callback) {}
 
   void on_reset(XferFailReason reason) override;
@@ -62,7 +62,7 @@ private:
   CtrlInXfer *process_get_descriptor(MessagePipe *pipe,
                                      const SetupPacket &packet);
 
-  ControlHandlerCallback* const callback_ = nullptr;
+  StdControlHandlerCallback* const callback_ = nullptr;
   uint8_t ep0_max_packet_size_ = 64;
 };
 

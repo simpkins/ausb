@@ -32,7 +32,7 @@ constexpr auto make_descriptor_map() {
 
 const auto kDescriptors = make_descriptor_map();
 
-class TestControlHandlerCallback : public ControlHandlerCallback {
+class TestControlHandlerCallback : public StdControlHandlerCallback {
 public:
   bool set_configuration(uint8_t config_id) override {
       return false;
