@@ -14,11 +14,15 @@ public:
   virtual bool set_configuration(uint8_t config_id) = 0;
   virtual std::optional<asel::buf_view> get_descriptor(uint16_t value,
                                                        uint16_t index) = 0;
+
+  virtual void on_reset(XferFailReason reason) {}
+  virtual void on_suspend() {}
+  virtual void on_resume() {}
 };
 
 /**
- * StdControlHandler processes most standard SETUP requests on the device's
- * default control endpoint.
+ * StdControlHandler processes SETUP requests on the device's default control
+ * pipe.
  */
 class StdControlHandler : public EndpointZeroCallback {
 public:
@@ -34,7 +38,10 @@ public:
   constexpr explicit StdControlHandler(ControlHandlerCallback *callback)
       : callback_(callback) {}
 
+  void on_reset(XferFailReason reason) override;
   void on_enum_done(uint8_t max_packet_size) override;
+  void on_suspend() override;
+  void on_resume() override;
 
   CtrlOutXfer *process_out_setup(MessagePipe *pipe,
                                  const SetupPacket &packet) override;

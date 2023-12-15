@@ -17,9 +17,17 @@
 
 namespace ausb::device {
 
+void StdControlHandler::on_reset(XferFailReason reason) {
+  callback_->on_reset(reason);
+}
+
 void StdControlHandler::on_enum_done(uint8_t max_packet_size) {
   ep0_max_packet_size_ = max_packet_size;
 }
+
+void StdControlHandler::on_suspend() { callback_->on_suspend(); }
+
+void StdControlHandler::on_resume() { callback_->on_resume(); }
 
 CtrlOutXfer *StdControlHandler::process_out_setup(MessagePipe *pipe,
                                                   const SetupPacket &packet) {
@@ -192,7 +200,7 @@ StdControlHandler::process_get_descriptor(MessagePipe *pipe,
       packet.index == 0) {
     DeviceDescriptorParser dd(*desc);
     if (dd.valid() && dd.ep0_max_pkt_size() != ep0_max_packet_size_) {
-      AUSB_LOGI("GET_DESCRIPTOR explicitly modifying device descriptor to set "
+      AUSB_LOGV("GET_DESCRIPTOR explicitly modifying device descriptor to set "
                 "correct EP0 max packet size (%u -> %u)",
                 (*desc)[7], ep0_max_packet_size_);
       return pipe->new_in_handler<GetDevDescriptorModifyEP0>(
