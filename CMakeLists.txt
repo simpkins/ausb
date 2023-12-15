@@ -14,6 +14,7 @@ set(
     "ausb/dev/StdControlHandler.cpp"
     "ausb/dev/ctrl/AckEmptyCtrlOut.cpp"
     "ausb/dev/ctrl/GetDevDescriptorModifyEP0.cpp"
+    "ausb/dev/ctrl/GetConfiguration.cpp"
     "ausb/dev/ctrl/GetStaticDescriptor.cpp"
     "ausb/dev/ctrl/SetAddress.cpp"
     "ausb/dev/ctrl/StallCtrlIn.cpp"

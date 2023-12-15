@@ -69,7 +69,10 @@ XferStartResult MockDevice::start_read(uint8_t endpoint, void *data,
   return XferStartResult::Ok;
 }
 
-void MockDevice::stall_control_endpoint(uint8_t endpoint_num) {}
+void MockDevice::stall_control_endpoint(uint8_t endpoint_num) {
+  in_eps[endpoint_num].stalled = true;
+  out_eps[endpoint_num].stalled = true;
+}
 
 DeviceEvent MockDevice::complete_in_xfer(uint8_t endpoint_num) {
   if (!ASEL_EXPECT_TRUE(in_eps[endpoint_num].xfer_in_progress)) {
@@ -94,6 +97,14 @@ DeviceEvent MockDevice::complete_out_xfer(uint8_t endpoint_num,
   out_eps[endpoint_num].cur_xfer_size = 0;
   out_eps[endpoint_num].xfer_in_progress = false;
   return OutXferCompleteEvent(endpoint_num, bytes_read_reply);
+}
+
+void MockDevice::reset_in_stall(uint8_t endpoint_num) {
+  in_eps[endpoint_num].stalled = false;
+}
+
+void MockDevice::reset_out_stall(uint8_t endpoint_num) {
+  out_eps[endpoint_num].stalled = false;
 }
 
 } // namespace ausb

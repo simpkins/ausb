@@ -1,11 +1,13 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/StdControlHandler.h"
 
+#include "ausb/UsbDevice.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/dev/EndpointZero.h"
 #include "ausb/hw/mock/MockDevice.h"
+#include "test/lib/mock_utils.h"
 
 #include <asel/test/checks.h>
 #include <asel/test/TestCase.h>
@@ -148,6 +150,92 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_full_speed) {
       1,    // num configurations
   }};
   ASEL_EXPECT_EQ(reply, expected_reply);
+}
+
+namespace {
+class MultiConfigDevice {
+public:
+  static constexpr uint8_t kConfigA = 0x12;
+  static constexpr uint8_t kConfigB = 0x34;
+
+  bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
+    if (config_id == 0) {
+      ep_mgr.unconfigure();
+      return true;
+    }
+    if (config_id == kConfigA || config_id == kConfigB) {
+      ep_mgr.set_configured(config_id);
+      return true;
+    }
+    return false;
+  }
+
+  static constexpr auto make_descriptor_map() {
+    DeviceDescriptor dev;
+    dev.set_vendor(0x1234);
+    dev.set_product(0x5678);
+    dev.set_device_release(1, 0);
+
+    auto cfg_a = ConfigDescriptor(kConfigA, ConfigAttr::RemoteWakeup);
+    auto cfg_b = ConfigDescriptor(kConfigB);
+
+    return StaticDescriptorMap()
+        .add_device_descriptor(dev)
+        .add_language_ids(Language::English_US)
+        .add_string(dev.mfgr_str_idx(), "ACME, Inc.", Language::English_US)
+        .add_string(dev.product_str_idx(), "AUSB Test Device",
+                    Language::English_US)
+        .add_string(dev.serial_str_idx(), "00:00:00::00:00:00",
+                    Language::English_US)
+        .add_config_descriptor(cfg_a)
+        .add_config_descriptor(cfg_b);
+  }
+};
+
+constinit UsbDevice<MultiConfigDevice, MockDevice> multi_cfg_usb;
+} // namespace
+
+ASEL_TEST(StdControlHandler, multi_config) {
+  attach_mock_device(multi_cfg_usb);
+
+  // Make a GET_CONFIGURATION request
+  uint8_t cfg_id;
+  mock_send_get_config(multi_cfg_usb, cfg_id);
+  // The currently selected config should be ConfigA
+  ASEL_EXPECT_EQ(cfg_id, 0x12);
+
+  // Send a SET_CONFIGURATION request to switch to ConfigB
+  mock_send_set_config(multi_cfg_usb, 0x34);
+
+  // GET_CONFIGURATION should now return ConfigB's ID
+  mock_send_get_config(multi_cfg_usb, cfg_id);
+  ASEL_EXPECT_EQ(cfg_id, 0x34);
+
+  // Send a SET_CONFIGURATION request to unconfigure the device
+  mock_send_set_config(multi_cfg_usb, 0);
+
+  mock_send_get_config(multi_cfg_usb, cfg_id);
+  ASEL_EXPECT_EQ(cfg_id, 0);
+
+  // A SET_CONFIGURATION request with a bogus ID should fail and result in a
+  // STALL
+  SetupPacket set_cfg_78;
+  set_cfg_78.request_type = 0x00; // Out, Device, Standard request
+  set_cfg_78.request = 9;         // SET_CONFIGURATION
+  set_cfg_78.value = 0x78;        // Config ID
+  set_cfg_78.index = 0;
+  set_cfg_78.length = 0;
+  multi_cfg_usb.handle_event(SetupPacketEvent{0, set_cfg_78});
+  auto *const hw = multi_cfg_usb.hw();
+  ASEL_EXPECT_TRUE(hw->in_eps[0].stalled);
+  ASEL_EXPECT_TRUE(hw->out_eps[0].stalled);
+  hw->reset_in_stall(0);
+  hw->reset_out_stall(0);
+
+  // GET_CONFIGURATION should still return config ID 0 now
+  cfg_id = 0xff;
+  mock_send_get_config(multi_cfg_usb, cfg_id);
+  ASEL_EXPECT_EQ(cfg_id, 0);
 }
 
 } // namespace ausb::test

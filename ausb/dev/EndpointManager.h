@@ -61,6 +61,7 @@ public:
   void handle_event(const DeviceEvent &event);
 
   DeviceState state() const { return state_; }
+  uint8_t config_id() const { return config_id_; }
   bool is_suspended() const { return dev_state_is_suspended(state_); }
 
   /**
@@ -112,7 +113,7 @@ public:
    * request on endpoint 0, after all of the endpoints for this configuration
    * have been opened.
    */
-  void set_configured();
+  void set_configured(uint8_t config_id);
 
   /**
    * Unconfigure the device.

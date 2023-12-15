@@ -205,14 +205,16 @@ Interface *EndpointManager::get_interface(uint8_t number) {
   return interfaces_[number];
 }
 
-void EndpointManager::set_configured() {
+void EndpointManager::set_configured(uint8_t config_id) {
   state_ = DeviceState::Configured;
+  config_id_ = config_id;
 }
 
 void EndpointManager::unconfigure() {
   // TODO: close all open endpoints
   AUSB_LOGE("TODO: EndpointManager::unconfigure()");
 
+  config_id_ = 0;
   state_ = DeviceState::Address;
 }
 

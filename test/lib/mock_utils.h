@@ -28,4 +28,19 @@ bool attach_mock_device(device::UsbDevice<UsbDeviceImpl, HwDeviceType> &usb) {
   return attach_mock_device(usb.hw(), usb.manager());
 }
 
+bool mock_send_set_config(MockDevice *hw, device::EndpointManager *ep_manager,
+                          uint8_t config_id);
+template <typename UsbDeviceImpl, typename HwDeviceType>
+bool mock_send_set_config(device::UsbDevice<UsbDeviceImpl, HwDeviceType> &usb,
+                          uint8_t config_id) {
+  return mock_send_set_config(usb.hw(), usb.manager(), config_id);
+}
+bool mock_send_get_config(MockDevice *hw, device::EndpointManager *ep_manager,
+                          uint8_t &config_id);
+template <typename UsbDeviceImpl, typename HwDeviceType>
+bool mock_send_get_config(device::UsbDevice<UsbDeviceImpl, HwDeviceType> &usb,
+                          uint8_t &config_id) {
+  return mock_send_get_config(usb.hw(), usb.manager(), config_id);
+}
+
 } // namespace ausb::test

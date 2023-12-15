@@ -26,11 +26,13 @@ public:
     void reset() {
       max_packet_size = 0;
       xfer_in_progress = false;
+      stalled = false;
       cur_xfer_data = nullptr;
       cur_xfer_size = 0;
     }
     uint16_t max_packet_size = 0;
     bool xfer_in_progress = false;
+    bool stalled = false;
     BufType cur_xfer_data = nullptr;
     size_t cur_xfer_size = 0;
   };
@@ -68,6 +70,8 @@ public:
 
   DeviceEvent complete_in_xfer(uint8_t endpoint_num);
   DeviceEvent complete_out_xfer(uint8_t endpoint_num, int32_t bytes_read = -1);
+  void reset_in_stall(uint8_t endpoint_num);
+  void reset_out_stall(uint8_t endpoint_num);
 
 private:
   MockDevice(MockDevice const &) = delete;

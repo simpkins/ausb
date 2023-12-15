@@ -43,7 +43,7 @@ public:
     }
 #endif
 
-    ep_mgr.set_configured();
+    ep_mgr.set_configured(config_id);
     return true;
   }
 
@@ -90,7 +90,7 @@ private:
   hid::KeyboardInterface kbd_intf_;
 };
 
-static constinit UsbDevice<TestDevice, MockDevice> usb;
+constinit UsbDevice<TestDevice, MockDevice> usb;
 
 } // namespace
 

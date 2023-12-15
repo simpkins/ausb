@@ -39,7 +39,7 @@ public:
       AUSB_LOGE("error opening IN endpoint 1");
     }
 
-    ep_mgr.set_configured();
+    ep_mgr.set_configured(config_id);
     return true;
   }
 

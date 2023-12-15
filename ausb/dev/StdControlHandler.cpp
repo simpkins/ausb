@@ -8,6 +8,7 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/dev/Interface.h"
 #include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
+#include "ausb/dev/ctrl/GetConfiguration.h"
 #include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
 #include "ausb/dev/ctrl/GetStaticDescriptor.h"
 #include "ausb/dev/ctrl/SetAddress.h"
@@ -127,9 +128,8 @@ StdControlHandler::process_std_device_in(MessagePipe *pipe,
     AUSB_LOGE("TODO: handle GET_STATUS");
     return nullptr;
   } else if (std_req_type == StdRequestType::GetConfiguration) {
-    // TODO: return current config ID
-    AUSB_LOGE("TODO: handle GET_CONFIGURATION");
-    return nullptr;
+    return pipe->new_in_handler<GetConfiguration>(pipe,
+                                                  pipe->manager()->config_id());
   }
 
   AUSB_LOGW("unknown standard device IN request %u",
@@ -153,9 +153,9 @@ StdControlHandler::process_set_configuration(MessagePipe *pipe,
     return pipe->new_out_handler<StallCtrlOut>(pipe);
   }
 
-  // TODO: should we perhaps handle the config_id == 0 case specially, rather
-  // than requiring callback_ to handle this on their own?
-  if (!callback_->set_configuration(config_id)) {
+  if (config_id == 0) {
+    pipe->manager()->unconfigure();
+  } else if (!callback_->set_configuration(config_id)) {
     AUSB_LOGW("rejected SET_CONFIGURATION %u request", config_id);
     // Note: if a SetConfiguration request is received with an invalid config
     // ID, the USB spec specifies that we should reply with an error, but does

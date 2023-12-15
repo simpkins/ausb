@@ -98,18 +98,66 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
   ep_manager->handle_event(hw->complete_out_xfer(0));
 
   // Call SET_CONFIGURATION with the first config ID
-  SetupPacket set_cfg_desc;
-  set_cfg_desc.request_type = 0x00; // Out, Device, Standard request
-  set_cfg_desc.request = 9;         // SET_CONFIGURATION
-  set_cfg_desc.value = cfg_id;      // Config ID
-  set_cfg_desc.index = 0;
-  set_cfg_desc.length = 0;
-  ep_manager->handle_event(SetupPacketEvent{0, set_cfg_desc});
+  if (!mock_send_set_config(hw, ep_manager, cfg_id)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool mock_send_set_config(MockDevice *hw, device::EndpointManager *ep_manager,
+                          uint8_t config_id) {
+  SetupPacket set_cfg;
+  set_cfg.request_type = 0x00; // Out, Device, Standard request
+  set_cfg.request = 9;         // SET_CONFIGURATION
+  set_cfg.value = config_id;   // Config ID
+  set_cfg.index = 0;
+  set_cfg.length = 0;
+  ep_manager->handle_event(SetupPacketEvent{0, set_cfg});
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
   }
-  ASEL_EXPECT_EQ(0, hw->in_eps[0].cur_xfer_size);
+  if (!ASEL_EXPECT_EQ(0, hw->in_eps[0].cur_xfer_size)) {
+    return false;
+  }
   ep_manager->handle_event(hw->complete_in_xfer(0));
+
+  return true;
+}
+
+bool mock_send_get_config(MockDevice *hw, device::EndpointManager *ep_manager,
+                          uint8_t &config_id) {
+  config_id = 0xff;
+
+  SetupPacket set_cfg;
+  set_cfg.request_type = 0x80; // IN, Device, Standard request
+  set_cfg.request = 8;         // SET_CONFIGURATION
+  set_cfg.value = 0;   // Config ID
+  set_cfg.index = 0;
+  set_cfg.length = 1;
+  ep_manager->handle_event(SetupPacketEvent{0, set_cfg});
+
+  if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
+    return false;
+  }
+  buf_view reply(
+      static_cast<const uint8_t *>(hw->in_eps[0].cur_xfer_data),
+      hw->in_eps[0].cur_xfer_size);
+  if (!ASEL_EXPECT_EQ(reply.size(), 1)) {
+    return false;
+  }
+
+  config_id = reply[0];
+
+  // Ack the transfer
+  ep_manager->handle_event(hw->complete_in_xfer(0));
+  if (!ASEL_EXPECT_TRUE(hw->out_eps[0].xfer_in_progress)) {
+    return false;
+  }
+  if (!ASEL_EXPECT_EQ(0, hw->out_eps[0].cur_xfer_size)) {
+    return false;
+  }
+  ep_manager->handle_event(hw->complete_out_xfer(0));
 
   return true;
 }
