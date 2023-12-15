@@ -11,4 +11,12 @@ menu "AUSB"
         help
             Support a mock USB hardware device.  This is mainly useful for
             building unit tests.
+    config AUSB_ESP_EVENT_QUEUE
+        int "The size of the USB event queue."
+        default 32
+        help
+            The size of the queue holding events for the USB task to process.
+            This is primarily used to signal the USB task of interrupt events.
+            If this queue fills up and new interrupt events cannot be added
+            the device will enter an error state.
 endmenu #AUSB

@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/ausb_config.h"
 #include "ausb/ausb_types.h"
 #include "ausb/dev/DeviceEvent.h"
 #include "ausb/hw/HWDeviceBase.h"
@@ -563,7 +564,7 @@ private:
   static uint16_t get_max_in_pkt_size(uint8_t endpoint_num, uint32_t diepctl);
   static uint8_t get_ep0_max_packet_size(EP0MaxPktSize mps_bits);
 
-  static constexpr uint8_t kMaxEventQueueSize = 32;
+  static constexpr uint8_t kMaxEventQueueSize = CONFIG_AUSB_ESP_EVENT_QUEUE;
 
   StaticQueue_t queue_storage_ = {};
   QueueHandle_t event_queue_ = nullptr;
