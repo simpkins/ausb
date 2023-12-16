@@ -6,6 +6,10 @@
 #include "ausb/dev/EndpointZero.h"
 #include "ausb/hw/HWDevice.h"
 
+#include <asel/array.h>
+#include <asel/range.h>
+#include <asel/utility.h>
+
 #include <cstdint>
 #include <memory>
 #include <system_error>
@@ -14,6 +18,8 @@
 namespace ausb::device {
 
 class Interface;
+class InEndpoint;
+class OutEndpoint;
 
 /**
  * This class is the main gateway between the hardware-independent code and the
@@ -37,7 +43,7 @@ public:
    */
   template <typename... Args>
   std::error_code init(Args... args) {
-    return hw_->init(std::forward<Args>(args)...);
+    return hw_->init(asel::forward<Args>(args)...);
   }
 
   /**
@@ -96,31 +102,30 @@ public:
   void set_address_early(uint8_t address);
 
   /**
-   * add_interface() should be called to define a new interface.
-   *
-   * This should generally be called as part of processing a SET_CONFIGURATION
-   * request.  set_configured() should be called after all interfaces and
-   * endpoints have been configured.
-   *
-   * The EndpointManager stores a pointer to the Interface object, but does not
-   * own it.  The caller is responsible for ensuring that the Interface object
-   * lives for at least as long as the device is configured.
-   *
-   * Returns false if an interface with this number is already defined.
-   * Returns true on success.
-   */
-  bool add_interface(uint8_t number, Interface *interface);
-
-  Interface *get_interface(uint8_t number);
-
-  /**
    * Mark the device as configured.
    *
    * This should generally only be invoked when handling a SET_CONFIGURATION
    * request on endpoint 0, after all of the endpoints for this configuration
    * have been opened.
+   *
+   * The endpoints for this configuration should typically be opened before
+   * calling set_configured().
    */
-  void set_configured(uint8_t config_id);
+  void set_configured(uint8_t config_id,
+                      asel::range<Interface *const> interfaces);
+  template <size_t N>
+  void set_configured(uint8_t config_id,
+                      const asel::array<Interface *, N> &interfaces) {
+    set_configured(config_id, asel::range<Interface *const>(interfaces));
+  }
+  template <typename... IntfT>
+  void set_configured(uint8_t config_id,
+                      Interface *intf1,
+                      IntfT *...other_interfaces) {
+    asel::array intf_array(
+        asel::to_array<Interface *>({intf1, other_interfaces...}));
+    set_configured(config_id, asel::range<Interface *const>(intf_array));
+  }
 
   /**
    * Unconfigure the device.
@@ -131,6 +136,14 @@ public:
    * with a config ID of 0.
    */
   void unconfigure();
+
+  /**
+   * Get an interface by index.
+   *
+   * Returns the interface with this index, or nullptr if the index is larger
+   * or equal to the number of currently configured interfaces.
+   */
+  Interface *get_interface(uint8_t index);
 
   /**
    * Configure a message pipe to respond to any future IN or OUT tokens
@@ -241,7 +254,39 @@ private:
   HWDevice *hw_ = nullptr;
   EndpointZero ep0_;
 
-  std::vector<Interface *> interfaces_;
+  // Array storing pointers to the currently configured interfaces.
+  //
+  // The set of interfaces is defined by the current configuration, and can
+  // only be changed with a set_configured() or unconfigure() call.
+  //
+  // TODO: We could require that the user provide storage for this array,
+  // where we just point to an array that they provide in set_configured().
+  // However, this seems easy for users to accidentally provide an array with
+  // an insufficient lifetime.  Perhaps define a Configuration class, which
+  // contains an array of configured interfaces plus the config descriptor?
+  // That would make it easier for callers to provide storage for this array.
+  static constexpr size_t kMaxNumInterfaces = 6;
+  asel::array<Interface *, kMaxNumInterfaces> interfaces_ = {};
+
+  // Arrays storing points to the currently configured endpoints.
+  //
+  // The set of endpoints currently in use can be changed on the fly without
+  // changing the overall device configuration: a SET_INTERFACE call may be
+  // used to change an interface behavior, which can change the endpoints it
+  // uses.
+  //
+  // We provide storage for these arrays primarily to make our APIs easier to
+  // use.  This does place limits on the max number of endpoints, and result in
+  // wasted space if fewer endpoints are in use.
+  //
+  // The endpoint number is encoded as 4 bits in USB token packets, so
+  // the maximum possible endpoint number is 15, allowing for up to 16 IN
+  // endpoints and 16 OUT endpoints (including endpoint 0).  In practice most
+  // device hardware supports fewer endpoints than this.
+  static constexpr size_t kMaxNumOutEndpoints = 6; // TODO: move to build config
+  static constexpr size_t kMaxNumInEndpoints = 6;  // TODO: move to build config
+  asel::array<InEndpoint *, kMaxNumInEndpoints> in_endpoints = {};
+  asel::array<OutEndpoint *, kMaxNumOutEndpoints> out_endpoints_ = {};
 };
 
 } // namespace ausb::device

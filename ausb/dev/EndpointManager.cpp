@@ -1,8 +1,10 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/EndpointManager.h"
 
+#include "ausb/dev/Interface.h"
 #include "ausb/log.h"
 
+#include <cassert>
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -190,17 +192,6 @@ void EndpointManager::set_address_early(uint8_t address) {
   hw_->set_address_early(address);
 }
 
-bool EndpointManager::add_interface(uint8_t number, Interface *interface) {
-  if (interfaces_.size() <= number) {
-    interfaces_.resize(number + 1, nullptr);
-  }
-  if (interfaces_[number] != nullptr) {
-    return false;
-  }
-  interfaces_[number] = interface;
-  return true;
-}
-
 Interface *EndpointManager::get_interface(uint8_t number) {
   if (number >= interfaces_.size()) {
     return nullptr;
@@ -208,14 +199,38 @@ Interface *EndpointManager::get_interface(uint8_t number) {
   return interfaces_[number];
 }
 
-void EndpointManager::set_configured(uint8_t config_id) {
+void EndpointManager::set_configured(uint8_t config_id,
+                                     asel::range<Interface *const> interfaces) {
+  assert(interfaces.size() < interfaces_.size());
+  for (size_t n = 0; n < interfaces_.size(); ++n) {
+    Interface *new_intf;
+    if (n < interfaces.size()) {
+      new_intf = interfaces[n];
+      assert(new_intf != nullptr);
+    } else {
+      new_intf = nullptr;
+    }
+    if (interfaces_[n] != nullptr && interfaces_[n] != new_intf) {
+      interfaces_[n]->unconfigure();
+    }
+    interfaces_[n] = new_intf;
+  }
+
   state_ = DeviceState::Configured;
   config_id_ = config_id;
 }
 
 void EndpointManager::unconfigure() {
+  AUSB_LOGI("EndpointManager::unconfigure() invoked");
+
   // TODO: close all open endpoints
-  AUSB_LOGE("TODO: EndpointManager::unconfigure()");
+
+  for (size_t n = 0; n < interfaces_.size(); ++n) {
+    if (interfaces_[n] != nullptr) {
+      interfaces_[n]->unconfigure();
+    }
+    interfaces_[n] = nullptr;
+  }
 
   config_id_ = 0;
   state_ = DeviceState::Address;

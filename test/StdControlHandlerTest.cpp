@@ -164,7 +164,9 @@ public:
       return true;
     }
     if (config_id == kConfigA || config_id == kConfigB) {
-      ep_mgr.set_configured(config_id);
+      // We call set_configured() with no interfaces, even though this isn't
+      // a realistic configuration
+      ep_mgr.set_configured(config_id, asel::range<Interface *const>{});
       return true;
     }
     return false;

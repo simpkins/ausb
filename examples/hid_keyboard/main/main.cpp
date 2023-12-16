@@ -31,7 +31,6 @@ public:
       return false;
     }
 
-    ep_mgr.add_interface(0, &kbd_intf_);
     // TODO:
     // ep_mgr.open_in_endpoint(1);
     auto res = ep_mgr.hw()->open_in_endpoint(1, EndpointType::Interrupt, 8);
@@ -39,7 +38,7 @@ public:
       AUSB_LOGE("error opening IN endpoint 1");
     }
 
-    ep_mgr.set_configured(config_id);
+    ep_mgr.set_configured(config_id, &kbd_intf_);
     return true;
   }
 

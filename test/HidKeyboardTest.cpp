@@ -6,6 +6,8 @@
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
+#include "ausb/dev/InEndpoint.h"
+#include "ausb/dev/OutEndpoint.h"
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/KeyboardInterface.h"
 #include "ausb/hw/mock/MockDevice.h"
@@ -20,6 +22,41 @@ namespace ausb::test {
 
 namespace {
 
+class HidInEndpoint : public InEndpoint {
+public:
+  constexpr HidInEndpoint() = default;
+
+  device::CtrlOutXfer *process_out_setup(device::MessagePipe *pipe,
+                                         const SetupPacket &packet) override {
+    // TODO
+    return nullptr;
+  }
+  device::CtrlInXfer *process_in_setup(device::MessagePipe *pipe,
+                                       const SetupPacket &packet) override {
+    // TODO
+    return nullptr;
+  }
+  void on_in_xfer_complete() override {
+    // TODO
+  }
+  void on_in_xfer_failed(XferFailReason reason) override {
+    // TODO
+  }
+};
+
+constinit hid::KeyboardInterface kbd_intf;
+
+// TODO: specify endpoint type and max packet size
+constinit HidInEndpoint kbd_in_endpoint;
+
+class KeyboardConfig {
+public:
+  std::array<Interface *, 1> interfaces = {{&kbd_intf}};
+  std::array<InEndpoint *, 1> in_endpoints = {{&kbd_in_endpoint}};
+  std::array<OutEndpoint *, 0> out_endpoints = {};
+};
+constexpr KeyboardConfig kbd_config;
+
 class TestDevice {
 public:
   static constexpr uint8_t kConfigId = 1;
@@ -33,7 +70,6 @@ public:
       return false;
     }
 
-    ep_mgr.add_interface(0, &kbd_intf_);
 #if 0
     // TODO:
     // ep_mgr.open_in_endpoint(1);
@@ -43,7 +79,8 @@ public:
     }
 #endif
 
-    ep_mgr.set_configured(config_id);
+    // ep_mgr.add_interface(0, &kbd_intf_);
+    ep_mgr.set_configured(config_id, &kbd_intf);
     return true;
   }
 
