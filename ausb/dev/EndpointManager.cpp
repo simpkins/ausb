@@ -236,6 +236,62 @@ void EndpointManager::unconfigure() {
   state_ = DeviceState::Address;
 }
 
+bool EndpointManager::open_in_endpoint(uint8_t endpoint_num,
+                                       InEndpoint *endpoint,
+                                       EndpointType type,
+                                       uint16_t max_packet_size) {
+  if (state_ == DeviceState::Default) {
+    // We shouldn't be attempting to open endpoints until SET_ADDRESS and
+    // then SET_CONFIGURATION has been called.
+    return false;
+  }
+
+  if (endpoint_num >= in_endpoints_.size()) {
+    AUSB_LOGE("cannot open IN endpoint %d: endpoint number is too large",
+              endpoint_num);
+    return false;
+  }
+  if (in_endpoints_[endpoint_num] != nullptr) {
+    AUSB_LOGE(
+        "cannot open IN endpoint %d: this endpoint number is already in use",
+        endpoint_num);
+    return false;
+  }
+
+  if (!hw_->open_in_endpoint(endpoint_num, type, max_packet_size)) {
+    return false;
+  }
+  in_endpoints_[endpoint_num] = endpoint;
+  return true;
+}
+
+bool EndpointManager::open_out_endpoint(uint8_t endpoint_num,
+                                        OutEndpoint *endpoint,
+                                        EndpointType type,
+                                        uint16_t max_packet_size) {
+  if (state_ == DeviceState::Default) {
+    return false;
+  }
+
+  if (endpoint_num >= out_endpoints_.size()) {
+    AUSB_LOGE("cannot open OUT endpoint %d: endpoint number is too large",
+              endpoint_num);
+    return false;
+  }
+  if (out_endpoints_[endpoint_num] != nullptr) {
+    AUSB_LOGE(
+        "cannot open OUT endpoint %d: this endpoint number is already in use",
+        endpoint_num);
+    return false;
+  }
+
+  if (!hw_->open_out_endpoint(endpoint_num, type, max_packet_size)) {
+    return false;
+  }
+  out_endpoints_[endpoint_num] = endpoint;
+  return true;
+}
+
 void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
                                           const void *data,
                                           uint32_t size) {

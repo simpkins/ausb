@@ -55,6 +55,13 @@ public:
   void set_address_early(uint8_t address);
 
   bool configure_ep0(uint8_t max_packet_size);
+  [[nodiscard]] bool open_in_endpoint(uint8_t endpoint_num,
+                                      EndpointType type,
+                                      uint16_t max_packet_size);
+  [[nodiscard]] bool open_out_endpoint(uint8_t endpoint_num,
+                                       EndpointType type,
+                                       uint16_t max_packet_size);
+
   [[nodiscard]] XferStartResult
   start_write(uint8_t endpoint, const void *data, uint32_t size);
   [[nodiscard]] XferStartResult

@@ -35,6 +35,36 @@ bool MockDevice::configure_ep0(uint8_t max_packet_size) {
   return true;
 }
 
+bool MockDevice::open_in_endpoint(uint8_t endpoint_num,
+                                  EndpointType type,
+                                  uint16_t max_packet_size) {
+  if (endpoint_num > in_eps.size()) {
+    return false;
+  }
+  if (in_eps[endpoint_num].max_packet_size != 0) {
+    // endpoint already open
+    return false;
+  }
+
+  in_eps[endpoint_num].max_packet_size = max_packet_size;
+  return true;
+}
+
+bool MockDevice::open_out_endpoint(uint8_t endpoint_num,
+                                   EndpointType type,
+                                   uint16_t max_packet_size) {
+  if (endpoint_num > out_eps.size()) {
+    return false;
+  }
+  if (out_eps[endpoint_num].max_packet_size != 0) {
+    // endpoint already open
+    return false;
+  }
+
+  out_eps[endpoint_num].max_packet_size = max_packet_size;
+  return true;
+}
+
 XferStartResult
 MockDevice::start_write(uint8_t endpoint, const void *data, uint32_t size) {
   if (endpoint >= in_eps.size()) {

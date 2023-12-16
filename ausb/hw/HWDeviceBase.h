@@ -29,6 +29,13 @@ public:
   virtual void set_address_early(uint8_t address) = 0;
 
   virtual bool configure_ep0(uint8_t max_packet_size) = 0;
+  [[nodiscard]] virtual bool open_in_endpoint(uint8_t endpoint_num,
+                                              EndpointType type,
+                                              uint16_t max_packet_size) = 0;
+  [[nodiscard]] virtual bool open_out_endpoint(uint8_t endpoint_num,
+                                               EndpointType type,
+                                               uint16_t max_packet_size) = 0;
+
   [[nodiscard]] virtual XferStartResult
   start_write(uint8_t endpoint, const void *data, uint32_t size) = 0;
   [[nodiscard]] virtual XferStartResult

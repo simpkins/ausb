@@ -11,6 +11,7 @@
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/KeyboardInterface.h"
 #include "ausb/hw/mock/MockDevice.h"
+#include "ausb/log.h"
 #include "test/lib/mock_utils.h"
 
 #include <asel/test/checks.h>
@@ -70,16 +71,12 @@ public:
       return false;
     }
 
-#if 0
-    // TODO:
-    // ep_mgr.open_in_endpoint(1);
-    auto res = ep_mgr.hw()->open_in_endpoint(1, EndpointType::Interrupt, 8);
+    auto res = ep_mgr.open_in_endpoint(
+        1, &kbd_in_endpoint, EndpointType::Interrupt, 8);
     if (!res) {
       AUSB_LOGE("error opening IN endpoint 1");
     }
-#endif
 
-    // ep_mgr.add_interface(0, &kbd_intf_);
     ep_mgr.set_configured(config_id, &kbd_intf);
     return true;
   }

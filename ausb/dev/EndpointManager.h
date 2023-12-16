@@ -137,13 +137,22 @@ public:
    */
   void unconfigure();
 
+  [[nodiscard]] bool open_in_endpoint(uint8_t endpoint_num,
+                                      InEndpoint *endpoint,
+                                      EndpointType type,
+                                      uint16_t max_packet_size);
+  [[nodiscard]] bool open_out_endpoint(uint8_t endpoint_num,
+                                       OutEndpoint *endpoint,
+                                       EndpointType type,
+                                       uint16_t max_packet_size);
+
   /**
    * Get an interface by index.
    *
    * Returns the interface with this index, or nullptr if the index is larger
    * or equal to the number of currently configured interfaces.
    */
-  Interface *get_interface(uint8_t index);
+  [[nodiscard]] Interface *get_interface(uint8_t index);
 
   /**
    * Configure a message pipe to respond to any future IN or OUT tokens
@@ -285,7 +294,7 @@ private:
   // device hardware supports fewer endpoints than this.
   static constexpr size_t kMaxNumOutEndpoints = 6; // TODO: move to build config
   static constexpr size_t kMaxNumInEndpoints = 6;  // TODO: move to build config
-  asel::array<InEndpoint *, kMaxNumInEndpoints> in_endpoints = {};
+  asel::array<InEndpoint *, kMaxNumInEndpoints> in_endpoints_ = {};
   asel::array<OutEndpoint *, kMaxNumOutEndpoints> out_endpoints_ = {};
 };
 
