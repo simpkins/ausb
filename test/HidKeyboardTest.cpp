@@ -9,6 +9,7 @@
 #include "ausb/dev/InEndpoint.h"
 #include "ausb/dev/OutEndpoint.h"
 #include "ausb/hid/HidDescriptor.h"
+#include "ausb/hid/HidInEndpoint.h"
 #include "ausb/hid/KeyboardInterface.h"
 #include "ausb/hw/mock/MockDevice.h"
 #include "ausb/log.h"
@@ -23,32 +24,23 @@ namespace ausb::test {
 
 namespace {
 
-class HidInEndpoint : public InEndpoint {
-public:
-  constexpr HidInEndpoint() = default;
-
-  device::CtrlOutXfer *process_out_setup(device::MessagePipe *pipe,
-                                         const SetupPacket &packet) override {
-    // TODO
-    return nullptr;
-  }
-  device::CtrlInXfer *process_in_setup(device::MessagePipe *pipe,
-                                       const SetupPacket &packet) override {
-    // TODO
-    return nullptr;
-  }
-  void on_in_xfer_complete() override {
-    // TODO
-  }
-  void on_in_xfer_failed(XferFailReason reason) override {
-    // TODO
-  }
-};
-
 constinit hid::KeyboardInterface kbd_intf;
 
+struct KbdReport1 {
+  static constexpr uint8_t report_id = 1;
+  static constexpr uint16_t report_size = 8;
+  static constexpr uint8_t queue_capacity = 2;
+};
+struct MouseReport2 {
+  static constexpr uint8_t report_id = 2;
+  static constexpr uint16_t report_size = 3;
+  static constexpr uint8_t queue_capacity = 2;
+};
+
 // TODO: specify endpoint type and max packet size
-constinit HidInEndpoint kbd_in_endpoint;
+constinit hid::HidInEndpoint<hid::ReportInfo<0, asel::array<uint8_t, 8>>>
+    kbd_in_endpoint(1, 8);
+constinit hid::HidInEndpoint<KbdReport1, MouseReport2> dual_in_endpoint(2, 8);
 
 class KeyboardConfig {
 public:

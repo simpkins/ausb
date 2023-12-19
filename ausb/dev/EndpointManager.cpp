@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/EndpointManager.h"
 
+#include "ausb/dev/InEndpoint.h"
 #include "ausb/dev/Interface.h"
 #include "ausb/log.h"
 
@@ -300,6 +301,18 @@ void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
     AUSB_LOGE("error starting control IN transfer: %d",
               static_cast<int>(status));
     pipe->on_in_xfer_failed(XferFailReason::SoftwareError);
+    return;
+  }
+}
+
+void EndpointManager::start_in_write(uint8_t endpoint_num,
+                                     const void *data,
+                                     uint32_t size) {
+  auto status = hw_->start_write(endpoint_num, data, size);
+  if (status != XferStartResult::Ok) {
+    AUSB_LOGE("error starting IN transfer: %d", static_cast<int>(status));
+    auto endpoint = in_endpoints_[endpoint_num - 1];
+    endpoint->on_in_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
 }

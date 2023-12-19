@@ -195,6 +195,8 @@ public:
    */
   void start_ctrl_in_ack(MessagePipe *pipe);
 
+  void start_in_write(uint8_t endpoint_num, const void *data, uint32_t size);
+
   /**
    * Begin receiving data for the current control OUT transfer.
    *
