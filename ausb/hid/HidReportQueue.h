@@ -13,6 +13,9 @@ namespace ausb::hid {
  * HidReportQueue contains a queue of report values to send for a single HID
  * report ID.
  *
+ * This queue is relevant only for input reports, which are sent from the
+ * device to the host.
+ *
  * A report queue must always contain at least 2 entries: one to hold the
  * current report state, and one to hold data currently being transmitted to
  * the host.
@@ -86,6 +89,27 @@ private:
   // time_last_sent_ should generally be 0 if and only if next_to_send_ and
   // and current_xmit_index_ are both 0xff.
   asel::chrono::steady_clock::time_point time_last_sent_;
+};
+
+/**
+ * A small helper class to provide info about a HID report,
+ * for use constructing HidInEndpoint objects.
+ */
+template <uint8_t ReportID, typename DataType, uint8_t QueueCapacity = 2>
+class ReportInfo {
+public:
+  // Report ID 0 is reserved by the standard.
+  // If report_id is 0, then this means that this interface only supports a
+  // single report, and so the report ID is not used.
+  static constexpr uint8_t report_id = ReportID;
+
+  static constexpr uint8_t queue_capacity = QueueCapacity;
+
+  // The report size, in bytes.
+  // HID report contents are defined on a bit-by-bit basis, and the underlying
+  // report data may not end on an even byte boundary.  However, reports are
+  // always padded to a full byte boundary when sending them to the host.
+  static constexpr uint16_t report_size = sizeof(DataType);
 };
 
 class HidReportQueuePtr {
@@ -225,7 +249,7 @@ public:
 template <typename... Reports>
 class HidReportMapVirtual : public HidReportMapIntf {
 public:
-  HidReportMapVirtual(HidReportMap<Reports...> *map) : map_(map) {}
+  constexpr HidReportMapVirtual(HidReportMap<Reports...> *map) : map_(map) {}
 
   HidReportQueuePtr get_report_queue(uint8_t report_id) override {
     return map_->get_report_queue(report_id);

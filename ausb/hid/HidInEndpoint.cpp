@@ -40,20 +40,4 @@ bool HidInEndpointImpl::on_in_xfer_failed(XferFailReason reason) {
   return true;
 }
 
-device::CtrlOutXfer *
-HidInEndpointImpl::process_out_setup(device::MessagePipe *pipe,
-                                     const SetupPacket &packet,
-                                     HidReportMapIntf &report_map) {
-  // TODO
-  return nullptr;
-}
-
-device::CtrlInXfer *
-HidInEndpointImpl::process_in_setup(device::MessagePipe *pipe,
-                                    const SetupPacket &packet,
-                                    HidReportMapIntf &report_map) {
-  // TODO
-  return nullptr;
-}
-
 } // namespace ausb::hid

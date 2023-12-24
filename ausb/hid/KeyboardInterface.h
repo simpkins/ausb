@@ -3,6 +3,7 @@
 
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
+#include "ausb/hid/HidReportQueue.h"
 #include "ausb/hid/generic_desktop.h"
 #include "ausb/hid/key_codes.h"
 #include "ausb/hid/leds.h"
@@ -59,21 +60,23 @@ static constexpr auto make_kbd_report_descriptor() {
 
 class KeyboardInterface : public HidInterface {
 public:
-  constexpr KeyboardInterface() noexcept = default;
+  constexpr KeyboardInterface() noexcept
+      : HidInterface(report_descriptor_.data(), &report_map_virt_) {}
 
-  device::CtrlOutXfer *process_out_setup(device::MessagePipe *pipe,
-                                         const SetupPacket &packet) override;
-  device::CtrlInXfer *process_in_setup(device::MessagePipe *pipe,
-                                       const SetupPacket &packet) override;
+  // TODO: add a thread-safe method to set the report from a different task
 
-  bool set_report(asel::buf_view data) override;
+  bool set_output_report(asel::buf_view data) override;
 
   static constexpr size_t report_descriptor_length() {
     return report_descriptor_.kTotalLength;
   }
 
 private:
+  using ReportType = std::array<uint8_t, 8>;
+
   static constexpr auto report_descriptor_ = make_kbd_report_descriptor();
+  HidReportMap<ReportInfo<0, ReportType>> report_map_;
+  HidReportMapVirtual<ReportInfo<0, ReportType>> report_map_virt_{&report_map_};
 };
 
 } // namespace ausb::hid

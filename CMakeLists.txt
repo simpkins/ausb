@@ -21,6 +21,7 @@ set(
     "ausb/dev/ctrl/StallCtrlOut.cpp"
     "ausb/hid/KeyboardInterface.cpp"
     "ausb/hid/HidInEndpoint.cpp"
+    "ausb/hid/HidInterface.cpp"
     "ausb/hid/HidReportQueue.cpp"
     "ausb/hid/HidSetReport.cpp"
     "ausb/log.cpp"

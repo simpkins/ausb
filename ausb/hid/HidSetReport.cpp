@@ -13,7 +13,7 @@ void HidSetReport::start(const SetupPacket &packet) {
 }
 
 void HidSetReport::out_data_received(uint32_t bytes_received) {
-  if (intf_->set_report(asel::buf_view(buf_.data(), buf_.size()))) {
+  if (intf_->set_output_report(asel::buf_view(buf_.data(), buf_.size()))) {
     AUSB_LOGV("HID SET_REPORT succeeded");
     ack();
   } else {
