@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/dev/InEndpoint.h"
 #include "ausb/hid/HidReportQueue.h"
 
@@ -76,6 +77,17 @@ public:
       return;
     }
     impl_.start_xfer(queue, reports_.kLongestReportSize);
+  }
+
+  static constexpr EndpointDescriptor make_descriptor(uint8_t endpoint_num,
+                                                      uint16_t max_packet_size,
+                                                      uint8_t interval = 10) {
+    EndpointDescriptor desc;
+    desc.set_address(Direction::In, endpoint_num);
+    desc.set_type(EndpointType::Interrupt);
+    desc.set_interval(interval);
+    desc.set_max_packet_size(max_packet_size);
+    return desc;
   }
 
   /////////////////////

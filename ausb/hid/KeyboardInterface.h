@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
 #include "ausb/hid/HidReportQueue.h"
@@ -73,6 +74,18 @@ public:
 
   static constexpr InterfaceDescriptor make_interface_descriptor() {
     return HidInterface::make_boot_interface_descriptor(HidProtocol::Keyboard);
+  }
+
+  static constexpr EndpointDescriptor
+  make_in_endpoint_descriptor(uint8_t endpoint_num,
+                              uint16_t max_packet_size = 8,
+                              uint8_t interval = 10) {
+    EndpointDescriptor desc;
+    desc.set_address(Direction::In, endpoint_num);
+    desc.set_type(EndpointType::Interrupt);
+    desc.set_interval(interval);
+    desc.set_max_packet_size(max_packet_size);
+    return desc;
   }
 
 private:
