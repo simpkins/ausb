@@ -13,8 +13,8 @@ namespace ausb::hid {
  * (Section 10, page 88)
  */
 enum class Key : uint8_t {
-  None = 0x00, // reserved
-  ErrorRollOver = 0x01,
+  None = 0x00,          // reserved
+  ErrorRollOver = 0x01, // Sent when more than 6 keys are pressed
   POSTFail = 0x02,
   ErrorUndefined = 0x03,
   A = 0x04,
