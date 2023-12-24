@@ -26,9 +26,9 @@ CtrlOutXfer *HidInterface::process_out_setup(MessagePipe *pipe,
     const auto std_req_type = packet.get_std_request();
     if (std_req_type == StdRequestType::SetDescriptor) {
       // We don't currently support SET_DESCRIPTOR
-      AUSB_LOGI("unsupported SET_DESCRIPTOR request for HID descriptor 0x%04x",
+      AUSB_LOGW("unsupported SET_DESCRIPTOR request for HID descriptor 0x%04x",
                 packet.value);
-      return nullptr;
+      return pipe->new_out_handler<StallCtrlOut>(pipe);
     }
   } else if (req_type == SetupReqType::Class) {
     const auto hid_req_type = static_cast<HidRequest>(packet.request);
@@ -71,12 +71,20 @@ CtrlInXfer *HidInterface::process_in_setup(MessagePipe *pipe,
   if (req_type == SetupReqType::Standard) {
     const auto std_req_type = packet.get_std_request();
     if (std_req_type == StdRequestType::GetDescriptor) {
+      // In practice it seems like there is only ever a single HID class
+      // descriptor.  The HID specification indicates that there should be "at
+      // least one" report descriptor, but there doesn't seem to be a use for
+      // more than 1, and host implementations appear to generally expect
+      // exactly one report descriptor.
+      //
+      // The HID specification also defines physical descriptors, but
+      // generally discourages implementing them.  I haven't come across
+      // anything that seems to use them in practice.  The Linux USB HID code
+      // never appears to request HID physical descriptors.
       if (packet.value == desc_setup_value(DescriptorType::HidReport, 0)) {
         return pipe->new_in_handler<GetStaticDescriptor>(
             pipe, report_descriptor_, report_descriptor_size_);
       } else {
-        // Hosts can request physical descriptors.
-        // We currently do not support returning physical descriptors.
         AUSB_LOGV("GET_DESCRIPTOR request for non-existent HID class "
                   "descriptor 0x%04x",
                   packet.value);
