@@ -48,10 +48,6 @@ public:
     dev.set_product(0x1000);
     dev.set_device_release(1, 0);
 
-    InterfaceDescriptor kbd_intf(UsbClass::Hid,
-                                 static_cast<uint8_t>(HidSubclass::Boot),
-                                 static_cast<uint8_t>(HidProtocol::Keyboard));
-
     EndpointDescriptor ep1;
     ep1.set_address(Direction::In, 1);
     ep1.set_type(EndpointType::Interrupt);
@@ -65,10 +61,11 @@ public:
     kbd_hid_desc.set_report_descriptor_type(DescriptorType::HidReport);
     kbd_hid_desc.set_report_descriptor_length(kbd_report.kTotalLength);
 
-    auto cfg = ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
-                   .add_interface(kbd_intf)
-                   .add_descriptor(kbd_hid_desc)
-                   .add_endpoint(ep1);
+    auto cfg =
+        ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
+            .add_interface(hid::KeyboardInterface::make_interface_descriptor())
+            .add_descriptor(kbd_hid_desc)
+            .add_endpoint(ep1);
 
     return StaticDescriptorMap()
         .add_device_descriptor(dev)

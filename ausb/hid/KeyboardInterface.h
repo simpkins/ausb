@@ -71,6 +71,10 @@ public:
     return report_descriptor_.kTotalLength;
   }
 
+  static constexpr InterfaceDescriptor make_interface_descriptor() {
+    return HidInterface::make_boot_interface_descriptor(HidProtocol::Keyboard);
+  }
+
 private:
   using ReportType = std::array<uint8_t, 8>;
 

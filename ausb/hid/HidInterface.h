@@ -2,8 +2,10 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
+#include "ausb/desc/InterfaceDescriptor.h"
 #include "ausb/dev/Interface.h"
 #include "ausb/hid/HidReportQueue.h"
+#include "ausb/hid/types.h"
 
 namespace ausb::hid {
 
@@ -34,6 +36,24 @@ public:
                                        const SetupPacket &packet) override;
 
   [[nodiscard]] virtual bool set_output_report(asel::buf_view data) = 0;
+
+  /**
+   * Return an interface descriptor for a non-boot interface.
+   */
+  static constexpr InterfaceDescriptor make_interface_descriptor() {
+    return InterfaceDescriptor(UsbClass::Hid, 0, 0);
+  }
+
+  /**
+   * Return an interface descriptor for mouse or keyboard interface that
+   * supports the boot protocol.
+   */
+  static constexpr InterfaceDescriptor
+  make_boot_interface_descriptor(HidProtocol protocol) {
+    return InterfaceDescriptor(UsbClass::Hid,
+                               static_cast<uint8_t>(HidSubclass::Boot),
+                               static_cast<uint8_t>(protocol));
+  }
 
 private:
   // Note: the HidInterface does not own the storage for report_descriptor_ or
