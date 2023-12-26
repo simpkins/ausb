@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
@@ -86,6 +87,18 @@ public:
     desc.set_interval(interval);
     desc.set_max_packet_size(max_packet_size);
     return desc;
+  }
+
+  template <size_t TotalLength, uint8_t NumInterfaces>
+  static constexpr auto
+  update_config_descriptor(ConfigDescriptor<TotalLength, NumInterfaces> cfg,
+                           uint8_t endpoint_num,
+                           uint16_t max_packet_size = 8,
+                           uint8_t interval = 10) {
+    return cfg.add_interface(make_interface_descriptor())
+        .add_descriptor(make_kbd_report_descriptor())
+        .add_endpoint(make_in_endpoint_descriptor(
+            endpoint_num, max_packet_size, interval));
   }
 
 private:

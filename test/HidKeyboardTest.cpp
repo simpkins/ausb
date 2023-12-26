@@ -79,22 +79,9 @@ public:
     dev.set_product(0x1000);
     dev.set_device_release(1, 0);
 
-    EndpointDescriptor ep1 =
-        hid::KeyboardInterface::make_in_endpoint_descriptor(
-            /*endpoint_num=*/1);
-
-    auto kbd_report = hid::make_kbd_report_descriptor();
-
-    HidDescriptor kbd_hid_desc;
-    kbd_hid_desc.set_num_descriptors(1);
-    kbd_hid_desc.set_report_descriptor_type(DescriptorType::HidReport);
-    kbd_hid_desc.set_report_descriptor_length(kbd_report.kTotalLength);
-
-    auto cfg =
-        ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup)
-            .add_interface(hid::KeyboardInterface::make_interface_descriptor())
-            .add_descriptor(kbd_hid_desc)
-            .add_endpoint(ep1);
+    auto cfg = hid::KeyboardInterface::update_config_descriptor(
+        ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup),
+        /*endpoint_num=*/1);
 
     return StaticDescriptorMap()
         .add_device_descriptor(dev)
