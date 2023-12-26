@@ -3,6 +3,7 @@
 
 #include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/EndpointDescriptor.h"
+#include "ausb/hid/HidInEndpoint.h"
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
 #include "ausb/hid/HidReportQueue.h"
@@ -62,8 +63,20 @@ static constexpr auto make_kbd_report_descriptor() {
 
 class KeyboardInterface : public HidInterface {
 public:
-  constexpr KeyboardInterface() noexcept
-      : HidInterface(report_descriptor_.data(), &report_map_virt_) {}
+  static constexpr uint16_t kDefaultMaxPacketSize = 8;
+  static constexpr uint8_t kDefaultInterval = 10;
+  using ReportType = std::array<uint8_t, 8>;
+  using KbdReportInfo = ReportInfo<0, ReportType>;
+
+  constexpr explicit KeyboardInterface(
+      uint8_t in_endpoint_num,
+      uint16_t max_packet_size = kDefaultMaxPacketSize) noexcept
+      : HidInterface(report_descriptor_.data(), &report_map_),
+        in_endpoint_(in_endpoint_num, max_packet_size) {}
+
+  HidInEndpoint &in_endpoint() {
+    return in_endpoint_;
+  }
 
   // TODO: add a thread-safe method to set the report from a different task
 
@@ -79,8 +92,8 @@ public:
 
   static constexpr EndpointDescriptor
   make_in_endpoint_descriptor(uint8_t endpoint_num,
-                              uint16_t max_packet_size = 8,
-                              uint8_t interval = 10) {
+                              uint16_t max_packet_size = kDefaultMaxPacketSize,
+                              uint8_t interval = kDefaultInterval) {
     EndpointDescriptor desc;
     desc.set_address(Direction::In, endpoint_num);
     desc.set_type(EndpointType::Interrupt);
@@ -102,11 +115,10 @@ public:
   }
 
 private:
-  using ReportType = std::array<uint8_t, 8>;
-
   static constexpr auto report_descriptor_ = make_kbd_report_descriptor();
-  HidReportMap<ReportInfo<0, ReportType>> report_map_;
-  HidReportMapVirtual<ReportInfo<0, ReportType>> report_map_virt_{&report_map_};
+
+  HidReportMapStorage<KbdReportInfo> report_map_;
+  HidInEndpoint in_endpoint_;
 };
 
 } // namespace ausb::hid

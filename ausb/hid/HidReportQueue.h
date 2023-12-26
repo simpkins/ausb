@@ -129,6 +129,13 @@ public:
     return impl_ != nullptr;
   }
 
+  HidReportQueueImpl &operator*() const {
+    return *impl_;
+  }
+  HidReportQueueImpl *operator->() const {
+    return impl_;
+  }
+
 private:
   HidReportQueueImpl *impl_ = nullptr;
   uint16_t report_size_ = 0;
@@ -165,98 +172,6 @@ public:
 private:
   asel::array<uint8_t, ReportSize *NumEntries> storage_ = {};
   HidReportQueueImpl impl_;
-};
-
-/**
- * A class tracking multiple HID reports, and allowing look up of specific
- * report queues by report ID.
- *
- * The template parameters should generally be ReportInfo objects.
- */
-template <typename... Reports>
-class HidReportMap {};
-
-template <typename ReportT>
-class HidReportMap<ReportT> {
-public:
-  static constexpr size_t kNumReports = 1;
-  static constexpr uint16_t kLongestReportSize = ReportT::report_size;
-
-  constexpr explicit HidReportMap() = default;
-
-  constexpr HidReportQueuePtr get_report_queue(uint8_t report_id) {
-    if (report_id == ReportT::report_id) {
-      return report_.get_ptr();
-    }
-    return nullptr;
-  }
-
-  /**
-   * Return the HidReportQueueImpl to send next, if one needs to be sent
-   * immediately, or nullptr if no report needs to be transmitted now.
-   */
-  HidReportQueuePtr
-  get_next_pending_xfer(asel::chrono::steady_clock::time_point now) {
-    if (report_.needs_xfer(now)) {
-      return report_.get_ptr();
-    }
-    return nullptr;
-  }
-
-private:
-  HidReportQueue<ReportT::report_size, ReportT::queue_capacity> report_;
-};
-
-template <typename Report1, typename... RemainingReports>
-class HidReportMap<Report1, RemainingReports...> {
-public:
-  static constexpr size_t kNumReports = 1 + sizeof...(RemainingReports);
-  static constexpr uint16_t kLongestReportSize =
-      std::max(static_cast<uint16_t>(Report1::report_size),
-               HidReportMap<RemainingReports...>::kLongestReportSize);
-
-  constexpr explicit HidReportMap() = default;
-
-  constexpr HidReportQueuePtr get_report_queue(uint8_t report_id) {
-    if (report_id == Report1::report_id) {
-      return report_.get_ptr();
-    }
-    return others_.get_report_queue(report_id);
-  }
-
-  HidReportQueuePtr
-  get_next_pending_xfer(asel::chrono::steady_clock::time_point now) {
-    // TODO: we walk the list of reports in order, and always return the
-    // first one that needs transmitting.  This could result in starvation
-    // if earlier report IDs have a lot of events and always need to be sent.
-    // It might be nice to have a slightly more fair approach somehow.
-    if (report_.needs_xfer(now)) {
-      return report_.get_ptr();
-    }
-    return others_.get_next_pending_xfer(now);
-  }
-
-private:
-  HidReportQueue<Report1::report_size, Report1::queue_capacity> report_;
-  HidReportMap<RemainingReports...> others_;
-};
-
-class HidReportMapIntf {
-public:
-  virtual HidReportQueuePtr get_report_queue(uint8_t report_id) = 0;
-};
-
-template <typename... Reports>
-class HidReportMapVirtual : public HidReportMapIntf {
-public:
-  constexpr HidReportMapVirtual(HidReportMap<Reports...> *map) : map_(map) {}
-
-  HidReportQueuePtr get_report_queue(uint8_t report_id) override {
-    return map_->get_report_queue(report_id);
-  }
-
-private:
-  HidReportMap<Reports...> *const map_ = nullptr;
 };
 
 } // namespace ausb::hid

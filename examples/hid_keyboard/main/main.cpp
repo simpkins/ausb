@@ -21,6 +21,7 @@ const char *LogTag = "ausb.test";
 class TestDevice {
 public:
   static constexpr uint8_t kConfigId = 1;
+  static constexpr uint8_t kHidInEndpointNum = 1;
 
   bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
     if (config_id == 0) {
@@ -31,11 +32,13 @@ public:
       return false;
     }
 
-    // TODO:
-    // ep_mgr.open_in_endpoint(1);
-    auto res = ep_mgr.hw()->open_in_endpoint(1, EndpointType::Interrupt, 8);
+    auto res =
+        ep_mgr.open_in_endpoint(kHidInEndpointNum,
+                                &kbd_intf_.in_endpoint(),
+                                EndpointType::Interrupt,
+                                hid::KeyboardInterface::kDefaultMaxPacketSize);
     if (!res) {
-      AUSB_LOGE("error opening IN endpoint 1");
+      AUSB_LOGE("error opening HID IN endpoint");
     }
 
     ep_mgr.set_configured(config_id, &kbd_intf_);
@@ -64,7 +67,7 @@ public:
   }
 
 private:
-  hid::KeyboardInterface kbd_intf_;
+  hid::KeyboardInterface kbd_intf_{kHidInEndpointNum};
 };
 
 static constinit UsbDevice<TestDevice> usb;

@@ -3,7 +3,7 @@
 
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/dev/InEndpoint.h"
-#include "ausb/hid/HidReportQueue.h"
+#include "ausb/hid/HidReportMap.h"
 
 #include <asel/array.h>
 #include <asel/chrono.h>
@@ -49,34 +49,40 @@ private:
   device::EndpointManager *manager_ = nullptr;
 };
 
-template <typename... Reports>
 class HidInEndpoint : public device::InEndpoint {
 public:
-  static constexpr size_t kNumReports = sizeof...(Reports);
-
   constexpr HidInEndpoint(uint8_t endpoint_num,
                           uint16_t max_packet_size) noexcept
       : impl_(endpoint_num, max_packet_size) {}
 
+  /**
+   * Prepare to add a new INPUT report for the specified report ID.
+   *
+   * This returns the buffer where the report data should be written.
+   * This method may only be called from the main USB task, and the caller must
+   * write the report data into the buffer and then call add_report_complete()
+   * before returning to the USB task loop.
+   */
   uint8_t *add_report_prepare(uint8_t report_id,
                               bool flush_previous_entries = false) {
-    auto *queue = reports_.get_report_queue(report_id);
-    if (!queue) {
+    auto buf =
+        reports_->add_report_get_buffer(report_id, flush_previous_entries);
+    if (!buf) {
       impl_.log_bad_report_id(report_id);
       return nullptr;
     }
-    return queue->add_report_prepare(report_id, flush_previous_entries);
+    return buf;
   }
   void add_report_complete(uint8_t report_id) {
     if (impl_.is_xfer_in_progress()) {
       return;
     }
-    auto *queue = reports_.get_report_queue(report_id);
+    auto queue = reports_->get_report_queue(report_id);
     if (!queue) {
       impl_.log_bad_report_id(report_id);
       return;
     }
-    impl_.start_xfer(queue, reports_.kLongestReportSize);
+    impl_.start_xfer(queue, reports_->get_longest_report_size());
   }
 
   static constexpr EndpointDescriptor make_descriptor(uint8_t endpoint_num,
@@ -118,13 +124,13 @@ public:
 private:
   void start_next_transfer() {
     const auto now = asel::chrono::steady_clock::now();
-    auto queue = reports_.get_next_pending_xfer(now);
+    auto queue = reports_->get_next_pending_xfer(now);
     if (queue) {
-      impl_.start_xfer(queue, reports_.kLongestReportSize);
+      impl_.start_xfer(queue, reports_->get_longest_report_size());
     }
   }
 
-  HidReportMap<Reports...> reports_;
+  HidReportMap *reports_ = nullptr;
   HidInEndpointImpl impl_;
 };
 

@@ -4,7 +4,7 @@
 #include "ausb/ausb_types.h"
 #include "ausb/desc/InterfaceDescriptor.h"
 #include "ausb/dev/Interface.h"
-#include "ausb/hid/HidReportQueue.h"
+#include "ausb/hid/HidReportMap.h"
 #include "ausb/hid/types.h"
 
 namespace ausb::hid {
@@ -19,14 +19,14 @@ class HidInterface : public device::Interface {
 public:
   constexpr HidInterface(const uint8_t *report_descriptor,
                          size_t report_descriptor_size,
-                         HidReportMapIntf *report_map)
+                         HidReportMap *report_map)
       : report_descriptor_(report_descriptor),
         report_descriptor_size_(report_descriptor_size),
         report_map_(report_map) {}
 
   template <size_t S>
   constexpr HidInterface(const std::array<uint8_t, S> &report_descriptor,
-                         HidReportMapIntf *report_map)
+                         HidReportMap *report_map)
       : HidInterface(
             report_descriptor.data(), report_descriptor.size(), report_map) {}
 
@@ -60,7 +60,7 @@ private:
   // report_map_, and simply points to data owned by the caller.
   const uint8_t *const report_descriptor_ = nullptr;
   size_t const report_descriptor_size_ = 0;
-  HidReportMapIntf *const report_map_ = nullptr;
+  HidReportMap *const report_map_ = nullptr;
 };
 
 } // namespace ausb::hid

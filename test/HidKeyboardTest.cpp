@@ -24,35 +24,10 @@ namespace ausb::test {
 
 namespace {
 
-constinit hid::KeyboardInterface kbd_intf;
-
-struct KbdReport1 {
-  static constexpr uint8_t report_id = 1;
-  static constexpr uint16_t report_size = 8;
-  static constexpr uint8_t queue_capacity = 2;
-};
-struct MouseReport2 {
-  static constexpr uint8_t report_id = 2;
-  static constexpr uint16_t report_size = 3;
-  static constexpr uint8_t queue_capacity = 2;
-};
-
-// TODO: specify endpoint type and max packet size
-constinit hid::HidInEndpoint<hid::ReportInfo<0, asel::array<uint8_t, 8>>>
-    kbd_in_endpoint(1, 8);
-constinit hid::HidInEndpoint<KbdReport1, MouseReport2> dual_in_endpoint(2, 8);
-
-class KeyboardConfig {
-public:
-  std::array<Interface *, 1> interfaces = {{&kbd_intf}};
-  std::array<InEndpoint *, 1> in_endpoints = {{&kbd_in_endpoint}};
-  std::array<OutEndpoint *, 0> out_endpoints = {};
-};
-constexpr KeyboardConfig kbd_config;
-
 class TestDevice {
 public:
   static constexpr uint8_t kConfigId = 1;
+  static constexpr uint8_t kHidInEndpointNum = 1;
 
   bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
     if (config_id == 0) {
@@ -63,13 +38,16 @@ public:
       return false;
     }
 
-    auto res = ep_mgr.open_in_endpoint(
-        1, &kbd_in_endpoint, EndpointType::Interrupt, 8);
+    auto res =
+        ep_mgr.open_in_endpoint(kHidInEndpointNum,
+                                &kbd_intf_.in_endpoint(),
+                                EndpointType::Interrupt,
+                                hid::KeyboardInterface::kDefaultMaxPacketSize);
     if (!res) {
-      AUSB_LOGE("error opening IN endpoint 1");
+      AUSB_LOGE("error opening HID IN endpoint");
     }
 
-    ep_mgr.set_configured(config_id, &kbd_intf);
+    ep_mgr.set_configured(config_id, &kbd_intf_);
     return true;
   }
 
@@ -81,7 +59,7 @@ public:
 
     auto cfg = hid::KeyboardInterface::update_config_descriptor(
         ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup),
-        /*endpoint_num=*/1);
+        kHidInEndpointNum);
 
     return StaticDescriptorMap()
         .add_device_descriptor(dev)
@@ -95,7 +73,7 @@ public:
   }
 
 private:
-  hid::KeyboardInterface kbd_intf_;
+  hid::KeyboardInterface kbd_intf_{kHidInEndpointNum};
 };
 
 constinit UsbDevice<TestDevice, MockDevice> usb;
