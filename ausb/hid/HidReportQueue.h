@@ -52,10 +52,17 @@ public:
            (now >= (time_last_sent_ +
                     (idle_rate_in_4ms_ * asel::chrono::milliseconds(4))));
   }
+  const uint8_t *send_next_report(const uint8_t *storage,
+                                  uint16_t report_size,
+                                  uint8_t num_entries,
+                                  asel::chrono::steady_clock::time_point now);
+  void xfer_finished() {
+    current_xmit_index_ = 0xff;
+  }
 
 private:
-  static uint8_t next_queue_index(uint8_t current_index, uint8_t num_entries) {
-    return (current_index + 1) % num_entries;
+  static uint8_t next_queue_index(uint8_t index, uint8_t num_entries) {
+    return (index + 1) % num_entries;
   }
 
   // All queue index variables are specified in number of entries,
@@ -66,7 +73,7 @@ private:
   // The index in the queue to the entry we are currently transmitting,
   // or 0xff if we are not currently transmitting an entry.  (This can be 0xff
   // even if we have state to send if the endpoint is currently transmitting a
-  // different report.)
+  // different report ID.)
   uint8_t current_xmit_index_ = 0xff;
   // The index in the queue to the next entry to transmit to the host,
   // or 0xff if the current report state has already been transmitted.
@@ -117,11 +124,13 @@ public:
   constexpr HidReportQueuePtr() noexcept = default;
   constexpr /* implicit */ HidReportQueuePtr(std::nullptr_t arg) noexcept {}
   HidReportQueuePtr(HidReportQueueImpl *impl,
+                    uint8_t report_id,
                     uint16_t report_size,
                     uint8_t num_entries,
                     const uint8_t *storage)
       : impl_(impl),
         report_size_(report_size),
+        report_id_(report_id),
         num_entries_(num_entries),
         storage_(storage) {}
 
@@ -136,9 +145,21 @@ public:
     return impl_;
   }
 
+  uint8_t report_id() const {
+    return report_id_;
+  }
+  uint16_t report_size() const {
+    return report_size_;
+  }
+  const uint8_t *
+  send_next_report(asel::chrono::steady_clock::time_point now) const {
+    return impl_->send_next_report(storage_, report_size_, num_entries_, now);
+  }
+
 private:
   HidReportQueueImpl *impl_ = nullptr;
   uint16_t report_size_ = 0;
+  uint8_t report_id_ = 0;
   uint8_t num_entries_ = 0;
   const uint8_t *storage_ = nullptr;
 };
@@ -155,8 +176,9 @@ public:
 
   explicit constexpr HidReportQueue() = default;
 
-  HidReportQueuePtr get_ptr() {
-    return HidReportQueuePtr(&impl_, report_size, num_entries, storage_.data());
+  HidReportQueuePtr get_ptr(uint8_t report_id) {
+    return HidReportQueuePtr(
+        &impl_, report_id, report_size, num_entries, storage_.data());
   }
 
   uint8_t *add_report_get_buffer(bool flush_queue) {

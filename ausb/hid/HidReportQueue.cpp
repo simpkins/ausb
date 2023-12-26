@@ -2,6 +2,7 @@
 #include "ausb/hid/HidReportQueue.h"
 
 #include "ausb/log.h"
+#include <cassert>
 
 namespace ausb::hid {
 
@@ -37,11 +38,31 @@ uint8_t HidReportQueueImpl::add_report_get_index(uint8_t *storage,
       next_to_send_ = next_queue_index(current_xmit_index_, num_entries);
     }
   } else if (next_to_send_ == 0xff) {
-    next_to_send_ = current_index_;
+    next_to_send_ = write_index;
   }
 
   current_index_ = write_index;
   return current_index_;
+}
+
+const uint8_t *HidReportQueueImpl::send_next_report(
+    const uint8_t *storage,
+    uint16_t report_size,
+    uint8_t num_entries,
+    asel::chrono::steady_clock::time_point now) {
+  assert(current_xmit_index_ == 0xff);
+  if (next_to_send_ != 0xff) {
+    current_xmit_index_ = next_to_send_;
+    if (next_to_send_ == current_xmit_index_) {
+      next_to_send_ = 0xff;
+    } else {
+      next_to_send_ = next_queue_index(next_to_send_, num_entries);
+    }
+  } else {
+    current_xmit_index_ = current_index_;
+  }
+  time_last_sent_ = now;
+  return storage + (current_xmit_index_ * report_size);
 }
 
 } // namespace ausb::hid

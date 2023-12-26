@@ -52,16 +52,11 @@ CtrlOutXfer *HidInterface::process_out_setup(MessagePipe *pipe,
       // TODO: inform a callback and let it decide how to respond
       return pipe->new_out_handler<AckEmptyCtrlOut>(pipe);
     }
-
-    AUSB_LOGW("unhandled HID request %u to HID keyboard interface",
-              packet.request);
-    return nullptr;
   }
 
-  AUSB_LOGW(
-      "unhandled control request (0x%#02x 0x%#02x) to HID keyboard interface",
-      packet.request_type,
-      packet.request);
+  AUSB_LOGW("unhandled control OUT request (0x%#02x 0x%#02x) to HID interface",
+            packet.request_type,
+            packet.request);
   return nullptr;
 }
 
@@ -102,8 +97,9 @@ CtrlInXfer *HidInterface::process_in_setup(MessagePipe *pipe,
     }
   }
 
-  // TODO:
-  AUSB_LOGE("TODO: implement HID Keyboard ctrl IN handling");
+  AUSB_LOGW("unhandled control IN request (0x%#02x 0x%#02x) to HID interface",
+            packet.request_type,
+            packet.request);
   return nullptr;
 }
 

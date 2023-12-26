@@ -65,26 +65,28 @@ class KeyboardInterface : public HidInterface {
 public:
   static constexpr uint16_t kDefaultMaxPacketSize = 8;
   static constexpr uint8_t kDefaultInterval = 10;
+  static constexpr uint8_t kReportId = 0;
   using ReportType = std::array<uint8_t, 8>;
   using KbdReportInfo = ReportInfo<0, ReportType>;
 
   constexpr explicit KeyboardInterface(
+      device::EndpointManager *manager,
       uint8_t in_endpoint_num,
       uint16_t max_packet_size = kDefaultMaxPacketSize) noexcept
-      : HidInterface(report_descriptor_.data(), &report_map_),
-        in_endpoint_(in_endpoint_num, max_packet_size) {}
+      : HidInterface(manager,
+                     in_endpoint_num,
+                     max_packet_size,
+                     report_descriptor_.data(),
+                     &report_map_) {}
 
-  HidInEndpoint &in_endpoint() {
-    return in_endpoint_;
+  void send_report(const uint8_t *data);
+  void send_report(const ReportType &data) {
+    send_report(data.data());
   }
 
   // TODO: add a thread-safe method to set the report from a different task
 
   bool set_output_report(asel::buf_view data) override;
-
-  static constexpr size_t report_descriptor_length() {
-    return report_descriptor_.kTotalLength;
-  }
 
   static constexpr InterfaceDescriptor make_interface_descriptor() {
     return HidInterface::make_boot_interface_descriptor(HidProtocol::Keyboard);
@@ -118,7 +120,6 @@ private:
   static constexpr auto report_descriptor_ = make_kbd_report_descriptor();
 
   HidReportMapStorage<KbdReportInfo> report_map_;
-  HidInEndpoint in_endpoint_;
 };
 
 } // namespace ausb::hid

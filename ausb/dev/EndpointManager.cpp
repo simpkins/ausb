@@ -144,22 +144,33 @@ void EndpointManager::stall_message_pipe(uint8_t endpoint_num) {
 }
 
 void EndpointManager::on_in_xfer_complete(uint8_t endpoint_num) {
+  // TODO: stop treating endpoint 0 specially here
   if (endpoint_num == 0) {
     ep0_.on_in_xfer_complete();
   } else {
-    // TODO
-    AUSB_LOGE("TODO: on_in_xfer_complete");
+    if (endpoint_num >= in_endpoints_.size() ||
+        in_endpoints_[endpoint_num] == nullptr) {
+      AUSB_LOGW(
+          "received IN transfer complete event for unexpected endpoint %u",
+          endpoint_num);
+      return;
+    }
+    in_endpoints_[endpoint_num]->on_in_xfer_complete();
   }
 }
 
 void EndpointManager::on_in_xfer_failed(uint8_t endpoint_num,
                                         XferFailReason reason) {
-  AUSB_LOGE("TODO: on_in_xfer_failed");
   if (endpoint_num == 0) {
     ep0_.on_in_xfer_failed(reason);
   } else {
-    // TODO
-    AUSB_LOGE("TODO: on_in_xfer_failed");
+    if (endpoint_num >= in_endpoints_.size() ||
+        in_endpoints_[endpoint_num] == nullptr) {
+      AUSB_LOGW("received IN transfer failed event for unexpected endpoint %u",
+                endpoint_num);
+      return;
+    }
+    in_endpoints_[endpoint_num]->on_in_xfer_failed(reason);
   }
 }
 

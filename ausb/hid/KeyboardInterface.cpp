@@ -14,9 +14,17 @@
 
 #include "ausb/log.h"
 
+#include <cstring>
+
 using namespace ausb::device;
 
 namespace ausb::hid {
+
+void KeyboardInterface::send_report(const uint8_t *data) {
+  auto *buf = add_report_prepare(kReportId);
+  memcpy(buf, data, sizeof(ReportType));
+  add_report_complete(kReportId);
+}
 
 bool KeyboardInterface::set_output_report(asel::buf_view data) {
   // TODO

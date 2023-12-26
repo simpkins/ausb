@@ -31,6 +31,12 @@ public:
       cur_xfer_data = nullptr;
       cur_xfer_size = 0;
     }
+
+    asel::buf_view cur_xfer_buf() {
+      return asel::buf_view(static_cast<const uint8_t *>(cur_xfer_data),
+                            cur_xfer_size);
+    }
+
     uint16_t max_packet_size = 0;
     bool xfer_in_progress = false;
     bool stalled = false;

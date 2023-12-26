@@ -62,7 +62,7 @@ public:
   }
   HidReportQueuePtr get_report_queue(uint8_t report_id) override final {
     if (report_id == ReportT::report_id) {
-      return report_.get_ptr();
+      return report_.get_ptr(ReportT::report_id);
     }
     return nullptr;
   }
@@ -70,7 +70,7 @@ public:
   HidReportQueuePtr get_next_pending_xfer(
       asel::chrono::steady_clock::time_point now) override final {
     if (report_.needs_xfer(now)) {
-      return report_.get_ptr();
+      return report_.get_ptr(ReportT::report_id);
     }
     return nullptr;
   }
@@ -100,7 +100,7 @@ public:
   }
   HidReportQueuePtr get_report_queue(uint8_t report_id) override final {
     if (report_id == Report1::report_id) {
-      return report_.get_ptr();
+      return report_.get_ptr(Report1::report_id);
     }
     return others_.get_report_queue(report_id);
   }
@@ -112,7 +112,7 @@ public:
     // if earlier report IDs have a lot of events and always need to be sent.
     // It might be nice to have a slightly more fair approach somehow.
     if (report_.needs_xfer(now)) {
-      return report_.get_ptr();
+      return report_.get_ptr(Report1::report_id);
     }
     return others_.get_next_pending_xfer(now);
   }

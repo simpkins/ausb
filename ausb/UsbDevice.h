@@ -73,7 +73,7 @@ public:
   }
 
   UsbDeviceImpl &dev() {
-    return *impl_;
+    return impl_;
   }
 
 private:
@@ -93,7 +93,7 @@ private:
   HwDeviceType hw_;
   StdControlHandler ctrl_handler{this};
   EndpointManager ep_manager_{&hw_, &ctrl_handler};
-  UsbDeviceImpl impl_;
+  UsbDeviceImpl impl_{&ep_manager_};
 };
 
 } // namespace ausb::device

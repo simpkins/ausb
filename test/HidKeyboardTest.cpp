@@ -29,6 +29,13 @@ public:
   static constexpr uint8_t kConfigId = 1;
   static constexpr uint8_t kHidInEndpointNum = 1;
 
+  constexpr explicit TestDevice(EndpointManager *manager)
+      : kbd_intf_(manager, kHidInEndpointNum) {}
+
+  hid::KeyboardInterface &kbd_intf() {
+    return kbd_intf_;
+  }
+
   bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
     if (config_id == 0) {
       ep_mgr.unconfigure();
@@ -73,7 +80,7 @@ public:
   }
 
 private:
-  hid::KeyboardInterface kbd_intf_{kHidInEndpointNum};
+  hid::KeyboardInterface kbd_intf_;
 };
 
 constinit UsbDevice<TestDevice, MockDevice> usb;
@@ -82,6 +89,35 @@ constinit UsbDevice<TestDevice, MockDevice> usb;
 
 ASEL_TEST(HidKeyboard, test) {
   attach_mock_device(usb);
+
+  // Send a report
+  usb.dev().kbd_intf().send_report(
+      {0x71, 0, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09});
+  ASEL_EXPECT_TRUE(usb.hw()->in_eps[1].xfer_in_progress);
+  const auto expected = hid::KeyboardInterface::ReportType{
+      {0x71, 0, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09}};
+  ASEL_EXPECT_EQ(expected, usb.hw()->in_eps[1].cur_xfer_buf());
+
+  // Try to send another report while the first report is still being
+  // transmitted.  This one will be stored as the current state, but we can't
+  // start transmitting it until the current transmission is complete.
+  usb.dev().kbd_intf().send_report(
+      {0x70, 0, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a});
+  // Try to send another report while the first report is still being
+  // transmitted.  This one will be stored as the current state, but we can't
+  // start transmitting it until the current transmission is complete.
+  // The previous untransmitted state will be dropped.
+  usb.dev().kbd_intf().send_report(
+      {0x80, 0, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b});
+
+  usb.manager()->handle_event(usb.hw()->complete_in_xfer(1));
+  ASEL_EXPECT_TRUE(usb.hw()->in_eps[1].xfer_in_progress);
+  const auto expected2 = hid::KeyboardInterface::ReportType{
+      {0x80, 0, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b}};
+  ASEL_EXPECT_EQ(expected2, usb.hw()->in_eps[1].cur_xfer_buf());
+
+  usb.manager()->handle_event(usb.hw()->complete_in_xfer(1));
+  ASEL_EXPECT_FALSE(usb.hw()->in_eps[1].xfer_in_progress);
 }
 
 } // namespace ausb::test

@@ -16,44 +16,16 @@ class EndpointManager;
 
 namespace ausb::hid {
 
-/*
- * This class contains code for the implementation of HidInEndpoint.
- * This is all of the code that does not need to be templatized.  We keep it in
- * a separate class to avoid it being instantiated multiple times, one for each
- * template instantiation.
- */
-class HidInEndpointImpl {
-public:
-  constexpr HidInEndpointImpl(uint8_t endpoint_num,
-                              uint16_t max_packet_size) noexcept
-      : endpoint_num_(endpoint_num), max_packet_size_(max_packet_size) {}
-
-  void start_xfer(const HidReportQueuePtr &queue, uint16_t longest_report_size);
-  bool is_xfer_in_progress() const;
-  void log_bad_report_id(uint8_t report_id) const;
-
-  /*
-   * Returns true if we should attempt to start a new transfer
-   */
-  bool on_in_xfer_complete();
-  bool on_in_xfer_failed(XferFailReason reason);
-
-private:
-  HidInEndpointImpl(HidInEndpointImpl const &) = delete;
-  HidInEndpointImpl &operator=(HidInEndpointImpl const &) = delete;
-
-  uint8_t endpoint_num_ = 0;
-  bool xfer_in_progress_ = false;
-  bool send_zero_length_packet_ = false;
-  uint16_t max_packet_size_ = 0;
-  device::EndpointManager *manager_ = nullptr;
-};
-
 class HidInEndpoint : public device::InEndpoint {
 public:
-  constexpr HidInEndpoint(uint8_t endpoint_num,
-                          uint16_t max_packet_size) noexcept
-      : impl_(endpoint_num, max_packet_size) {}
+  constexpr HidInEndpoint(device::EndpointManager *manager,
+                          uint8_t endpoint_num,
+                          uint16_t max_packet_size,
+                          HidReportMap *report_map) noexcept
+      : manager_(manager),
+        reports_(report_map),
+        max_packet_size_(max_packet_size),
+        endpoint_num_(endpoint_num) {}
 
   /**
    * Prepare to add a new INPUT report for the specified report ID.
@@ -64,26 +36,8 @@ public:
    * before returning to the USB task loop.
    */
   uint8_t *add_report_prepare(uint8_t report_id,
-                              bool flush_previous_entries = false) {
-    auto buf =
-        reports_->add_report_get_buffer(report_id, flush_previous_entries);
-    if (!buf) {
-      impl_.log_bad_report_id(report_id);
-      return nullptr;
-    }
-    return buf;
-  }
-  void add_report_complete(uint8_t report_id) {
-    if (impl_.is_xfer_in_progress()) {
-      return;
-    }
-    auto queue = reports_->get_report_queue(report_id);
-    if (!queue) {
-      impl_.log_bad_report_id(report_id);
-      return;
-    }
-    impl_.start_xfer(queue, reports_->get_longest_report_size());
-  }
+                              bool flush_previous_entries = false);
+  void add_report_complete(uint8_t report_id);
 
   static constexpr EndpointDescriptor make_descriptor(uint8_t endpoint_num,
                                                       uint16_t max_packet_size,
@@ -110,28 +64,29 @@ public:
     return nullptr;
   }
 
-  void on_in_xfer_complete() override {
-    if (impl_.on_in_xfer_complete()) {
-      start_next_transfer();
-    }
-  }
-  void on_in_xfer_failed(XferFailReason reason) override {
-    if (impl_.on_in_xfer_failed(reason)) {
-      start_next_transfer();
-    }
-  }
+  void on_in_xfer_complete() override;
+  void on_in_xfer_failed(XferFailReason reason) override;
 
 private:
-  void start_next_transfer() {
-    const auto now = asel::chrono::steady_clock::now();
-    auto queue = reports_->get_next_pending_xfer(now);
-    if (queue) {
-      impl_.start_xfer(queue, reports_->get_longest_report_size());
-    }
-  }
+  static constexpr uint8_t kUnusedReportID = 0xff;
 
-  HidReportMap *reports_ = nullptr;
-  HidInEndpointImpl impl_;
+  HidInEndpoint(HidInEndpoint const &) = delete;
+  HidInEndpoint &operator=(HidInEndpoint const &) = delete;
+
+  void start_next_transfer();
+  void start_xfer(const HidReportQueuePtr &queue, uint16_t longest_report_size);
+  bool is_xfer_in_progress() const {
+    return current_xmit_report_id_ != kUnusedReportID;
+  }
+  void log_bad_report_id(uint8_t report_id) const;
+  void clear_in_progress_xfer();
+
+  device::EndpointManager *const manager_ = nullptr;
+  HidReportMap *const reports_ = nullptr;
+  uint16_t const max_packet_size_ = 0;
+  uint8_t const endpoint_num_ = 0;
+  uint8_t current_xmit_report_id_ = kUnusedReportID;
+  bool send_zero_length_packet_ = false;
 };
 
 } // namespace ausb::hid

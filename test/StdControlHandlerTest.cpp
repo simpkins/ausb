@@ -158,6 +158,8 @@ public:
   static constexpr uint8_t kConfigA = 0x12;
   static constexpr uint8_t kConfigB = 0x34;
 
+  constexpr explicit MultiConfigDevice(EndpointManager *manager) {}
+
   bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
     if (config_id == 0) {
       ep_mgr.unconfigure();
