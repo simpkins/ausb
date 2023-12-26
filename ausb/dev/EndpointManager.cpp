@@ -3,6 +3,7 @@
 
 #include "ausb/dev/InEndpoint.h"
 #include "ausb/dev/Interface.h"
+#include "ausb/dev/OutEndpoint.h"
 #include "ausb/log.h"
 
 #include <cassert>
@@ -179,19 +180,29 @@ void EndpointManager::on_out_xfer_complete(uint8_t endpoint_num,
   if (endpoint_num == 0) {
     ep0_.on_out_xfer_complete(bytes_read);
   } else {
-    // TODO
-    AUSB_LOGE("TODO: on_out_xfer_complete");
+    if (endpoint_num >= out_endpoints_.size() ||
+        out_endpoints_[endpoint_num] == nullptr) {
+      AUSB_LOGW(
+          "received OUT transfer complete event for unexpected endpoint %u",
+          endpoint_num);
+      return;
+    }
+    out_endpoints_[endpoint_num]->on_out_xfer_complete(bytes_read);
   }
 }
 
 void EndpointManager::on_out_xfer_failed(uint8_t endpoint_num,
                                          XferFailReason reason) {
-  AUSB_LOGE("TODO: on_out_xfer_failed");
   if (endpoint_num == 0) {
     ep0_.on_out_xfer_failed(reason);
   } else {
-    // TODO
-    AUSB_LOGE("TODO: on_out_xfer_failed");
+    if (endpoint_num >= out_endpoints_.size() ||
+        out_endpoints_[endpoint_num] == nullptr) {
+      AUSB_LOGW("received OUT transfer failed event for unexpected endpoint %u",
+                endpoint_num);
+      return;
+    }
+    out_endpoints_[endpoint_num]->on_out_xfer_failed(reason);
   }
 }
 
@@ -213,6 +224,12 @@ Interface *EndpointManager::get_interface(uint8_t number) {
 
 void EndpointManager::set_configured(uint8_t config_id,
                                      asel::range<Interface *const> interfaces) {
+  if (state_ == DeviceState::Configured) {
+    // Call unconfigure() first to close all endpoints and interfaces
+    // from the previous configuration.
+    unconfigure();
+  }
+
   assert(interfaces.size() < interfaces_.size());
   for (size_t n = 0; n < interfaces_.size(); ++n) {
     Interface *new_intf;
@@ -235,8 +252,21 @@ void EndpointManager::set_configured(uint8_t config_id,
 void EndpointManager::unconfigure() {
   AUSB_LOGI("EndpointManager::unconfigure() invoked");
 
-  // TODO: close all open endpoints
+  // Close all open endpoints
+  for (size_t n = 0; n < in_endpoints_.size(); ++n) {
+    if (in_endpoints_[n] != nullptr) {
+      in_endpoints_[n]->unconfigure();
+    }
+    in_endpoints_[n] = nullptr;
+  }
+  for (size_t n = 0; n < out_endpoints_.size(); ++n) {
+    if (out_endpoints_[n] != nullptr) {
+      out_endpoints_[n]->unconfigure();
+    }
+    out_endpoints_[n] = nullptr;
+  }
 
+  // Inform all interfaces that they have been unconfigured
   for (size_t n = 0; n < interfaces_.size(); ++n) {
     if (interfaces_[n] != nullptr) {
       interfaces_[n]->unconfigure();
