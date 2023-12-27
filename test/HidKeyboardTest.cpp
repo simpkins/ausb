@@ -52,6 +52,7 @@ public:
                                 hid::KeyboardInterface::kDefaultMaxPacketSize);
     if (!res) {
       AUSB_LOGE("error opening HID IN endpoint");
+      return false;
     }
 
     ep_mgr.set_configured(config_id, &kbd_intf_);

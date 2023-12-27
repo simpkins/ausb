@@ -23,6 +23,9 @@ public:
   static constexpr uint8_t kConfigId = 1;
   static constexpr uint8_t kHidInEndpointNum = 1;
 
+  constexpr explicit TestDevice(EndpointManager *manager)
+      : kbd_intf_(manager, kHidInEndpointNum) {}
+
   bool set_configuration(uint8_t config_id, EndpointManager& ep_mgr) {
     if (config_id == 0) {
       ep_mgr.unconfigure();
@@ -39,6 +42,7 @@ public:
                                 hid::KeyboardInterface::kDefaultMaxPacketSize);
     if (!res) {
       AUSB_LOGE("error opening HID IN endpoint");
+      return false;
     }
 
     ep_mgr.set_configured(config_id, &kbd_intf_);
@@ -67,7 +71,7 @@ public:
   }
 
 private:
-  hid::KeyboardInterface kbd_intf_{kHidInEndpointNum};
+  hid::KeyboardInterface kbd_intf_;
 };
 
 static constinit UsbDevice<TestDevice> usb;
