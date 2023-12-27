@@ -1182,7 +1182,7 @@ void Esp32Device::initiate_next_write_xfer(uint8_t endpoint_num) {
 
     auto max_bytes_to_send = std::min(size_remaining, max_xfer_size);
     const auto pkts_left =
-        (max_bytes_to_send + (max_xfer_size - 1)) / max_xfer_size;
+        (max_bytes_to_send + (max_pkt_size - 1)) / max_pkt_size;
     if (pkts_left > max_pkt_cnt) {
       pkts_to_send = max_pkt_cnt;
       bytes_to_send = pkts_to_send * max_pkt_size;
