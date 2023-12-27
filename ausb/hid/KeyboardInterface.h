@@ -3,6 +3,7 @@
 
 #include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/EndpointDescriptor.h"
+#include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/HidInEndpoint.h"
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
@@ -110,8 +111,15 @@ public:
                            uint8_t endpoint_num,
                            uint16_t max_packet_size = 8,
                            uint8_t interval = 10) {
+    auto report_desc = make_kbd_report_descriptor();
+
+    HidDescriptor hid_desc;
+    hid_desc.set_num_descriptors(1);
+    hid_desc.set_report_descriptor_type(DescriptorType::HidReport);
+    hid_desc.set_report_descriptor_length(report_desc.kTotalLength);
+
     return cfg.add_interface(make_interface_descriptor())
-        .add_descriptor(make_kbd_report_descriptor())
+        .add_descriptor(hid_desc)
         .add_endpoint(make_in_endpoint_descriptor(
             endpoint_num, max_packet_size, interval));
   }

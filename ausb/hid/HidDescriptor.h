@@ -29,10 +29,10 @@ public:
             0x11, // bcdHID (lower half)
             0x01, // bcdHID (upper half)
             0,    // bCountryCode
-            0,    // bNumDescriptors
-            0,    // bDescriptorType
-            0,    // wDescriptorLength (lower half)
-            0     // wDescriptorLength (upper half)
+            1,    // bNumDescriptors
+            static_cast<uint8_t>(DescriptorType::HidReport), // bDescriptorType
+            0, // wDescriptorLength (lower half)
+            0  // wDescriptorLength (upper half)
         }} {}
 
   constexpr const std::array<uint8_t, kSize> &data() const {
