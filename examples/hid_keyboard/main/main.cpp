@@ -8,12 +8,13 @@
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/hid/HidDescriptor.h"
-#include "ausb/hid/KeyboardInterface.h"
+#include "ausb/hid/kbd/BootKeyboard.h"
 #include "ausb/log.h"
 
 using namespace ausb;
 using namespace ausb::device;
 using namespace std::chrono_literals;
+using ausb::kbd::BootKeyboard;
 
 namespace {
 const char *LogTag = "ausb.test";
@@ -35,11 +36,10 @@ public:
       return false;
     }
 
-    auto res =
-        ep_mgr.open_in_endpoint(kHidInEndpointNum,
-                                &kbd_intf_.in_endpoint(),
-                                EndpointType::Interrupt,
-                                hid::KeyboardInterface::kDefaultMaxPacketSize);
+    auto res = ep_mgr.open_in_endpoint(kHidInEndpointNum,
+                                       &kbd_intf_.in_endpoint(),
+                                       EndpointType::Interrupt,
+                                       BootKeyboard::kDefaultMaxPacketSize);
     if (!res) {
       AUSB_LOGE("error opening HID IN endpoint");
       return false;
@@ -55,7 +55,7 @@ public:
     dev.set_product(0x1000);
     dev.set_device_release(1, 0);
 
-    auto cfg = hid::KeyboardInterface::update_config_descriptor(
+    auto cfg = BootKeyboard::update_config_descriptor(
         ConfigDescriptor(kConfigId, ConfigAttr::RemoteWakeup),
         /*endpoint_num=*/1);
 
@@ -71,7 +71,7 @@ public:
   }
 
 private:
-  hid::KeyboardInterface kbd_intf_;
+  BootKeyboard kbd_intf_;
 };
 
 static constinit UsbDevice<TestDevice> usb;

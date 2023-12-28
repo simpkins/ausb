@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/hid/KeyboardInterface.h"
+#include "ausb/hid/kbd/BootKeyboard.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/desc/types.h"
@@ -17,18 +17,19 @@
 #include <cstring>
 
 using namespace ausb::device;
+using namespace ausb::hid;
 
-namespace ausb::hid {
+namespace ausb::kbd {
 
-void KeyboardInterface::send_report(const uint8_t *data) {
+void BootKeyboard::send_report(const uint8_t *data) {
   auto *buf = add_report_prepare(kReportId);
   memcpy(buf, data, sizeof(ReportType));
   add_report_complete(kReportId);
 }
 
-bool KeyboardInterface::set_output_report(asel::buf_view data) {
+bool BootKeyboard::set_output_report(asel::buf_view data) {
   // TODO
   return true;
 }
 
-} // namespace ausb::hid
+} // namespace ausb::kbd

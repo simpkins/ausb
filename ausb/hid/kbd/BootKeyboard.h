@@ -13,7 +13,7 @@
 #include "ausb/hid/usage/leds.h"
 #include "ausb/hid/usage/usage_page.h"
 
-namespace ausb::hid {
+namespace ausb::kbd {
 
 static constexpr auto make_kbd_report_descriptor() {
   const auto max_key_code = hid::Key::ExSel;
@@ -62,15 +62,15 @@ static constexpr auto make_kbd_report_descriptor() {
       .end_collection();
 }
 
-class KeyboardInterface : public HidInterface {
+class BootKeyboard : public hid::HidInterface {
 public:
   static constexpr uint16_t kDefaultMaxPacketSize = 8;
   static constexpr uint8_t kDefaultInterval = 10;
   static constexpr uint8_t kReportId = 0;
   using ReportType = std::array<uint8_t, 8>;
-  using KbdReportInfo = ReportInfo<0, ReportType>;
+  using KbdReportInfo = hid::ReportInfo<0, ReportType>;
 
-  constexpr explicit KeyboardInterface(
+  constexpr explicit BootKeyboard(
       device::EndpointManager *manager,
       uint8_t in_endpoint_num,
       uint16_t max_packet_size = kDefaultMaxPacketSize) noexcept
@@ -127,7 +127,7 @@ public:
 private:
   static constexpr auto report_descriptor_ = make_kbd_report_descriptor();
 
-  HidReportMapStorage<KbdReportInfo> report_map_;
+  hid::HidReportMapStorage<KbdReportInfo> report_map_;
 };
 
-} // namespace ausb::hid
+} // namespace ausb::kbd

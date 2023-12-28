@@ -19,11 +19,11 @@ set(
     "ausb/dev/ctrl/SetAddress.cpp"
     "ausb/dev/ctrl/StallCtrlIn.cpp"
     "ausb/dev/ctrl/StallCtrlOut.cpp"
-    "ausb/hid/KeyboardInterface.cpp"
     "ausb/hid/HidInEndpoint.cpp"
     "ausb/hid/HidInterface.cpp"
     "ausb/hid/HidReportQueue.cpp"
     "ausb/hid/HidSetReport.cpp"
+    "ausb/hid/kbd/BootKeyboard.cpp"
     "ausb/log.cpp"
 )
 

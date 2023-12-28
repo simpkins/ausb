@@ -5,7 +5,7 @@
 #include "ausb/desc/StaticDescriptorMap.h"
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/HidReportDescriptor.h"
-#include "ausb/hid/KeyboardInterface.h"
+#include "ausb/hid/kbd/BootKeyboard.h"
 #include "ausb/hid/types.h"
 #include "ausb/hid/usage/keys.h"
 #include "ausb/hid/usage/leds.h"
