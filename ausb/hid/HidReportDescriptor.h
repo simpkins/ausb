@@ -1,9 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/hid/generic_desktop.h"
 #include "ausb/hid/report_types.h"
-#include "ausb/hid/usage_page.h"
+#include "ausb/hid/usage/usage_page.h"
 
 #include <array>
 #include <type_traits>

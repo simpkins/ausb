@@ -8,10 +8,10 @@
 #include "ausb/hid/HidInterface.h"
 #include "ausb/hid/HidReportDescriptor.h"
 #include "ausb/hid/HidReportQueue.h"
-#include "ausb/hid/generic_desktop.h"
-#include "ausb/hid/key_codes.h"
-#include "ausb/hid/leds.h"
-#include "ausb/hid/usage_page.h"
+#include "ausb/hid/usage/generic_desktop.h"
+#include "ausb/hid/usage/keys.h"
+#include "ausb/hid/usage/leds.h"
+#include "ausb/hid/usage/usage_page.h"
 
 namespace ausb::hid {
 

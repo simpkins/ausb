@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/hid/usage_page.h"
+#include "ausb/hid/usage/usage_page.h"
 
 namespace ausb::hid {
 
