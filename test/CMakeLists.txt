@@ -1,6 +1,7 @@
 set(
     ausb_test_srcs
     descriptor_test.cpp
+    KbdBootReport.cpp
 )
 set(
     ausb_test_lib_srcs

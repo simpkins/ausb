@@ -24,6 +24,7 @@ set(
     "ausb/hid/HidReportQueue.cpp"
     "ausb/hid/HidSetReport.cpp"
     "ausb/hid/kbd/BootKeyboard.cpp"
+    "ausb/hid/kbd/BootReport.cpp"
     "ausb/log.cpp"
 )
 
