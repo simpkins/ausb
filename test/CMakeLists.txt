@@ -2,6 +2,7 @@ set(
     ausb_test_srcs
     descriptor_test.cpp
     KbdBootReport.cpp
+    KeyBitmap.cpp
 )
 set(
     ausb_test_lib_srcs
