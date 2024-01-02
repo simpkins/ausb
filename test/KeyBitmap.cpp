@@ -26,7 +26,7 @@ void log_field(const KeyDiff &diff) {
           diff.is_press ? "press" : "release");
 }
 
-ASEL_TEST(KeyBitmap, iterator) {
+ASEL_TEST(KeyBitmap, iterator_hid) {
   using KB = KeyBitmap<256, hid::Key>;
   KB a;
   KB b;
@@ -61,6 +61,89 @@ ASEL_TEST(KeyBitmap, iterator) {
   expected[3].key = hid::Key::W;
   expected[3].is_press = true;
   ASEL_EXPECT_EQ(diffs, expected);
+}
+
+template <size_t NumKeys, typename KeyTypeT, typename... Args>
+void expect_diff(typename KeyBitmap<NumKeys, KeyTypeT>::Iterator iter,
+                 const typename KeyBitmap<NumKeys, KeyTypeT>::Iterator &end) {
+  if (iter != end) {
+    ASEL_ADD_FAILURE("unexpected key change (",
+                     iter.key(),
+                     ", ",
+                     iter.is_press() ? "press" : "release",
+                     ")");
+    return;
+  }
+}
+
+template <size_t NumKeys, typename KeyTypeT, typename... Args>
+void expect_diff(typename KeyBitmap<NumKeys, KeyTypeT>::Iterator iter,
+                 const typename KeyBitmap<NumKeys, KeyTypeT>::Iterator &end,
+                 KeyTypeT key,
+                 bool is_press,
+                 Args &&...args) {
+  if (iter == end) {
+    ASEL_ADD_FAILURE("missing key change: (",
+                     key,
+                     ", ",
+                     is_press ? "press" : "release",
+                     ")");
+    return;
+  }
+  if (iter.key() != key) {
+    if (key < iter.key()) {
+      ASEL_ADD_FAILURE("missing key change (",
+                       key,
+                       ", ",
+                       is_press ? "press" : "release",
+                       ")");
+      expect_diff<NumKeys, KeyTypeT>(iter, end, std::forward<Args>(args)...);
+      return;
+    } else {
+      ASEL_ADD_FAILURE("unexpected key change (",
+                       iter.key(),
+                       ", ",
+                       iter.is_press() ? "press" : "release",
+                       ")");
+      expect_diff<NumKeys, KeyTypeT>(
+          ++iter, end, key, is_press, std::forward<Args>(args)...);
+      return;
+    }
+  }
+
+  if (iter.is_press() != is_press) {
+    ASEL_ADD_FAILURE("unexpected press type for key ",
+                     key,
+                     ": expected ",
+                     is_press ? "press" : "release",
+                     ", found ",
+                     iter.is_press() ? "press" : "release");
+  }
+  expect_diff<NumKeys, KeyTypeT>(++iter, end, std::forward<Args>(args)...);
+}
+
+template <size_t NumKeys, typename KeyTypeT, typename... Args>
+void expect_diff(const KeyBitmap<NumKeys, KeyTypeT> &new_kb,
+                 const KeyBitmap<NumKeys, KeyTypeT> &old_kb,
+                 Args &&...args) {
+  auto changes = new_kb.changes_from(old_kb);
+  expect_diff<NumKeys, KeyTypeT>(
+      changes.begin(), changes.end(), std::forward<Args>(args)...);
+}
+
+ASEL_TEST(KeyBitmap, iterator) {
+  using KB = KeyBitmap<231, uint8_t>;
+  KB a;
+  KB b;
+  a.add_key(7);
+  b.add_key(8);
+  a.add_key(64);
+  b.add_key(125);
+  a.add_key(127);
+  b.add_key(128);
+
+  expect_diff(
+      a, b, 7, true, 8, false, 64, true, 125, false, 127, true, 128, false);
 }
 
 } // namespace ausb::test

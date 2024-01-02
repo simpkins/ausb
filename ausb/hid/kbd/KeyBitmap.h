@@ -17,6 +17,7 @@ public:
   using KeyType = KeyTypeT;
   using KeyIntType = size_t;
   static constexpr size_t kNumBytes = (NumKeys + 7) / 8;
+  static constexpr size_t kNumU32s = (NumKeys + 31) / 32;
 
   class Changes;
   class Iterator;
@@ -24,16 +25,16 @@ public:
   constexpr KeyBitmap() = default;
 
   bool get(KeyType index) const {
-    return ((data_[static_cast<KeyIntType>(index) >> 3] >>
+    return ((data_.u8[static_cast<KeyIntType>(index) >> 3] >>
              (static_cast<KeyIntType>(index) & 7)) &
             1);
   }
   void set(KeyType index, bool value) {
     if (value) {
-      data_[static_cast<KeyIntType>(index) >> 3] |=
+      data_.u8[static_cast<KeyIntType>(index) >> 3] |=
           static_cast<uint8_t>(1 << (static_cast<KeyIntType>(index) & 7));
     } else {
-      data_[static_cast<KeyIntType>(index) >> 3] &=
+      data_.u8[static_cast<KeyIntType>(index) >> 3] &=
           ~static_cast<uint8_t>(1 << (static_cast<KeyIntType>(index) & 7));
     }
   }
@@ -42,13 +43,16 @@ public:
     set(value, true);
   }
   void clear() {
-    memset(data_.data(), 0, data_.size());
+    memset(data_.u8.data(), 0, data_.u8.size());
   }
 
-  Changes changes_from(const KeyBitmap<NumKeys, KeyTypeT> &other);
+  Changes changes_from(const KeyBitmap<NumKeys, KeyTypeT> &other) const;
 
 private:
-  asel::array<uint8_t, kNumBytes> data_ = {};
+  union {
+    asel::array<uint8_t, kNumBytes> u8 = {};
+    asel::array<uint32_t, kNumU32s> u32;
+  } data_;
 };
 
 template <size_t NumKeys, typename KeyTypeT>
@@ -83,12 +87,9 @@ public:
 
   Iterator(const Bitmap *new_kb, const Bitmap *old_kb, BeginEnum)
       : new_(new_kb), old_(old_kb), position_(0) {
-    // TODO: read uint32 words at a time
-    if (new_->get(static_cast<KeyType>(0)) ==
-        old_->get(static_cast<KeyType>(0))) {
-      advance();
-    }
+    advance_loop();
   }
+
   Iterator(const Bitmap *new_kb, const Bitmap *old_kb, EndEnum)
       : new_(new_kb), old_(old_kb), position_(NumKeys) {}
 
@@ -118,15 +119,51 @@ public:
 
 private:
   void advance() {
-    // TODO: read uint32 words at a time
     ++position_;
-    while (position_ < NumKeys) {
-      if (new_->get(static_cast<KeyType>(position_)) !=
-          old_->get(static_cast<KeyType>(position_))) {
-        return;
+    advance_loop();
+  }
+
+  void advance_loop() {
+    size_t word_idx = position_ / 32;
+    size_t byte_idx;
+    size_t bit_idx;
+    if ((position_ & 31) != 0) {
+      byte_idx = (position_ >> 3);
+      bit_idx = position_ & 7;
+      if (bit_idx != 0) {
+        goto bit_loop;
       }
-      ++position_;
+      goto byte_loop;
     }
+
+    // Optimize for the case when the keys are mostly the same between each
+    // scan loop.  Check uint32_t values at a time.  If we find a word with
+    // differences then check bytes at a time, and check individual bits once
+    // we find specific bytes with differences.
+    for (; word_idx < Bitmap::kNumU32s; ++word_idx) {
+      if (new_->data_.u32[word_idx] != old_->data_.u32[word_idx]) [[unlikely]] {
+        byte_idx = word_idx * 4;
+      byte_loop:
+        do {
+          bit_idx = 0;
+        bit_loop:
+          const auto new_byte = new_->data_.u8[byte_idx];
+          const auto old_byte = old_->data_.u8[byte_idx];
+          if (new_byte != old_byte) {
+            for (; bit_idx < 8; ++bit_idx) {
+              if (((new_byte >> bit_idx) & 1) != ((old_byte >> bit_idx) & 1)) {
+                position_ = (byte_idx * 8) + bit_idx;
+                return;
+              }
+            }
+          }
+          ++byte_idx;
+        } while ((byte_idx & 3) != 0);
+      }
+    }
+
+    // No remaining differences
+    position_ = NumKeys;
   }
 
   const Bitmap *new_;
@@ -137,7 +174,7 @@ private:
 template <size_t NumKeys, typename KeyTypeT>
 typename KeyBitmap<NumKeys, KeyTypeT>::Changes
 KeyBitmap<NumKeys, KeyTypeT>::changes_from(
-    const KeyBitmap<NumKeys, KeyTypeT> &other) {
+    const KeyBitmap<NumKeys, KeyTypeT> &other) const {
   return Changes(this, &other);
 }
 
