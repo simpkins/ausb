@@ -26,7 +26,7 @@ void log_field(const KeyDiff &diff) {
           diff.is_press ? "press" : "release");
 }
 
-ASEL_TEST(KeyBitmap, iterator_hid) {
+ASEL_TEST(KeyBitmap, changes_from_hid) {
   using KB = KeyBitmap<256, hid::Key>;
   KB a;
   KB b;
@@ -131,7 +131,7 @@ void expect_diff(const KeyBitmap<NumKeys, KeyTypeT> &new_kb,
       changes.begin(), changes.end(), std::forward<Args>(args)...);
 }
 
-ASEL_TEST(KeyBitmap, iterator) {
+ASEL_TEST(KeyBitmap, changes_from) {
   using KB = KeyBitmap<231, uint8_t>;
   KB a;
   KB b;

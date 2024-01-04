@@ -4,8 +4,6 @@
 #include <asel/array.h>
 #include <asel/inttypes.h>
 
-#include <cstring>
-
 namespace ausb::kbd {
 
 /**
@@ -43,10 +41,30 @@ public:
     set(value, true);
   }
   void clear() {
-    memset(data_.u8.data(), 0, data_.u8.size());
+    for (size_t n = 0; n < data_.u32.size(); ++n) {
+      data_.u32[n] = 0;
+    }
   }
 
   Changes changes_from(const KeyBitmap<NumKeys, KeyTypeT> &other) const;
+  bool has_changes(const KeyBitmap<NumKeys, KeyTypeT> &other) const {
+    for (size_t n = 0; n < data_.u32.size(); ++n) {
+      if (data_.u32[n] != other.data_.u32[n]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Changes pressed_keys() const;
+  bool any_pressed() const {
+    for (size_t n = 0; n < data_.u32.size(); ++n) {
+      if (data_.u32[n] != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
 
 private:
   union {
@@ -75,6 +93,13 @@ private:
   const Bitmap *old_;
 };
 
+namespace detail {
+size_t key_bitmap_advance_iterator(const uint32_t *new_u32,
+                                   const uint32_t *old_u32,
+                                   size_t start_position,
+                                   size_t num_keys);
+}
+
 template <size_t NumKeys, typename KeyTypeT>
 class KeyBitmap<NumKeys, KeyTypeT>::Iterator {
 public:
@@ -86,9 +111,13 @@ public:
   enum EndEnum { End };
 
   Iterator(const Bitmap *new_kb, const Bitmap *old_kb, BeginEnum)
-      : new_(new_kb), old_(old_kb), position_(0) {
-    advance_loop();
-  }
+      : new_(new_kb),
+        old_(old_kb),
+        position_(detail::key_bitmap_advance_iterator(
+            new_->data_.u32.data(),
+            old_ ? old_->data_.u32.data() : nullptr,
+            0,
+            NumKeys)) {}
 
   Iterator(const Bitmap *new_kb, const Bitmap *old_kb, EndEnum)
       : new_(new_kb), old_(old_kb), position_(NumKeys) {}
@@ -119,56 +148,16 @@ public:
 
 private:
   void advance() {
-    ++position_;
-    advance_loop();
+    position_ = detail::key_bitmap_advance_iterator(
+        new_->data_.u32.data(),
+        old_ ? old_->data_.u32.data() : nullptr,
+        position_ + 1,
+        NumKeys);
   }
 
-  void advance_loop() {
-    size_t word_idx = position_ / 32;
-    size_t byte_idx;
-    size_t bit_idx;
-    if ((position_ & 31) != 0) {
-      byte_idx = (position_ >> 3);
-      bit_idx = position_ & 7;
-      if (bit_idx != 0) {
-        goto bit_loop;
-      }
-      goto byte_loop;
-    }
-
-    // Optimize for the case when the keys are mostly the same between each
-    // scan loop.  Check uint32_t values at a time.  If we find a word with
-    // differences then check bytes at a time, and check individual bits once
-    // we find specific bytes with differences.
-    for (; word_idx < Bitmap::kNumU32s; ++word_idx) {
-      if (new_->data_.u32[word_idx] != old_->data_.u32[word_idx]) [[unlikely]] {
-        byte_idx = word_idx * 4;
-      byte_loop:
-        do {
-          bit_idx = 0;
-        bit_loop:
-          const auto new_byte = new_->data_.u8[byte_idx];
-          const auto old_byte = old_->data_.u8[byte_idx];
-          if (new_byte != old_byte) {
-            for (; bit_idx < 8; ++bit_idx) {
-              if (((new_byte >> bit_idx) & 1) != ((old_byte >> bit_idx) & 1)) {
-                position_ = (byte_idx * 8) + bit_idx;
-                return;
-              }
-            }
-          }
-          ++byte_idx;
-        } while ((byte_idx & 3) != 0);
-      }
-    }
-
-    // No remaining differences
-    position_ = NumKeys;
-  }
-
-  const Bitmap *new_;
-  const Bitmap *old_;
-  size_t position_;
+  const Bitmap *new_ = nullptr;
+  const Bitmap *old_ = nullptr;
+  size_t position_ = 0;
 };
 
 template <size_t NumKeys, typename KeyTypeT>
@@ -176,6 +165,12 @@ typename KeyBitmap<NumKeys, KeyTypeT>::Changes
 KeyBitmap<NumKeys, KeyTypeT>::changes_from(
     const KeyBitmap<NumKeys, KeyTypeT> &other) const {
   return Changes(this, &other);
+}
+
+template <size_t NumKeys, typename KeyTypeT>
+typename KeyBitmap<NumKeys, KeyTypeT>::Changes
+KeyBitmap<NumKeys, KeyTypeT>::pressed_keys() const {
+  return Changes(this, nullptr);
 }
 
 } // namespace ausb::kbd
