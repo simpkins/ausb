@@ -62,16 +62,19 @@ void EndpointManager::handle_event(const DeviceEvent &event) {
 
 void EndpointManager::reset() {
   AUSB_LOGW("EndpointManager::reset() called");
+  unconfigure_endpoints_and_interfaces();
   ep0_.on_reset(XferFailReason::LocalReset);
   hw_->reset();
   state_ = DeviceState::Uninit;
-  config_id_ = 0;
   remote_wakeup_enabled_ = false;
 }
 
 void EndpointManager::on_bus_reset() {
   AUSB_LOGW("on_bus_reset");
+  unconfigure_endpoints_and_interfaces();
   ep0_.on_reset(XferFailReason::BusReset);
+  state_ = DeviceState::Uninit;
+  remote_wakeup_enabled_ = false;
 }
 
 void EndpointManager::on_suspend() {
@@ -252,7 +255,11 @@ void EndpointManager::set_configured(uint8_t config_id,
 void EndpointManager::unconfigure() {
   AUSB_LOGI("EndpointManager::unconfigure() invoked");
 
-  // Close all open endpoints
+  unconfigure_endpoints_and_interfaces();
+  state_ = DeviceState::Address;
+}
+
+void EndpointManager::unconfigure_endpoints_and_interfaces() {
   for (size_t n = 0; n < in_endpoints_.size(); ++n) {
     if (in_endpoints_[n] != nullptr) {
       in_endpoints_[n]->unconfigure();
@@ -275,7 +282,6 @@ void EndpointManager::unconfigure() {
   }
 
   config_id_ = 0;
-  state_ = DeviceState::Address;
 }
 
 bool EndpointManager::open_in_endpoint(uint8_t endpoint_num,

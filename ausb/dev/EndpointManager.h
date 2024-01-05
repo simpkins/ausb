@@ -258,6 +258,8 @@ private:
   void on_out_xfer_complete(uint8_t endpoint_num, uint32_t bytes_read);
   void on_out_xfer_failed(uint8_t endpoint_num, XferFailReason reason);
 
+  void unconfigure_endpoints_and_interfaces();
+
   DeviceState state_ = DeviceState::Uninit;
   uint8_t config_id_ = 0;
   bool remote_wakeup_enabled_ = false;
