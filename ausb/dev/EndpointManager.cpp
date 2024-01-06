@@ -317,10 +317,16 @@ void EndpointManager::start_ctrl_in_write(MessagePipe *pipe,
 void EndpointManager::start_in_write(uint8_t endpoint_num,
                                      const void *data,
                                      uint32_t size) {
+  auto endpoint = in_endpoints_[endpoint_num];
+  if (!endpoint) {
+    AUSB_LOGE("attempted to start IN transfer on unopened endpoint %u",
+              endpoint_num);
+    return;
+  }
+
   auto status = hw_->start_write(endpoint_num, data, size);
   if (status != XferStartResult::Ok) {
     AUSB_LOGE("error starting IN transfer: %d", static_cast<int>(status));
-    auto endpoint = in_endpoints_[endpoint_num - 1];
     endpoint->on_in_xfer_failed(XferFailReason::SoftwareError);
     return;
   }
