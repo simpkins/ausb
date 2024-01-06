@@ -99,7 +99,6 @@ bool Esp32Device::process_events() {
     auto flags = events.flags.load(std::memory_order_relaxed);
     if (flags == 0) {
       // No more events ready to process
-      ESP_LOGV(LogTag, "process_events() called with no events ready");
       return processed_events;
     }
     processed_events = true;
