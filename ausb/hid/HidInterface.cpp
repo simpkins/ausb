@@ -33,18 +33,17 @@ CtrlOutXfer *HidInterface::process_out_setup(MessagePipe *pipe,
   } else if (req_type == SetupReqType::Class) {
     const auto hid_req_type = static_cast<HidRequest>(packet.request);
     if (hid_req_type == HidRequest::SetIdle) {
-      const uint8_t duration = (packet.value >> 8) & 0xff;
+      const uint8_t duration_4ms = (packet.value >> 8) & 0xff;
       const uint8_t report_id = packet.value & 0xff;
-      AUSB_LOGI("HID SET_IDLE: report_id=%u duration=%u", report_id, duration);
+      AUSB_LOGI(
+          "HID SET_IDLE: report_id=%u duration=%u", report_id, duration_4ms);
       auto report_queue = report_map_->get_report_queue(report_id);
       if (!report_queue) {
         AUSB_LOGW("received SET_IDLE request for unknown HID report %d",
                   report_id);
         return pipe->new_out_handler<StallCtrlOut>(pipe);
       }
-      // TODO: actually record and act on the idle setting
-      // report_queue->set_idle_4ms(duration);
-      (void)duration;
+      report_queue->set_idle_4ms(duration_4ms);
       return pipe->new_out_handler<AckEmptyCtrlOut>(pipe);
     } else if (hid_req_type == HidRequest::SetReport) {
       AUSB_LOGE("TODO: HID SET_REPORT");

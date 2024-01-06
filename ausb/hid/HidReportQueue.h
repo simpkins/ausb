@@ -48,9 +48,15 @@ public:
   void xmit_finished();
 
   bool needs_xfer(asel::chrono::steady_clock::time_point now) const {
-    return next_to_send_ != 0xff ||
-           (now >= (time_last_sent_ +
-                    (idle_rate_in_4ms_ * asel::chrono::milliseconds(4))));
+    if (next_to_send_ != 0xff) {
+      return true;
+    }
+    if (idle_rate_in_4ms_ == 0) {
+      return false;
+    }
+    const auto due_date =
+        time_last_sent_ + (idle_rate_in_4ms_ * asel::chrono::milliseconds(4));
+    return now >= due_date;
   }
   const uint8_t *send_next_report(const uint8_t *storage,
                                   uint16_t report_size,
@@ -58,6 +64,10 @@ public:
                                   asel::chrono::steady_clock::time_point now);
   void xfer_finished() {
     current_xmit_index_ = 0xff;
+  }
+
+  void set_idle_4ms(uint8_t value_in_4ms) {
+    idle_rate_in_4ms_ = value_in_4ms;
   }
 
 private:
