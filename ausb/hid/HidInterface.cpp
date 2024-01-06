@@ -35,6 +35,7 @@ CtrlOutXfer *HidInterface::process_out_setup(MessagePipe *pipe,
     if (hid_req_type == HidRequest::SetIdle) {
       const uint8_t duration = (packet.value >> 8) & 0xff;
       const uint8_t report_id = packet.value & 0xff;
+      AUSB_LOGI("HID SET_IDLE: report_id=%u duration=%u", report_id, duration);
       auto report_queue = report_map_->get_report_queue(report_id);
       if (!report_queue) {
         AUSB_LOGW("received SET_IDLE request for unknown HID report %d",
@@ -46,9 +47,11 @@ CtrlOutXfer *HidInterface::process_out_setup(MessagePipe *pipe,
       (void)duration;
       return pipe->new_out_handler<AckEmptyCtrlOut>(pipe);
     } else if (hid_req_type == HidRequest::SetReport) {
+      AUSB_LOGE("TODO: HID SET_REPORT");
       // TODO
       return pipe->new_out_handler<HidSetReport>(pipe, this);
     } else if (hid_req_type == HidRequest::SetProtocol) {
+      AUSB_LOGE("TODO: HID SET_PROTOCOL");
       // TODO: inform a callback and let it decide how to respond
       return pipe->new_out_handler<AckEmptyCtrlOut>(pipe);
     }
@@ -66,6 +69,7 @@ CtrlInXfer *HidInterface::process_in_setup(MessagePipe *pipe,
   if (req_type == SetupReqType::Standard) {
     const auto std_req_type = packet.get_std_request();
     if (std_req_type == StdRequestType::GetDescriptor) {
+      AUSB_LOGI("HID GET_DESCRIPTOR: value=%u", packet.value);
       // In practice it seems like there is only ever a single HID class
       // descriptor.  The HID specification indicates that there should be "at
       // least one" report descriptor, but there doesn't seem to be a use for
@@ -89,10 +93,13 @@ CtrlInXfer *HidInterface::process_in_setup(MessagePipe *pipe,
   } else if (req_type == SetupReqType::Class) {
     const auto hid_req_type = static_cast<HidRequest>(packet.request);
     if (hid_req_type == HidRequest::GetReport) {
+      AUSB_LOGE("TODO: HID GET_REPORT");
       // TODO
     } else if (hid_req_type == HidRequest::GetIdle) {
+      AUSB_LOGE("TODO: HID GET_IDLE");
       // TODO
     } else if (hid_req_type == HidRequest::GetProtocol) {
+      AUSB_LOGE("TODO: HID GET_PROTOCOL");
       // TODO
     }
   }
