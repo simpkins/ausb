@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/StdControlHandler.h"
 
+#include "ausb/SetupPacket.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
@@ -56,9 +57,9 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_low_speed) {
 
   // Test that endpoint 0's max packet size is reported as 8 bytes
   // when the bus is enumerated as low speed
-  ep_mgr.handle_event(SuspendEvent{});
-  ep_mgr.handle_event(BusResetEvent{});
-  ep_mgr.handle_event(BusEnumDone{UsbSpeed::Low});
+  ep_mgr.on_suspend();
+  ep_mgr.on_bus_reset();
+  ep_mgr.on_enum_done(UsbSpeed::Low);
   ASEL_EXPECT_EQ(hw.out_eps[0].max_packet_size, 8);
   ASEL_EXPECT_EQ(hw.in_eps[0].max_packet_size, 8);
 
@@ -68,7 +69,7 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_low_speed) {
   get_dev_desc.value = 0x0100;      // Device descriptor
   get_dev_desc.index = 0;
   get_dev_desc.length = 18;
-  ep_mgr.handle_event(SetupPacketEvent{0, get_dev_desc});
+  hw.setup_received(get_dev_desc);
 
   ASEL_ASSERT_TRUE(hw.in_eps[0].xfer_in_progress);
   buf_view reply(static_cast<const uint8_t *>(hw.in_eps[0].cur_xfer_data),
@@ -110,9 +111,9 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_full_speed) {
 
   // Test that endpoint 0's max packet size is reported as 8 bytes
   // when the bus is enumerated as low speed
-  ep_mgr.handle_event(SuspendEvent{});
-  ep_mgr.handle_event(BusResetEvent{});
-  ep_mgr.handle_event(BusEnumDone{UsbSpeed::Full});
+  ep_mgr.on_suspend();
+  ep_mgr.on_bus_reset();
+  ep_mgr.on_enum_done(UsbSpeed::Full);
   ASEL_EXPECT_EQ(hw.out_eps[0].max_packet_size, 64);
   ASEL_EXPECT_EQ(hw.in_eps[0].max_packet_size, 64);
 
@@ -122,7 +123,7 @@ ASEL_TEST(StdControlHandler, test_ep0_mps_full_speed) {
   get_dev_desc.value = 0x0100;      // Device descriptor
   get_dev_desc.index = 0;
   get_dev_desc.length = 18;
-  ep_mgr.handle_event(SetupPacketEvent{0, get_dev_desc});
+  hw.setup_received(get_dev_desc);
 
   ASEL_ASSERT_TRUE(hw.in_eps[0].xfer_in_progress);
   buf_view reply(static_cast<const uint8_t *>(hw.in_eps[0].cur_xfer_data),
@@ -229,8 +230,8 @@ ASEL_TEST(StdControlHandler, multi_config) {
   set_cfg_78.value = 0x78;        // Config ID
   set_cfg_78.index = 0;
   set_cfg_78.length = 0;
-  multi_cfg_usb.handle_event(SetupPacketEvent{0, set_cfg_78});
   auto *const hw = multi_cfg_usb.hw();
+  hw->setup_received(set_cfg_78);
   ASEL_EXPECT_TRUE(hw->in_eps[0].stalled);
   ASEL_EXPECT_TRUE(hw->out_eps[0].stalled);
   hw->reset_in_stall(0);

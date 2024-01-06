@@ -3,7 +3,6 @@
 
 #include "ausb/ausb_config.h"
 #include "ausb/ausb_types.h"
-#include "ausb/dev/DeviceEvent.h"
 
 #include <chrono>
 #include <cstdint>
@@ -23,7 +22,7 @@ public:
   [[nodiscard]] virtual std::error_code init() = 0;
   virtual void reset() = 0;
 
-  virtual DeviceEvent wait_for_event(std::chrono::milliseconds timeout) = 0;
+  virtual bool process_events() = 0;
 
   virtual void set_address(uint8_t address) = 0;
   virtual void set_address_early(uint8_t address) = 0;

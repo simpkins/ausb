@@ -2,13 +2,19 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
-#include "ausb/dev/DeviceEvent.h"
 #include "ausb/hw/HWDeviceBase.h"
+#include "ausb/usb_types.h"
 
 #include <array>
 #include <chrono>
 
 namespace ausb {
+
+class SetupPacket;
+
+namespace device {
+class EndpointManager;
+}
 
 /**
  * A mock hardware implementation, for use in unit tests.
@@ -52,10 +58,10 @@ public:
   // HWDeviceBase APIs
   ////////////////////////////////////////////////////////////////////
 
-  [[nodiscard]] std::error_code init();
+  [[nodiscard]] std::error_code init(device::EndpointManager *mgr);
   void reset();
 
-  DeviceEvent wait_for_event(std::chrono::milliseconds timeout);
+  bool process_events();
 
   void set_address(uint8_t address);
   void set_address_early(uint8_t address);
@@ -82,14 +88,17 @@ public:
   // Methods to be invoked by test code
   ////////////////////////////////////////////////////////////////////
 
-  DeviceEvent complete_in_xfer(uint8_t endpoint_num);
-  DeviceEvent complete_out_xfer(uint8_t endpoint_num, int32_t bytes_read = -1);
+  void setup_received(const SetupPacket &packet);
+  void complete_in_xfer(uint8_t endpoint_num);
+  void complete_out_xfer(uint8_t endpoint_num, int32_t bytes_read = -1);
   void reset_in_stall(uint8_t endpoint_num);
   void reset_out_stall(uint8_t endpoint_num);
 
 private:
   MockDevice(MockDevice const &) = delete;
   MockDevice &operator=(MockDevice const &) = delete;
+
+  device::EndpointManager *mgr_ = nullptr;
 };
 
 } // namespace ausb

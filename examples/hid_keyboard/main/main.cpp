@@ -9,6 +9,7 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/kbd/BootKeyboard.h"
+#include "ausb/hw/esp/TaskNotificationLoop.h"
 #include "ausb/log.h"
 
 using namespace ausb;
@@ -74,6 +75,7 @@ private:
   BootKeyboard kbd_intf_;
 };
 
+static constinit TaskNotificationLoop task;
 static constinit UsbDevice<TestDevice> usb;
 
 } // namespace
@@ -84,12 +86,18 @@ extern "C" void app_main() {
   esp_log_level_set("ausb.test", ESP_LOG_VERBOSE);
 
   ESP_LOGI(LogTag, "Starting USB initialization...");
-  const auto init_err = usb.init();
+  task.init();
+  const auto init_err = usb.init(&task);
   if (init_err) {
     ESP_LOGE(LogTag, "Error initializing USB device.");
     abort();
   }
 
   ESP_LOGI(LogTag, "Running USB task loop...");
-  usb.loop();
+
+  while (true) {
+    task.wait(3600s);
+    ESP_LOGD(LogTag, "USB task loop woken");
+    usb.hw()->process_events();
+  }
 }

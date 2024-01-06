@@ -42,6 +42,11 @@ enum class XferStartResult {
   EndpointNotConfigured,
 };
 
+enum class UsbSpeed {
+  Low,
+  Full,
+};
+
 /**
  * The USB device state.
  *

@@ -22,44 +22,6 @@ overloaded(Ts...) -> overloaded<Ts...>;
 
 namespace ausb::device {
 
-void EndpointManager::loop() {
-  while (true) {
-    // The timeout value shouldn't really matter here much, since we want to
-    // run forever and just retry immediately on timeout.  Set a relatively
-    // large value.
-    const auto event = hw_->wait_for_event(3600s);
-    handle_event(event);
-  }
-}
-
-void EndpointManager::handle_event(const DeviceEvent &event) {
-  std::visit(overloaded{
-                 [this](const NoEvent &) {
-                   // Nothing to do.  NoEvent can be returned if
-                   // wait_for_event() was called with a timeout and the timeout
-                   // expired before an event occured.
-                 },
-                 [this](const BusResetEvent &) { on_bus_reset(); },
-                 [this](const SuspendEvent &) { on_suspend(); },
-                 [this](const ResumeEvent &) { on_resume(); },
-                 [this](const BusEnumDone &ev) { on_enum_done(ev.speed); },
-                 [this](const SetupPacketEvent &ev) { on_setup_received(ev); },
-                 [this](const InXferCompleteEvent &ev) {
-                   on_in_xfer_complete(ev.endpoint_num);
-                 },
-                 [this](const InXferFailedEvent &ev) {
-                   on_in_xfer_failed(ev.endpoint_num, ev.reason);
-                 },
-                 [this](const OutXferCompleteEvent &ev) {
-                   on_out_xfer_complete(ev.endpoint_num, ev.bytes_read);
-                 },
-                 [this](const OutXferFailedEvent &ev) {
-                   on_out_xfer_failed(ev.endpoint_num, ev.reason);
-                 },
-             },
-             event);
-}
-
 void EndpointManager::reset() {
   AUSB_LOGW("EndpointManager::reset() called");
   unconfigure_endpoints_and_interfaces();
@@ -124,22 +86,22 @@ void EndpointManager::on_enum_done(UsbSpeed speed) {
   ep0_.on_enum_done(max_packet_size);
 }
 
-void EndpointManager::on_setup_received(const SetupPacketEvent &event) {
+void EndpointManager::on_setup_received(uint8_t endpoint_num,
+                                        const SetupPacket &packet) {
   // Ignore any packets until we have seen a reset.
   if (dev_state_unsuspended(state_) == DeviceState::Uninit) {
     AUSB_LOGW("ignoring USB setup packet before reset seen");
     return;
   }
 
-  if (event.endpoint_num == 0) {
-    ep0_.on_setup_received(event.packet);
+  if (endpoint_num == 0) {
+    ep0_.on_setup_received(packet);
   } else {
     // We could eventually provide APIs for someone to configure a message
     // pipe on an endpoint other than EP0.  For now we don't provide an API yet
     // to configure any other endpoints as message pipes.
     // Using message pipes on endpoints other than EP0 seems pretty uncommon.
-    AUSB_LOGW("SETUP packet received on unexpected endpoint %u",
-              event.endpoint_num);
+    AUSB_LOGW("SETUP packet received on unexpected endpoint %u", endpoint_num);
   }
 }
 

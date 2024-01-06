@@ -111,13 +111,13 @@ ASEL_TEST(HidKeyboard, test) {
   usb.dev().kbd_intf().send_report(
       {0x80, 0, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b});
 
-  usb.manager()->handle_event(usb.hw()->complete_in_xfer(1));
+  usb.hw()->complete_in_xfer(1);
   ASEL_EXPECT_TRUE(usb.hw()->in_eps[1].xfer_in_progress);
   const auto expected2 =
       BootKeyboard::ReportType{{0x80, 0, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b}};
   ASEL_EXPECT_EQ(expected2, usb.hw()->in_eps[1].cur_xfer_buf());
 
-  usb.manager()->handle_event(usb.hw()->complete_in_xfer(1));
+  usb.hw()->complete_in_xfer(1);
   ASEL_EXPECT_FALSE(usb.hw()->in_eps[1].xfer_in_progress);
 }
 

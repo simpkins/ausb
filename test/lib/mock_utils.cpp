@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "mock_utils.h"
 
+#include "ausb/SetupPacket.h"
 #include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/dev/EndpointManager.h"
@@ -19,9 +20,9 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
     return false;
   }
 
-  ep_manager->handle_event(SuspendEvent{});
-  ep_manager->handle_event(BusResetEvent{});
-  ep_manager->handle_event(BusEnumDone{UsbSpeed::Full});
+  ep_manager->on_suspend();
+  ep_manager->on_bus_reset();
+  ep_manager->on_enum_done(UsbSpeed::Full);
 
   // Walk through some normal steps that would be done by a host
   // Get the device descriptor
@@ -31,7 +32,7 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
   get_dev_desc.value = 0x0100;      // Device descriptor
   get_dev_desc.index = 0;
   get_dev_desc.length = 18;
-  ep_manager->handle_event(SetupPacketEvent{0, get_dev_desc});
+  ep_manager->on_setup_received(0, get_dev_desc);
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
   }
@@ -48,12 +49,12 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
       return false;
   }
 
-  ep_manager->handle_event(hw->complete_in_xfer(0));
+  hw->complete_in_xfer(0);
   if (!ASEL_EXPECT_TRUE(hw->out_eps[0].xfer_in_progress)) {
     return false;
   }
   ASEL_EXPECT_EQ(0, hw->out_eps[0].cur_xfer_size);
-  ep_manager->handle_event(hw->complete_out_xfer(0));
+  hw->complete_out_xfer(0);
 
   // Call SET_ADDRESS
   SetupPacket set_addr;
@@ -62,12 +63,12 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
   set_addr.value = 1234;        // Address
   set_addr.index = 0;
   set_addr.length = 0;
-  ep_manager->handle_event(SetupPacketEvent{0, set_addr});
+  hw->setup_received(set_addr);
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
   }
   ASEL_EXPECT_EQ(0, hw->in_eps[0].cur_xfer_size);
-  ep_manager->handle_event(hw->complete_in_xfer(0));
+  hw->complete_in_xfer(0);
 
   // Get the config descriptor
   SetupPacket get_cfg_desc;
@@ -76,7 +77,7 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
   get_cfg_desc.value = 0x0200;      // Config descriptor
   get_cfg_desc.index = 0;
   get_cfg_desc.length = 9;
-  ep_manager->handle_event(SetupPacketEvent{0, get_cfg_desc});
+  hw->setup_received(get_cfg_desc);
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
   }
@@ -90,12 +91,12 @@ bool attach_mock_device(MockDevice *hw, EndpointManager *ep_manager) {
   ConfigDescriptorParser cfg_desc(cfg_reply);
   const auto cfg_id = cfg_desc.value();
 
-  ep_manager->handle_event(hw->complete_in_xfer(0));
+  hw->complete_in_xfer(0);
   if (!ASEL_EXPECT_TRUE(hw->out_eps[0].xfer_in_progress)) {
     return false;
   }
   ASEL_EXPECT_EQ(0, hw->out_eps[0].cur_xfer_size);
-  ep_manager->handle_event(hw->complete_out_xfer(0));
+  hw->complete_out_xfer(0);
 
   // Call SET_CONFIGURATION with the first config ID
   if (!mock_send_set_config(hw, ep_manager, cfg_id)) {
@@ -113,14 +114,14 @@ bool mock_send_set_config(MockDevice *hw, device::EndpointManager *ep_manager,
   set_cfg.value = config_id;   // Config ID
   set_cfg.index = 0;
   set_cfg.length = 0;
-  ep_manager->handle_event(SetupPacketEvent{0, set_cfg});
+  hw->setup_received(set_cfg);
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
   }
   if (!ASEL_EXPECT_EQ(0, hw->in_eps[0].cur_xfer_size)) {
     return false;
   }
-  ep_manager->handle_event(hw->complete_in_xfer(0));
+  hw->complete_in_xfer(0);
 
   return true;
 }
@@ -135,7 +136,7 @@ bool mock_send_get_config(MockDevice *hw, device::EndpointManager *ep_manager,
   set_cfg.value = 0;   // Config ID
   set_cfg.index = 0;
   set_cfg.length = 1;
-  ep_manager->handle_event(SetupPacketEvent{0, set_cfg});
+  hw->setup_received(set_cfg);
 
   if (!ASEL_EXPECT_TRUE(hw->in_eps[0].xfer_in_progress)) {
     return false;
@@ -150,14 +151,14 @@ bool mock_send_get_config(MockDevice *hw, device::EndpointManager *ep_manager,
   config_id = reply[0];
 
   // Ack the transfer
-  ep_manager->handle_event(hw->complete_in_xfer(0));
+  hw->complete_in_xfer(0);
   if (!ASEL_EXPECT_TRUE(hw->out_eps[0].xfer_in_progress)) {
     return false;
   }
   if (!ASEL_EXPECT_EQ(0, hw->out_eps[0].cur_xfer_size)) {
     return false;
   }
-  ep_manager->handle_event(hw->complete_out_xfer(0));
+  hw->complete_out_xfer(0);
 
   return true;
 }

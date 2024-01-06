@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/dev/MessagePipe.h"
 
+#include "ausb/SetupPacket.h"
 #include "ausb/dev/ControlMessageHandler.h"
 #include "ausb/dev/CtrlInXfer.h"
 #include "ausb/dev/CtrlOutXfer.h"
@@ -248,7 +249,7 @@ void MessagePipe::invoke_xfer_failed(XferFailReason reason) {
   // TODO: invoke_xfer_failed() can potentially be invoked from inside one of
   // the CtrlInXfer or CtrlOutXfer methods.  It would probably be better to
   // avoid immediately destroying the xfer object before we return, and instead
-  // defer it's destruction until the start of the next wait_for_event() call.
+  // defer it's destruction until the start of the next task loop iteration.
   // This would avoid us deleting the xfer object while it may still be running
   // on the stack.  (Deleting it while it is running isn't necessarily a
   // problem, but it is a problem if the running method attempts to access any

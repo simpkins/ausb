@@ -1,11 +1,16 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/hw/mock/MockDevice.h"
 
+#include "ausb/dev/EndpointManager.h"
+
 #include <asel/test/checks.h>
+
+using ausb::device::EndpointManager;
 
 namespace ausb {
 
-std::error_code MockDevice::init() {
+std::error_code MockDevice::init(EndpointManager *mgr) {
+  mgr_ = mgr;
   return {};
 }
 
@@ -18,8 +23,8 @@ void MockDevice::reset() {
   }
 }
 
-DeviceEvent MockDevice::wait_for_event(std::chrono::milliseconds timeout) {
-  return NoEvent{NoEventReason::Timeout};
+bool MockDevice::process_events() {
+  return false;
 }
 
 void MockDevice::set_address(uint8_t address) {}
@@ -104,20 +109,23 @@ void MockDevice::stall_control_endpoint(uint8_t endpoint_num) {
   out_eps[endpoint_num].stalled = true;
 }
 
-DeviceEvent MockDevice::complete_in_xfer(uint8_t endpoint_num) {
+void MockDevice::setup_received(const SetupPacket &packet) {
+  mgr_->on_setup_received(0, packet);
+}
+
+void MockDevice::complete_in_xfer(uint8_t endpoint_num) {
   if (!ASEL_EXPECT_TRUE(in_eps[endpoint_num].xfer_in_progress)) {
-    return NoEvent(NoEventReason::HwProcessing);
+    return;
   }
   in_eps[endpoint_num].cur_xfer_data = nullptr;
   in_eps[endpoint_num].cur_xfer_size = 0;
   in_eps[endpoint_num].xfer_in_progress = false;
-  return InXferCompleteEvent(endpoint_num);
+  mgr_->on_in_xfer_complete(endpoint_num);
 }
 
-DeviceEvent MockDevice::complete_out_xfer(uint8_t endpoint_num,
-                                          int32_t bytes_read) {
+void MockDevice::complete_out_xfer(uint8_t endpoint_num, int32_t bytes_read) {
   if (!ASEL_EXPECT_TRUE(out_eps[endpoint_num].xfer_in_progress)) {
-    return NoEvent(NoEventReason::HwProcessing);
+    return;
   }
 
   uint16_t const bytes_read_reply =
@@ -126,7 +134,7 @@ DeviceEvent MockDevice::complete_out_xfer(uint8_t endpoint_num,
   out_eps[endpoint_num].cur_xfer_data = nullptr;
   out_eps[endpoint_num].cur_xfer_size = 0;
   out_eps[endpoint_num].xfer_in_progress = false;
-  return OutXferCompleteEvent(endpoint_num, bytes_read_reply);
+  mgr_->on_out_xfer_complete(endpoint_num, bytes_read_reply);
 }
 
 void MockDevice::reset_in_stall(uint8_t endpoint_num) {
