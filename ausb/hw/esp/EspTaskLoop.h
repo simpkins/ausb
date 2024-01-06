@@ -20,7 +20,7 @@ class EspTaskLoop {
 public:
   constexpr EspTaskLoop() noexcept = default;
 
-  virtual void wake_from_isr() = 0;
+  virtual void wake_from_usb_isr() = 0;
 
 private:
   EspTaskLoop(EspTaskLoop const &) = delete;

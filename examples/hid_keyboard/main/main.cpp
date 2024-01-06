@@ -14,7 +14,6 @@
 
 using namespace ausb;
 using namespace ausb::device;
-using namespace std::chrono_literals;
 using ausb::kbd::BootKeyboard;
 
 namespace {
@@ -96,8 +95,10 @@ extern "C" void app_main() {
   ESP_LOGI(LogTag, "Running USB task loop...");
 
   while (true) {
-    task.wait(3600s);
-    ESP_LOGD(LogTag, "USB task loop woken");
+    auto wake_flags = task.wait_forever();
+    ESP_LOGD(LogTag, "USB task loop woken: flags=%#" PRIx32, wake_flags);
+    // We could check if the WakeUsb bit is set in wake_flags, but since we
+    // don't wait on any other event types we don't really bother.
     usb.hw()->process_events();
   }
 }

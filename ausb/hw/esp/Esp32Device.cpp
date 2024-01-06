@@ -1651,7 +1651,7 @@ void Esp32Device::intr_main() {
   if (flags != orig_flags) {
     ISR_LOGV("USB interrupt 0x%02" PRIx32 " done", int_status);
     events.flags.store(flags, std::memory_order_release);
-    loop_->wake_from_isr();
+    loop_->wake_from_usb_isr();
   } else {
     ISR_LOGV("USB interrupt 0x%02" PRIx32 " was no-op", int_status);
   }
