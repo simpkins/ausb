@@ -556,7 +556,7 @@ void Esp32Device::process_out_ep_interrupt(uint8_t endpoint_num,
   // updated to enable OUT transfer receipt after a SETUP packet.
   if ((doepint & USB_SETUP0_M)) {
     ESP_LOGD(LogTag, "EP%u OUT: SETUP receive complete", endpoint_num);
-    mgr_->on_setup_received(endpoint_num, setup_packet_.setup);
+    process_setup_received(endpoint_num);
   }
 }
 
@@ -597,6 +597,29 @@ void Esp32Device::process_out_xfer_complete(uint8_t endpoint_num) {
 
   xfer.reset();
   mgr_->on_out_xfer_complete(endpoint_num, xfer.bytes_read);
+}
+
+void Esp32Device::process_setup_received(uint8_t endpoint_num) {
+  // Abort any in-progress OUT or IN transfers on this endpoint
+  // when we receive a SETUP packet.
+  //
+  // I have encountered host devices that sometimes don't perform the final OUT
+  // status phase of GET_DESCRIPTOR requests, and instead just send a new SETUP
+  // request.
+  auto& out_xfer = out_transfers_[endpoint_num];
+  if (out_xfer.status == OutEPStatus::Busy) {
+    out_xfer.reset();
+    mgr_->on_out_xfer_failed(endpoint_num, XferFailReason::ProtocolError);
+  }
+  auto& in_xfer = in_transfers_[endpoint_num];
+  if (in_xfer.status == InEPStatus::Busy) {
+    flush_tx_fifo(endpoint_num);
+    in_xfer.reset();
+    mgr_->on_in_xfer_failed(endpoint_num, XferFailReason::ProtocolError);
+  }
+
+  // Now inform the EndpointManager of the new SETUP packet
+  mgr_->on_setup_received(endpoint_num, setup_packet_.setup);
 }
 
 std::error_code Esp32Device::init(EndpointManager *mgr,

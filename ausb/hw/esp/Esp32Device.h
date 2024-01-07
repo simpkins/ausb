@@ -553,6 +553,7 @@ private:
   void process_out_ep_interrupts(InterruptEvents &events);
   void process_out_ep_interrupt(uint8_t endpoint_num, uint32_t doepint);
   void process_out_xfer_complete(uint8_t endpoint_num);
+  void process_setup_received(uint8_t endpoint_num);
 
   void flush_all_transfers_on_reset();
   void disable_all_out_endpoints();

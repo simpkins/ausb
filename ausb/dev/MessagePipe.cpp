@@ -135,7 +135,7 @@ void MessagePipe::on_in_xfer_complete() {
 void MessagePipe::on_in_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
   // in Status::InSendPartial, Status::InSendFinal, or Status::OutAck.
-  AUSB_LOGW("control IN failure: status=%d, reason%d",
+  AUSB_LOGW("control IN failure: status=%d, reason=%d",
             static_cast<int>(status_),
             static_cast<int>(reason));
 
@@ -170,7 +170,7 @@ void MessagePipe::on_out_xfer_complete(uint32_t bytes_read) {
 void MessagePipe::on_out_xfer_failed(XferFailReason reason) {
   // This should only occur after we started an IN operation, which is either
   // in Status::InStatus, or Status::OutXfer.
-  AUSB_LOGW("control OUT failure: status=%d, reason%d",
+  AUSB_LOGW("control OUT failure: status=%d, reason=%d",
             static_cast<int>(status_),
             static_cast<int>(reason));
 
