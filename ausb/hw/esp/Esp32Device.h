@@ -540,6 +540,7 @@ private:
   void intr_in_endpoint(InterruptEvents &events, uint8_t endpoint_num);
 
   void process_bus_reset();
+  void reset_device_state();
   void process_in_ep_interrupts(InterruptEvents &events);
   void process_in_ep_interrupt(uint8_t endpoint_num, uint32_t diepint);
   void initiate_next_write_xfer(uint8_t endpoint_num);

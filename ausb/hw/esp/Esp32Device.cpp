@@ -197,6 +197,17 @@ void Esp32Device::process_bus_reset() {
     out_transfers_[endpoint_num].unconfigure();
   }
 
+  // Call reset_device_state().  We already called this once in
+  // intr_bus_reset() as soon as we received the interrupt.  However, call it
+  // again here to ensure we are actually in a reset state now.  It is possible
+  // for us to receive back to back RESET, ENUM_DONE, RESET interrupts before
+  // the main USB task is able to process them.  In this case, the main task
+  // may continue processing the ENUM_DONE event after the second RESET
+  // interrupt, and may try to configure endpoint 0 even though we have
+  // actually been reset a second time already.  We therefore want the second
+  // reset to ensure that the state is truly reset again.
+  reset_device_state();
+
   flush_all_transfers_on_reset();
 
   // Re-enable receipt of SETUP and transfer complete endpoint interrupts
@@ -1683,11 +1694,17 @@ void Esp32Device::intr_main() {
 
 void Esp32Device::intr_bus_reset() {
   ISR_LOGV("USB int: reset");
-
-  // Immediately configure all endpoints to NAK any new packets
+  // Immediately clear the device configuration and set all endpoints to NAK
+  // any new packets.
+  //
   // We do most other state manipulation in process_bus_reset() in the main USB
   // task, but we want to immediately stop transmission of any new data after
   // the reset until process_bus_reset() can run.
+  reset_device_state();
+}
+
+void Esp32Device::reset_device_state() {
+  // NAK all IN or OUT packets
   nak_all_out_endpoints();
   nak_all_in_endpoints();
 
@@ -1901,10 +1918,10 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   const uint32_t full_words_to_copy =
       std::min(static_cast<uint32_t>(packet_size), capacity_left) /
       sizeof(uint32_t);
-  ESP_LOGV(LogTag,
-           "EP%d out: copy %" PRIu32 " full words",
-           endpoint_num,
-           full_words_to_copy);
+  ESP_LOGV2(LogTag,
+            "EP%d out: copy %" PRIu32 " full words",
+            endpoint_num,
+            full_words_to_copy);
   auto *buf = static_cast<uint8_t *>(xfer.data) + xfer.bytes_read;
   xfer.bytes_read += packet_size;
   for (uint32_t n = 0; n < full_words_to_copy; ++n) {
@@ -1928,10 +1945,10 @@ void Esp32Device::receive_packet(uint8_t endpoint_num, uint16_t packet_size) {
   // We may have more capacity for a partial packet
   auto words_read = full_words_to_copy;
   if (capacity_left > 0) {
-    ESP_LOGV(LogTag,
-             "EP%d out: copy partial word of %" PRIu32 " bytes",
-             endpoint_num,
-             std::min(capacity_left, bytes_left));
+    ESP_LOGV2(LogTag,
+              "EP%d out: copy partial word of %" PRIu32 " bytes",
+              endpoint_num,
+              std::min(capacity_left, bytes_left));
     assert(capacity_left < sizeof(uint32_t));
     const uint32_t word = (*rx_fifo);
     memcpy(buf, &word, std::min(capacity_left, bytes_left));
