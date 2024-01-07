@@ -16,7 +16,7 @@
 #include <cinttypes>
 #include <cstring>
 
-#define AUSB_VERBOSE_LOGGING
+// #define AUSB_VERBOSE_LOGGING
 
 // ESP_LOGx level aren't checked when using ESP_EARLY_LOGI() during
 // interrupt context.  Provide our own log macro so we can have some
@@ -25,9 +25,11 @@
 #ifdef AUSB_VERBOSE_LOGGING
 #define ISR_LOGD(arg, ...) ESP_EARLY_LOGI(LogTag, arg, ##__VA_ARGS__)
 #define ISR_LOGV(arg, ...) ESP_EARLY_LOGI(LogTag, arg, ##__VA_ARGS__)
+#define ESP_LOGV2(tag, arg, ...) ESP_LOGV(tag, arg, ##__VA_ARGS__)
 #else
 #define ISR_LOGD(arg, ...) (static_cast<void>(0))
 #define ISR_LOGV(arg, ...) (static_cast<void>(0))
+#define ESP_LOGV2(tag, arg, ...) (static_cast<void>(0))
 #endif
 
 using namespace std::chrono_literals;
@@ -1429,7 +1431,7 @@ void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num,
     const uint32_t *data32 = static_cast<const uint32_t *>(data);
     for (uint16_t n = 0; n < whole_words; ++n) {
       (*tx_fifo) = data32[n];
-      ESP_LOGV(LogTag, "  aligned write word %" PRIu16, n);
+      ESP_LOGV2(LogTag, "  aligned write word %" PRIu16, n);
     }
   } else {
     // Handle writing unaligned input data
@@ -1439,17 +1441,17 @@ void Esp32Device::copy_pkt_to_fifo(uint8_t fifo_num,
       uint32_t word = data8[n] | (data8[n + 1] << 8) | (data8[n + 2] << 16) |
                       (data8[n + 3] << 24);
       (*tx_fifo) = word;
-      ESP_LOGV(LogTag, "  unaligned write word %" PRIu16, n);
+      ESP_LOGV2(LogTag, "  unaligned write word %" PRIu16, n);
     }
   }
 
   // Handle any remaining data less than a full word
   const uint16_t idx = whole_words * 4;
   if (idx < pkt_size) {
-    ESP_LOGV(LogTag,
-             "  write tail difference %" PRIu16 " - %" PRIu16,
-             pkt_size,
-             idx);
+    ESP_LOGV2(LogTag,
+              "  write tail difference %" PRIu16 " - %" PRIu16,
+              pkt_size,
+              idx);
     const uint8_t *tail = static_cast<const uint8_t *>(data) + idx;
     uint32_t word = tail[0];
     if (idx + 1 < pkt_size) {
