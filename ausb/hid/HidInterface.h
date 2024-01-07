@@ -27,10 +27,12 @@ public:
                          uint16_t max_packet_size,
                          const uint8_t *report_descriptor,
                          size_t report_descriptor_size,
-                         HidReportMap *report_map)
+                         HidReportMap *report_map,
+                         HidReportMap *boot_report_map = nullptr)
       : report_descriptor_(report_descriptor),
         report_descriptor_size_(report_descriptor_size),
         report_map_(report_map),
+        boot_report_map_(report_map),
         in_endpoint_(manager, in_endpoint_num, max_packet_size, report_map_) {}
 
   template <size_t S>
@@ -56,6 +58,10 @@ public:
   // does not have to perform a runtime lookup of the report queue.  It could
   // also return a pointer to the correct underlying report data type, rather
   // than a 'uint8_t*' buffer.
+
+  // TODO: we need to provide separate APIs for updating normal reports vs boot
+  // reports.  For boot-protocol-capable interfaces, users should probably
+  // update both reports regardless of what protocol is currently configured.
 
   uint8_t *add_report_prepare(uint8_t report_id,
                               bool flush_previous_entries = false) {
@@ -91,11 +97,39 @@ public:
   }
 
 private:
+  device::CtrlOutXfer *set_idle(device::MessagePipe *pipe,
+                                const SetupPacket &packet);
+  device::CtrlOutXfer *set_report(device::MessagePipe *pipe,
+                                  const SetupPacket &packet);
+  device::CtrlOutXfer *set_protocol(device::MessagePipe *pipe,
+                                    const SetupPacket &packet);
+
+  device::CtrlInXfer *get_descriptor(device::MessagePipe *pipe,
+                                     const SetupPacket &packet);
+  device::CtrlInXfer *get_idle(device::MessagePipe *pipe,
+                               const SetupPacket &packet);
+  device::CtrlInXfer *get_report(device::MessagePipe *pipe,
+                                 const SetupPacket &packet);
+  device::CtrlInXfer *get_protocol(device::MessagePipe *pipe,
+                                   const SetupPacket &packet);
+
+  HidReportMap *get_report_map() const {
+    return protocol_ == HidReportProtocol::Report ? report_map_
+                                                  : boot_report_map_;
+  }
+  HidReportQueuePtr get_report_queue(uint8_t report_id) {
+    return get_report_map()->get_report_queue(report_id);
+  }
+
   // Note: the HidInterface does not own the storage for report_descriptor_ or
   // report_map_, and simply points to data owned by the caller.
   const uint8_t *const report_descriptor_ = nullptr;
   size_t const report_descriptor_size_ = 0;
+  // protocol_ selects whether report_map_ or boot_report_map_ is currently in
+  // use.
+  HidReportProtocol protocol_ = HidReportProtocol::Report;
   HidReportMap *const report_map_ = nullptr;
+  HidReportMap *const boot_report_map_ = nullptr;
   HidInEndpoint in_endpoint_;
 };
 

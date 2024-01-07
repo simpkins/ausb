@@ -28,6 +28,13 @@ public:
         endpoint_num_(endpoint_num) {}
 
   /**
+   * change_protocol() will be called when a HID boot keyboard or mouse
+   * interface switches between the boot protocol and normal report protocol,
+   * or vice-versa.
+   */
+  void change_protocol(HidReportMap* report_map);
+
+  /**
    * Prepare to add a new INPUT report for the specified report ID.
    *
    * This returns the buffer where the report data should be written.
@@ -82,7 +89,7 @@ private:
   void clear_in_progress_xfer();
 
   device::EndpointManager *const manager_ = nullptr;
-  HidReportMap *const reports_ = nullptr;
+  HidReportMap *reports_ = nullptr;
   uint16_t const max_packet_size_ = 0;
   uint8_t const endpoint_num_ = 0;
   uint8_t current_xmit_report_id_ = kUnusedReportID;

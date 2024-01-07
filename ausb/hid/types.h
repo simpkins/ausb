@@ -6,6 +6,8 @@
 namespace ausb {
 
 /**
+ * Values for the bInterfaceSubClass field in the HID interface descriptor.
+ *
  * HID class devices usually do not use the subclass field,
  * and instead use HID report descriptors to describe their data schema.
  *
@@ -29,13 +31,26 @@ enum class HidRequest : uint8_t {
 };
 
 /**
- * The HidProtocol field should be None unless the subclass is set to
- * HidSubclass::Boot.
+ * Values for the bInterfaceProtocol field in the HID interface descriptor.
  */
 enum class HidProtocol : uint8_t {
   None = 0,
   Keyboard = 1,
   Mouse = 2,
+};
+
+/**
+ * Values for the SET_PROTOCOL and GET_PROTOCOL control requests.
+ */
+enum class HidReportProtocol : uint8_t {
+  Boot = 0,
+  Report = 1,
+};
+
+enum class HidReportType : uint8_t {
+  Input = 1,
+  Output = 2,
+  Feature = 3,
 };
 
 /**

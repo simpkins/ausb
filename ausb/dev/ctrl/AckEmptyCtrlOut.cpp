@@ -2,11 +2,18 @@
 #include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
 
 #include "ausb/SetupPacket.h"
+#include "ausb/log.h"
 
 namespace ausb::device {
 
 void AckEmptyCtrlOut::start(const SetupPacket &packet) {
   if (packet.length != 0) {
+    AUSB_LOGE(
+        "received OUT SETUP packet with unexpected non-zero length %" PRIu16
+        " request_type=%#" PRIx16 " request=%#" PRIx16,
+        packet.length,
+        packet.request_type,
+        packet.request);
     error();
   }
   ack();

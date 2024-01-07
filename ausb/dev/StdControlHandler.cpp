@@ -8,9 +8,9 @@
 #include "ausb/dev/EndpointManager.h"
 #include "ausb/dev/Interface.h"
 #include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
-#include "ausb/dev/ctrl/GetConfiguration.h"
 #include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
 #include "ausb/dev/ctrl/GetStaticDescriptor.h"
+#include "ausb/dev/ctrl/SendData.h"
 #include "ausb/dev/ctrl/SetAddress.h"
 #include "ausb/dev/ctrl/StallCtrlIn.h"
 #include "ausb/dev/ctrl/StallCtrlOut.h"
@@ -152,8 +152,7 @@ StdControlHandler::process_std_device_in(MessagePipe *pipe,
     AUSB_LOGE("TODO: handle GET_STATUS");
     return nullptr;
   } else if (std_req_type == StdRequestType::GetConfiguration) {
-    return pipe->new_in_handler<GetConfiguration>(pipe,
-                                                  pipe->manager()->config_id());
+    return pipe->new_in_handler<SendU8>(pipe, pipe->manager()->config_id());
   }
 
   AUSB_LOGW("unknown standard device IN request %u",

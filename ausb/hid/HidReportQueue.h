@@ -54,8 +54,7 @@ public:
     if (idle_rate_in_4ms_ == 0) {
       return false;
     }
-    const auto due_date =
-        time_last_sent_ + (idle_rate_in_4ms_ * asel::chrono::milliseconds(4));
+    const auto due_date = time_last_sent_ + get_idle();
     return now >= due_date;
   }
   const uint8_t *send_next_report(const uint8_t *storage,
@@ -68,6 +67,12 @@ public:
 
   void set_idle_4ms(uint8_t value_in_4ms) {
     idle_rate_in_4ms_ = value_in_4ms;
+  }
+  uint8_t get_idle_4ms() const {
+    return idle_rate_in_4ms_;
+  }
+  std::chrono::milliseconds get_idle() const {
+    return (idle_rate_in_4ms_ * asel::chrono::milliseconds(4));
   }
 
 private:

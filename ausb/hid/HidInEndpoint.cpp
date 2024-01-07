@@ -7,6 +7,11 @@
 
 namespace ausb::hid {
 
+void HidInEndpoint::change_protocol(HidReportMap *report_map) {
+  reports_ = report_map;
+  // TODO: cancel and flush any in-progress transfer
+}
+
 uint8_t *HidInEndpoint::add_report_prepare(uint8_t report_id,
                                            bool flush_previous_entries) {
   assert(report_id != kUnusedReportID);
