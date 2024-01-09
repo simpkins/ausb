@@ -1,7 +1,6 @@
 set(
     esp_srcs
     "ausb/hw/esp/Esp32Device.cpp"
-    "ausb/hw/esp/EspError.cpp"
     "ausb/hw/esp/TaskNotificationLoop.cpp"
 )
 if(CONFIG_AUSB_HW_MOCK)

@@ -2,8 +2,9 @@
 #include "ausb/hw/esp/Esp32Device.h"
 
 #include "ausb/device/EndpointManager.h"
-#include "ausb/hw/esp/EspError.h"
 #include "ausb/hw/esp/EspTaskLoop.h"
+
+#include <asel/esp/EspError.h>
 
 #include <esp_check.h>
 #include <esp_log.h>
@@ -33,6 +34,7 @@
 #endif
 
 using namespace std::chrono_literals;
+using asel::make_esp_error;
 using ausb::device::EndpointManager;
 
 namespace {
