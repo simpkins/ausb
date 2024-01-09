@@ -22,8 +22,10 @@ void StdControlHandler::on_reset(XferFailReason reason) {
   callback_->on_reset(reason);
 }
 
-void StdControlHandler::on_enum_done(uint8_t max_packet_size) {
-  ep0_max_packet_size_ = max_packet_size;
+void StdControlHandler::on_enum_done(UsbSpeed speed,
+                                     uint8_t ep0_max_packet_size) {
+  ep0_max_packet_size_ = ep0_max_packet_size;
+  callback_->on_bus_enumerated(speed);
 }
 
 void StdControlHandler::on_suspend() {

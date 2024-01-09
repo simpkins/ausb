@@ -16,7 +16,7 @@ public:
   virtual ~EndpointZeroCallback() = default;
 
   virtual void on_reset(XferFailReason reason) {}
-  virtual void on_enum_done(uint8_t max_packet_size) {}
+  virtual void on_enum_done(UsbSpeed speed, uint8_t ep0_max_packet_size) {}
   virtual void on_suspend() {}
   virtual void on_resume() {}
 };
@@ -56,7 +56,7 @@ public:
    *
    * max_packet_size will be the maximum packet size chosen for this endpoint.
    */
-  void on_enum_done(uint8_t max_packet_size);
+  void on_enum_done(UsbSpeed speed, uint8_t max_packet_size);
 
   /**
    * on_reset() should be called by the EndpointManager when the bus is reset.

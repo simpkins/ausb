@@ -85,7 +85,7 @@ void EndpointManager::on_enum_done(UsbSpeed speed) {
   uint8_t max_packet_size = (speed == UsbSpeed::Low) ? 8 : 64;
 
   hw_->configure_ep0(max_packet_size);
-  ep0_.on_enum_done(max_packet_size);
+  ep0_.on_enum_done(speed, max_packet_size);
 }
 
 void EndpointManager::on_setup_received(uint8_t endpoint_num,

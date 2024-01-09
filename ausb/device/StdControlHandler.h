@@ -15,6 +15,7 @@ public:
   virtual std::optional<asel::buf_view> get_descriptor(uint16_t value,
                                                        uint16_t index) = 0;
 
+  virtual void on_bus_enumerated(UsbSpeed speed) {}
   virtual void on_reset(XferFailReason reason) {}
   virtual void on_suspend() {}
   virtual void on_resume() {}
@@ -39,7 +40,7 @@ public:
       : callback_(callback) {}
 
   void on_reset(XferFailReason reason) override;
-  void on_enum_done(uint8_t max_packet_size) override;
+  void on_enum_done(UsbSpeed speed, uint8_t ep0_max_packet_size) override;
   void on_suspend() override;
   void on_resume() override;
 

@@ -19,8 +19,8 @@ void EndpointZero::on_reset(XferFailReason reason) {
   get_callback()->on_reset(reason);
 }
 
-void EndpointZero::on_enum_done(uint8_t max_packet_size) {
-  get_callback()->on_enum_done(max_packet_size);
+void EndpointZero::on_enum_done(UsbSpeed speed, uint8_t ep0_max_packet_size) {
+  get_callback()->on_enum_done(speed, ep0_max_packet_size);
 }
 
 void EndpointZero::on_suspend() {
