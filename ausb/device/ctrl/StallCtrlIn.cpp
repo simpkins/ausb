@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ctrl/StallCtrlIn.h"
+#include "ausb/device/ctrl/StallCtrlIn.h"
 
 #include "ausb/log.h"
 

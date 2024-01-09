@@ -3,7 +3,7 @@
 
 #include "ausb/ausb_types.h"
 #include "ausb/desc/InterfaceDescriptor.h"
-#include "ausb/dev/Interface.h"
+#include "ausb/device/Interface.h"
 #include "ausb/hid/HidInEndpoint.h"
 #include "ausb/hid/HidReportMap.h"
 #include "ausb/hid/types.h"

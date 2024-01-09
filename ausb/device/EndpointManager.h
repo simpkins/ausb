@@ -2,7 +2,7 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
-#include "ausb/dev/EndpointZero.h"
+#include "ausb/device/EndpointZero.h"
 #include "ausb/hw/HWDevice.h"
 
 #include <asel/array.h>

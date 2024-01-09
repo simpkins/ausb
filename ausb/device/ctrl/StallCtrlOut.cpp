@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ctrl/StallCtrlOut.h"
+#include "ausb/device/ctrl/StallCtrlOut.h"
 
 namespace ausb::device {
 

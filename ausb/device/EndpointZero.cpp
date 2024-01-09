@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/EndpointZero.h"
+#include "ausb/device/EndpointZero.h"
 
 #include "ausb/SetupPacket.h"
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/log.h"
 
 #include <cassert>

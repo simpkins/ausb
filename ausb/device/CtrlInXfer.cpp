@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/device/CtrlInXfer.h"
 
-#include "ausb/dev/MessagePipe.h"
+#include "ausb/device/MessagePipe.h"
 
 namespace ausb::device {
 

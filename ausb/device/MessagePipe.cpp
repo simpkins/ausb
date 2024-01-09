@@ -1,11 +1,11 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/MessagePipe.h"
+#include "ausb/device/MessagePipe.h"
 
 #include "ausb/SetupPacket.h"
-#include "ausb/dev/ControlMessageHandler.h"
-#include "ausb/dev/CtrlInXfer.h"
-#include "ausb/dev/CtrlOutXfer.h"
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/ControlMessageHandler.h"
+#include "ausb/device/CtrlInXfer.h"
+#include "ausb/device/CtrlOutXfer.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/log.h"
 
 #include <cassert>

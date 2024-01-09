@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/ControlMessageHandler.h"
+#include "ausb/device/ControlMessageHandler.h"
 
 namespace ausb::device {
 

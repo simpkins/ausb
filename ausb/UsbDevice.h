@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/EndpointManager.h"
-#include "ausb/dev/StdControlHandler.h"
+#include "ausb/device/EndpointManager.h"
+#include "ausb/device/StdControlHandler.h"
 #include "ausb/hw/HWDevice.h"
 
 namespace ausb::device {
@@ -19,7 +19,7 @@ namespace ausb::device {
  *
  * The UsbDeviceImpl template parameter should be a class that you provide
  * with the device implementation.  See the UsbDeviceExample class in
- * ausb/dev/UsbDeviceExample.h for documentation about the methods that this
+ * ausb/device/UsbDeviceExample.h for documentation about the methods that this
  * class needs to provide.
  */
 template <typename UsbDeviceImpl, typename HwDeviceType = HWDevice>

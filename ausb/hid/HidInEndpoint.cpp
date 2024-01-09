@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/hid/HidInEndpoint.h"
 
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/log.h"
 #include <cassert>
 

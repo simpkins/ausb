@@ -1,8 +1,8 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ctrl/SetAddress.h"
+#include "ausb/device/ctrl/SetAddress.h"
 
 #include "ausb/SetupPacket.h"
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/log.h"
 
 namespace ausb::device {

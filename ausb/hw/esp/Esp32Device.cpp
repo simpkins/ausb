@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/hw/esp/Esp32Device.h"
 
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/hw/esp/EspError.h"
 #include "ausb/hw/esp/EspTaskLoop.h"
 

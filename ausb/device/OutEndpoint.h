@@ -2,13 +2,13 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
-#include "ausb/dev/ControlMessageHandler.h"
+#include "ausb/device/ControlMessageHandler.h"
 
 namespace ausb::device {
 
-class InEndpoint : public ControlMessageHandler {
+class OutEndpoint : public ControlMessageHandler {
 public:
-  constexpr InEndpoint() = default;
+  constexpr OutEndpoint() = default;
 
   /**
    * unconfigure() will be called when the endpoint is unconfigured.
@@ -18,12 +18,12 @@ public:
    */
   virtual void unconfigure() {}
 
-  virtual void on_in_xfer_complete() = 0;
-  virtual void on_in_xfer_failed(XferFailReason reason) = 0;
+  virtual void on_out_xfer_complete(uint32_t bytes_read) = 0;
+  virtual void on_out_xfer_failed(XferFailReason reason) = 0;
 
 private:
-  InEndpoint(InEndpoint const &) = delete;
-  InEndpoint &operator=(InEndpoint const &) = delete;
+  OutEndpoint(OutEndpoint const &) = delete;
+  OutEndpoint &operator=(OutEndpoint const &) = delete;
 };
 
 } // namespace ausb::device

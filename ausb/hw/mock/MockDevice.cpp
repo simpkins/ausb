@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #include "ausb/hw/mock/MockDevice.h"
 
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 
 #include <asel/test/checks.h>
 

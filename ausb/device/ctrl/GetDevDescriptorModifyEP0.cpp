@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ctrl/GetDevDescriptorModifyEP0.h"
+#include "ausb/device/ctrl/GetDevDescriptorModifyEP0.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/log.h"

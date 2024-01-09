@@ -2,8 +2,8 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
-#include "ausb/dev/ControlMessageHandler.h"
-#include "ausb/dev/MessagePipe.h"
+#include "ausb/device/ControlMessageHandler.h"
+#include "ausb/device/MessagePipe.h"
 
 #include <cinttypes>
 

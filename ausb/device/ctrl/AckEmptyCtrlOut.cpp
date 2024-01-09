@@ -1,5 +1,5 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/ctrl/AckEmptyCtrlOut.h"
+#include "ausb/device/ctrl/AckEmptyCtrlOut.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/log.h"

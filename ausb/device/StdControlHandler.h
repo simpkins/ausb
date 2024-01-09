@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/EndpointZero.h"
+#include "ausb/device/EndpointZero.h"
 
 #include <asel/buf_view.h>
 #include <cinttypes>

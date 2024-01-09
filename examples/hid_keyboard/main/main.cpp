@@ -6,7 +6,7 @@
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/EndpointDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/hid/HidDescriptor.h"
 #include "ausb/hid/kbd/BootKeyboard.h"
 #include "ausb/hw/esp/TaskNotificationLoop.h"

@@ -1,7 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/device/CtrlInXfer.h"
 
 #include <array>
 

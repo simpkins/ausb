@@ -2,7 +2,7 @@
 #pragma once
 
 #include "ausb/desc/EndpointDescriptor.h"
-#include "ausb/dev/InEndpoint.h"
+#include "ausb/device/InEndpoint.h"
 #include "ausb/hid/HidReportMap.h"
 
 #include <asel/array.h>

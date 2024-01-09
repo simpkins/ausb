@@ -4,7 +4,7 @@
 #include "ausb/SetupPacket.h"
 #include "ausb/desc/ConfigDescriptor.h"
 #include "ausb/desc/DeviceDescriptor.h"
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 #include "ausb/hw/mock/MockDevice.h"
 
 #include <asel/test/checks.h>

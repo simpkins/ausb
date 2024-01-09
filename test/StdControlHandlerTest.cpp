@@ -1,12 +1,12 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/StdControlHandler.h"
+#include "ausb/device/StdControlHandler.h"
 
 #include "ausb/SetupPacket.h"
 #include "ausb/UsbDevice.h"
 #include "ausb/desc/DeviceDescriptor.h"
 #include "ausb/desc/StaticDescriptorMap.h"
-#include "ausb/dev/EndpointManager.h"
-#include "ausb/dev/EndpointZero.h"
+#include "ausb/device/EndpointManager.h"
+#include "ausb/device/EndpointZero.h"
 #include "ausb/hw/mock/MockDevice.h"
 #include "test/lib/mock_utils.h"
 

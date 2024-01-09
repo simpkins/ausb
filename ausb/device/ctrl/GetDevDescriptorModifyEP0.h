@@ -2,7 +2,7 @@
 #pragma once
 
 #include "ausb/desc/DeviceDescriptor.h"
-#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/device/CtrlInXfer.h"
 
 #include <asel/buf_view.h>
 

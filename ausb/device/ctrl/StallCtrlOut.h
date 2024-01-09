@@ -1,11 +1,14 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
-#include "ausb/dev/CtrlOutXfer.h"
+#include "ausb/device/CtrlOutXfer.h"
 
 namespace ausb::device {
 
-class AckEmptyCtrlOut : public CtrlOutXfer {
+/**
+ * A CtrlOutXfer handler that simply fails the request with a STALL error.
+ */
+class StallCtrlOut : public CtrlOutXfer {
 public:
   using CtrlOutXfer::CtrlOutXfer;
 

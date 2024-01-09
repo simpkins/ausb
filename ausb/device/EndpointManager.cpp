@@ -1,9 +1,9 @@
 // Copyright (c) 2023, Adam Simpkins
-#include "ausb/dev/EndpointManager.h"
+#include "ausb/device/EndpointManager.h"
 
-#include "ausb/dev/InEndpoint.h"
-#include "ausb/dev/Interface.h"
-#include "ausb/dev/OutEndpoint.h"
+#include "ausb/device/InEndpoint.h"
+#include "ausb/device/Interface.h"
+#include "ausb/device/OutEndpoint.h"
 #include "ausb/log.h"
 
 #include <cassert>

@@ -2,7 +2,7 @@
 #pragma once
 
 #include "ausb/SetupPacket.h"
-#include "ausb/dev/CtrlInXfer.h"
+#include "ausb/device/CtrlInXfer.h"
 #include "ausb/log.h"
 
 #include <asel/array.h>
