@@ -24,7 +24,8 @@ namespace ausb::device {
 
 void EndpointManager::reset() {
   AUSB_LOGW("EndpointManager::reset() called");
-  unconfigure_endpoints_and_interfaces();
+  unconfigure_endpoints_and_interfaces(XferFailReason::LocalReset,
+                                       /*include_ep0=*/true);
   ep0_.on_reset(XferFailReason::LocalReset);
   hw_->reset();
   state_ = DeviceState::Uninit;
@@ -33,7 +34,8 @@ void EndpointManager::reset() {
 
 void EndpointManager::on_bus_reset() {
   AUSB_LOGW("on_bus_reset");
-  unconfigure_endpoints_and_interfaces();
+  unconfigure_endpoints_and_interfaces(XferFailReason::BusReset,
+                                       /*include_ep0=*/true);
   ep0_.on_reset(XferFailReason::BusReset);
   state_ = DeviceState::Uninit;
   remote_wakeup_enabled_ = false;
@@ -97,10 +99,11 @@ void EndpointManager::on_setup_received(uint8_t endpoint_num,
   if (endpoint_num == 0) {
     ep0_.on_setup_received(packet);
   } else {
-    // We could eventually provide APIs for someone to configure a message
-    // pipe on an endpoint other than EP0.  For now we don't provide an API yet
-    // to configure any other endpoints as message pipes.
-    // Using message pipes on endpoints other than EP0 seems pretty uncommon.
+    // We potentially could add an on_setup_received() method to the
+    // OutEndpoint API, to support endpoints other than endpoint 0 to be
+    // configured as message pipes.  However, there doesn't really seem to be
+    // much practical use for message pipes on other endpoints.  For now we
+    // don't bother supporting this.
     AUSB_LOGW("SETUP packet received on unexpected endpoint %u", endpoint_num);
   }
 }
@@ -110,65 +113,46 @@ void EndpointManager::stall_message_pipe(uint8_t endpoint_num) {
 }
 
 void EndpointManager::on_in_xfer_complete(uint8_t endpoint_num) {
-  // TODO: stop treating endpoint 0 specially here
-  if (endpoint_num == 0) {
-    ep0_.on_in_xfer_complete();
-  } else {
-    if (endpoint_num >= in_endpoints_.size() ||
-        in_endpoints_[endpoint_num] == nullptr) {
-      AUSB_LOGW(
-          "received IN transfer complete event for unexpected endpoint %u",
-          endpoint_num);
-      return;
-    }
-    in_endpoints_[endpoint_num]->on_in_xfer_complete();
+  if (endpoint_num >= in_endpoints_.size() ||
+      in_endpoints_[endpoint_num] == nullptr) {
+    AUSB_LOGW("received IN transfer complete event for unexpected endpoint %u",
+              endpoint_num);
+    return;
   }
+  in_endpoints_[endpoint_num]->on_in_xfer_complete();
 }
 
 void EndpointManager::on_in_xfer_failed(uint8_t endpoint_num,
                                         XferFailReason reason) {
-  if (endpoint_num == 0) {
-    ep0_.on_in_xfer_failed(reason);
-  } else {
-    if (endpoint_num >= in_endpoints_.size() ||
-        in_endpoints_[endpoint_num] == nullptr) {
-      AUSB_LOGW("received IN transfer failed event for unexpected endpoint %u",
-                endpoint_num);
-      return;
-    }
-    in_endpoints_[endpoint_num]->on_in_xfer_failed(reason);
+  if (endpoint_num >= in_endpoints_.size() ||
+      in_endpoints_[endpoint_num] == nullptr) {
+    AUSB_LOGW("received IN transfer failed event for unexpected endpoint %u",
+              endpoint_num);
+    return;
   }
+  in_endpoints_[endpoint_num]->on_in_xfer_failed(reason);
 }
 
 void EndpointManager::on_out_xfer_complete(uint8_t endpoint_num,
                                            uint32_t bytes_read) {
-  if (endpoint_num == 0) {
-    ep0_.on_out_xfer_complete(bytes_read);
-  } else {
-    if (endpoint_num >= out_endpoints_.size() ||
-        out_endpoints_[endpoint_num] == nullptr) {
-      AUSB_LOGW(
-          "received OUT transfer complete event for unexpected endpoint %u",
-          endpoint_num);
-      return;
-    }
-    out_endpoints_[endpoint_num]->on_out_xfer_complete(bytes_read);
+  if (endpoint_num >= out_endpoints_.size() ||
+      out_endpoints_[endpoint_num] == nullptr) {
+    AUSB_LOGW("received OUT transfer complete event for unexpected endpoint %u",
+              endpoint_num);
+    return;
   }
+  out_endpoints_[endpoint_num]->on_out_xfer_complete(bytes_read);
 }
 
 void EndpointManager::on_out_xfer_failed(uint8_t endpoint_num,
                                          XferFailReason reason) {
-  if (endpoint_num == 0) {
-    ep0_.on_out_xfer_failed(reason);
-  } else {
-    if (endpoint_num >= out_endpoints_.size() ||
-        out_endpoints_[endpoint_num] == nullptr) {
-      AUSB_LOGW("received OUT transfer failed event for unexpected endpoint %u",
-                endpoint_num);
-      return;
-    }
-    out_endpoints_[endpoint_num]->on_out_xfer_failed(reason);
+  if (endpoint_num >= out_endpoints_.size() ||
+      out_endpoints_[endpoint_num] == nullptr) {
+    AUSB_LOGW("received OUT transfer failed event for unexpected endpoint %u",
+              endpoint_num);
+    return;
   }
+  out_endpoints_[endpoint_num]->on_out_xfer_failed(reason);
 }
 
 void EndpointManager::set_address(uint8_t address) {
@@ -189,11 +173,14 @@ Interface *EndpointManager::get_interface(uint8_t number) {
 
 void EndpointManager::set_configured(uint8_t config_id,
                                      asel::range<Interface *const> interfaces) {
-  if (state_ == DeviceState::Configured) {
-    // Call unconfigure() first to close all endpoints and interfaces
-    // from the previous configuration.
-    unconfigure();
-  }
+  // The device state should be Address.  If SET_CONFIGURATION was called when
+  // the state was already Configured, the handler should call unconfigure() as
+  // the first step of their processing to close existing endpoints and
+  // interfaces.
+  assert(state_ == DeviceState::Address);
+  // If SET_CONFIGURATION is called with a config ID of 0, only unconfigure()
+  // should be called.
+  assert(config_id != 0);
 
   assert(interfaces.size() < interfaces_.size());
   for (size_t n = 0; n < interfaces_.size(); ++n) {
@@ -203,9 +190,6 @@ void EndpointManager::set_configured(uint8_t config_id,
       assert(new_intf != nullptr);
     } else {
       new_intf = nullptr;
-    }
-    if (interfaces_[n] != nullptr && interfaces_[n] != new_intf) {
-      interfaces_[n]->unconfigure();
     }
     interfaces_[n] = new_intf;
   }
@@ -217,20 +201,26 @@ void EndpointManager::set_configured(uint8_t config_id,
 void EndpointManager::unconfigure() {
   AUSB_LOGI("EndpointManager::unconfigure() invoked");
 
-  unconfigure_endpoints_and_interfaces();
+  unconfigure_endpoints_and_interfaces(XferFailReason::ConfigChanged,
+                                       /*include_ep0=*/false);
   state_ = DeviceState::Address;
 }
 
-void EndpointManager::unconfigure_endpoints_and_interfaces() {
-  for (size_t n = 0; n < in_endpoints_.size(); ++n) {
+void EndpointManager::unconfigure_endpoints_and_interfaces(
+    XferFailReason reason, bool include_ep0) {
+  if (include_ep0) {
+    in_endpoints_[0]->on_in_ep_unconfigured(reason);
+    out_endpoints_[0]->on_out_ep_unconfigured(reason);
+  }
+  for (size_t n = 1; n < in_endpoints_.size(); ++n) {
     if (in_endpoints_[n] != nullptr) {
-      in_endpoints_[n]->unconfigure();
+      in_endpoints_[n]->on_in_ep_unconfigured(reason);
     }
     in_endpoints_[n] = nullptr;
   }
-  for (size_t n = 0; n < out_endpoints_.size(); ++n) {
+  for (size_t n = 1; n < out_endpoints_.size(); ++n) {
     if (out_endpoints_[n] != nullptr) {
-      out_endpoints_[n]->unconfigure();
+      out_endpoints_[n]->on_out_ep_unconfigured(reason);
     }
     out_endpoints_[n] = nullptr;
   }

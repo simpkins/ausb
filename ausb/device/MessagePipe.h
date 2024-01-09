@@ -2,6 +2,8 @@
 #pragma once
 
 #include "ausb/ausb_types.h"
+#include "ausb/device/InEndpoint.h"
+#include "ausb/device/OutEndpoint.h"
 
 #include <cinttypes>
 
@@ -35,8 +37,14 @@ class CtrlOutXfer;
  * to also be configured as message pipes.  However, in practice this is very
  * uncommon.  Not all device hardware supports control transfers on endpoints
  * other than endpoint 0.
+ *
+ * Note that we inherit from InEndpoint and OutEndpoint, and both of those
+ * inherit from ControlMessageHandler.  We intentionally arent' using virtual
+ * inheritance here, despite their being diamond inheritance.  These parent
+ * classes are pure-virtual APIs with no data members, so we don't care about
+ * the diamond inheritance.
  */
-class MessagePipe {
+class MessagePipe : public InEndpoint, public OutEndpoint {
 public:
   /**
    * The current transfer state of the pipe.
@@ -104,15 +112,24 @@ public:
    */
   void on_setup_received(const SetupPacket &packet);
 
-  /**
-   * on_in_xfer_complete() should be called by the EndpointManager when a IN
-   * transfer started with EndpointManager::start_ctrl_in_write() has finished.
+  /*
+   * InEndpoint APIs
    */
-  void on_in_xfer_complete();
-  void on_in_xfer_failed(XferFailReason reason);
+  void on_in_ep_unconfigured(XferFailReason reason) override;
+  void on_in_xfer_complete() override;
+  void on_in_xfer_failed(XferFailReason reason) override;
 
-  void on_out_xfer_complete(uint32_t bytes_read);
-  void on_out_xfer_failed(XferFailReason reason);
+  /*
+   * OutEndpoint APIs
+   */
+  void on_out_ep_unconfigured(XferFailReason reason) override;
+  void on_out_xfer_complete(uint32_t bytes_read) override;
+  void on_out_xfer_failed(XferFailReason reason) override;
+
+  CtrlOutXfer *process_out_setup(MessagePipe *pipe,
+                                 const SetupPacket &packet) override;
+  CtrlInXfer *process_in_setup(MessagePipe *pipe,
+                               const SetupPacket &packet) override;
 
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by the current CtrlInXfer or CtrlOutXfer

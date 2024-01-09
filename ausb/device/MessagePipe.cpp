@@ -102,6 +102,17 @@ void MessagePipe::on_setup_received(const SetupPacket &packet) {
   }
 }
 
+void MessagePipe::on_in_ep_unconfigured(XferFailReason reason) {
+  // We generally expect on_in_ep_unconfigured() and on_out_ep_unconfigured()
+  // to be called together.  It's fine for us to call on_unconfigured() twice
+  // in a row, so just let each call run on_unconfigured().
+  on_unconfigured(reason);
+}
+
+void MessagePipe::on_out_ep_unconfigured(XferFailReason reason) {
+  on_unconfigured(reason);
+}
+
 void MessagePipe::on_in_xfer_complete() {
   switch (status_) {
   case Status::InSendPartial:
@@ -176,6 +187,20 @@ void MessagePipe::on_out_xfer_failed(XferFailReason reason) {
 
   invoke_xfer_failed(reason);
   manager_->stall_message_pipe(endpoint_num_);
+}
+
+CtrlOutXfer *MessagePipe::process_out_setup(MessagePipe *pipe,
+                               const SetupPacket &packet) {
+  // In theory this could be called if the host sends a SETUP message
+  // with an endpoint recipient of 0.  We generally don't expect this, though.
+  // Return null, and let our code above log a message about this unhandled
+  // transfer.
+  return nullptr;
+}
+
+CtrlInXfer *MessagePipe::process_in_setup(MessagePipe *pipe,
+                             const SetupPacket &packet) {
+  return nullptr;
 }
 
 void MessagePipe::start_out_read(void *data, size_t size) {

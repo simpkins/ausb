@@ -34,6 +34,8 @@ enum class XferFailReason {
   // A timeout occurred while waiting for the host to send the desired IN/OUT
   // token.
   Timeout,
+  // SET_CONFIGURATION was invoked, changing the device configuration.
+  ConfigChanged,
 };
 
 enum class XferStartResult {

@@ -33,7 +33,10 @@ class EndpointManager {
 public:
   constexpr explicit EndpointManager(
       HWDevice *hw, EndpointZeroCallback *ep0_callback) noexcept
-      : hw_(hw), ep0_(this, ep0_callback) {}
+      : hw_(hw), ep0_(this, ep0_callback) {
+    in_endpoints_[0] = &ep0_.get_message_pipe();
+    out_endpoints_[0] = &ep0_.get_message_pipe();
+  }
 
   /**
    * Initialize the USB device.
@@ -92,8 +95,13 @@ public:
    * request on endpoint 0, after all of the endpoints for this configuration
    * have been opened.
    *
-   * The endpoints for this configuration should typically be opened before
-   * calling set_configured().
+   * The endpoints for this configuration should be opened before calling
+   * set_configured().
+   *
+   * Note that if SET_CONFIGURATION is called to switch between two non-zero
+   * configurations, unconfigure() should be called as the first step to reset
+   * the endpoint and interface state, before opening the new endpoints and
+   * calling set_configured() with the new interface list.
    */
   void set_configured(uint8_t config_id,
                       asel::range<Interface *const> interfaces);
@@ -116,8 +124,7 @@ public:
    *
    * This closes all endpoints and puts the device back in the Address state.
    *
-   * This should normally be called when handling a SET_CONFIGURATION request
-   * with a config ID of 0.
+   * This should normally be called when handling a SET_CONFIGURATION request.
    */
   void unconfigure();
 
@@ -249,7 +256,8 @@ private:
 
   std::error_code pre_init();
 
-  void unconfigure_endpoints_and_interfaces();
+  void unconfigure_endpoints_and_interfaces(XferFailReason reason,
+                                            bool include_ep0);
 
   DeviceState state_ = DeviceState::Uninit;
   uint8_t config_id_ = 0;

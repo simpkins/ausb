@@ -11,12 +11,12 @@ public:
   constexpr InEndpoint() = default;
 
   /**
-   * unconfigure() will be called when the endpoint is unconfigured.
+   * on_in_ep_unconfigured() will be called when the endpoint is unconfigured.
    *
    * This can happen when the bus is reset, or if SET_CONFIGURE is called to
    * change the device configuration.
    */
-  virtual void unconfigure() {}
+  virtual void on_in_ep_unconfigured(XferFailReason reason) {}
 
   virtual void on_in_xfer_complete() = 0;
   virtual void on_in_xfer_failed(XferFailReason reason) = 0;

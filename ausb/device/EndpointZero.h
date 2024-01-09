@@ -42,6 +42,9 @@ public:
   MessagePipe::Status status() const {
     return pipe_.status();
   }
+  constexpr MessagePipe& get_message_pipe() {
+    return pipe_;
+  }
 
   ////////////////////////////////////////////////////////////////////
   // Methods to be invoked by EndpointManager to inform us of events
@@ -80,24 +83,6 @@ public:
    */
   void on_setup_received(const SetupPacket &packet) {
     pipe_.on_setup_received(packet);
-  }
-
-  /**
-   * on_in_xfer_complete() should be called by the EndpointManager when a IN
-   * transfer started with EndpointManager::start_ctrl_in_write() has finished.
-   */
-  void on_in_xfer_complete() {
-    pipe_.on_in_xfer_complete();
-  }
-  void on_in_xfer_failed(XferFailReason reason) {
-    pipe_.on_in_xfer_failed(reason);
-  }
-
-  void on_out_xfer_complete(uint32_t bytes_read) {
-    pipe_.on_out_xfer_complete(bytes_read);
-  }
-  void on_out_xfer_failed(XferFailReason reason) {
-    pipe_.on_out_xfer_failed(reason);
   }
 
 private:
