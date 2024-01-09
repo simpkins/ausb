@@ -11,4 +11,10 @@ menu "AUSB"
         help
             Support a mock USB hardware device.  This is mainly useful for
             building unit tests.
+    config AUSB_MAX_INTERFACES
+        int "The maximum number of interfaces to support"
+        default 6
+        help
+            The maximum number of interfaces to support in a single
+            USB device configuration.
 endmenu #AUSB

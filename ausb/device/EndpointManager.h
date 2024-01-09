@@ -1,6 +1,7 @@
 // Copyright (c) 2023, Adam Simpkins
 #pragma once
 
+#include "ausb/ausb_config.h"
 #include "ausb/ausb_types.h"
 #include "ausb/device/EndpointZero.h"
 #include "ausb/hw/HWDevice.h"
@@ -277,8 +278,11 @@ private:
   // an insufficient lifetime.  Perhaps define a Configuration class, which
   // contains an array of configured interfaces plus the config descriptor?
   // That would make it easier for callers to provide storage for this array.
-  static constexpr size_t kMaxNumInterfaces = 6;
+  static constexpr size_t kMaxNumInterfaces = AUSB_CONFIG_MAX_INTERFACES;
   asel::array<Interface *, kMaxNumInterfaces> interfaces_ = {};
+
+  static constexpr size_t kMaxNumOutEndpoints = AUSB_CONFIG_MAX_OUT_ENDPOINTS;
+  static constexpr size_t kMaxNumInEndpoints = AUSB_CONFIG_MAX_IN_ENDPOINTS;
 
   // Arrays storing points to the currently configured endpoints.
   //
@@ -295,8 +299,6 @@ private:
   // the maximum possible endpoint number is 15, allowing for up to 16 IN
   // endpoints and 16 OUT endpoints (including endpoint 0).  In practice most
   // device hardware supports fewer endpoints than this.
-  static constexpr size_t kMaxNumOutEndpoints = 6; // TODO: move to build config
-  static constexpr size_t kMaxNumInEndpoints = 6;  // TODO: move to build config
   asel::array<InEndpoint *, kMaxNumInEndpoints> in_endpoints_ = {};
   asel::array<OutEndpoint *, kMaxNumOutEndpoints> out_endpoints_ = {};
 };

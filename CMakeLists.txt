@@ -72,6 +72,13 @@ else()
     set(AUSB_CONFIG_HW_MOCK ON)
     set(hw_srcs "ausb/hw/mock/MockDevice.cpp")
 
+    set(AUSB_CONFIG_MAX_INTERFACES 6 CACHE STRING
+        "Maximum number of interfaces to support in a device configuration")
+    set(AUSB_CONFIG_MAX_IN_ENDPOINTS 6 CACHE STRING
+        "Maximum number of IN endpoints to support")
+    set(AUSB_CONFIG_MAX_OUT_ENDPOINTS 6 CACHE STRING
+        "Maximum number of OUT endpoints to support")
+
     # ESP-IDF's Kconfig system defines variables starting with "CONFIG_AUSB_"
     # For use in ausb/ausb-config.h we would rather have variables named
     # AUSB_CONFIG_*.  Translate between the two formats, so that we only have

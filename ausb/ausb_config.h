@@ -10,9 +10,14 @@
 
 // When building for Espressif chips, use their Kconfig configuration system.
 #include "sdkconfig.h"
+#include <soc/usb_types.h>
 
 #define AUSB_CONFIG_HW_ESP CONFIG_AUSB_HW_ESP
 #define AUSB_CONFIG_HW_MOCK CONFIG_AUSB_HW_MOCK
+#define AUSB_CONFIG_MAX_INTERFACES CONFIG_AUSB_MAX_INTERFACES
+
+#define AUSB_CONFIG_MAX_OUT_ENDPOINTS USB_OUT_EP_NUM
+#define AUSB_CONFIG_MAX_IN_ENDPOINTS USB_IN_EP_NUM
 
 #endif // ESP_TARGET
 
