@@ -40,7 +40,27 @@ else()
 
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/compiler-settings.cmake")
 
-    add_subdirectory("asel")
+    # We depend on the asel library.
+    # - When building ausb as a standalone project, this can be found as a
+    #   submodule of the current repository.
+    # - When ausb is being used as a dependency of another project, asel may
+    #   already be provided by that project's own CMake files.
+    #
+    # Only try including asel as a subdirectory if it isn't already defined.
+    if(NOT TARGET asel)
+        if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/asel/CMakeLists.txt")
+            add_subdirectory("asel")
+        else()
+            if (AUSB_IS_PRIMARY_PROJECT)
+                message(
+                    FATAL_ERROR
+                    "Unable to find asel dependency.  "
+                    "Perhaps you need to run 'git submodule update --init'?")
+            else()
+                message(FATAL_ERROR "unable to find asel dependency")
+            endif()
+        endif()
+    endif()
 
     set(
         AUSB_CONFIG_HW_MULTI
