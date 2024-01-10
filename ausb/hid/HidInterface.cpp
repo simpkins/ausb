@@ -11,7 +11,6 @@
 #include "ausb/device/ctrl/SendData.h"
 #include "ausb/device/ctrl/StallCtrlIn.h"
 #include "ausb/device/ctrl/StallCtrlOut.h"
-#include "ausb/hid/HidSetReport.h"
 #include "ausb/hid/types.h"
 
 #include "ausb/log.h"
@@ -64,17 +63,16 @@ CtrlOutXfer *HidInterface::set_idle(MessagePipe *pipe,
 }
 
 CtrlOutXfer *HidInterface::set_report(MessagePipe *pipe,
-                                    const SetupPacket &packet) {
+                                      const SetupPacket &packet) {
   const uint8_t report_type_u8 = (packet.value >> 8) & 0xff;
   const uint8_t report_id = packet.value & 0xff;
   AUSB_LOGI(
       "HID SET_REPORT: report_type=%u report_id=%u", report_type_u8, report_id);
-  const auto report_type = static_cast<HidReportType>(report_type_u8);
-
-  AUSB_LOGE("TODO: HID SET_REPORT");
-  // TODO
-  (void)report_type;
-  return pipe->new_out_handler<HidSetReport>(pipe, this);
+  if (callback_) {
+    const auto report_type = static_cast<HidReportType>(report_type_u8);
+    return callback_->set_report(pipe, packet, report_type, report_id);
+  }
+  return pipe->new_out_handler<StallCtrlOut>(pipe);
 }
 
 CtrlOutXfer *HidInterface::set_protocol(MessagePipe *pipe,

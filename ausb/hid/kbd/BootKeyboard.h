@@ -62,7 +62,13 @@ static constexpr auto make_kbd_report_descriptor() {
       .end_collection();
 }
 
-class BootKeyboard : public hid::HidInterface {
+class KeyboardLedCallback {
+public:
+  virtual void on_set_leds(uint8_t leds) = 0;
+};
+
+class BootKeyboard : public hid::HidInterface,
+                     private hid::HidInterfaceCallback {
 public:
   static constexpr uint16_t kDefaultMaxPacketSize = 8;
   static constexpr uint8_t kDefaultInterval = 10;
@@ -73,12 +79,16 @@ public:
   constexpr explicit BootKeyboard(
       device::EndpointManager *manager,
       uint8_t in_endpoint_num,
+      KeyboardLedCallback *callback = nullptr,
       uint16_t max_packet_size = kDefaultMaxPacketSize) noexcept
       : HidInterface(manager,
                      in_endpoint_num,
                      max_packet_size,
                      report_descriptor_.data(),
-                     &report_map_) {}
+                     &report_map_,
+                     &report_map_,
+                     this),
+        callback_(callback) {}
 
   void send_report(const uint8_t *data);
   void send_report(const ReportType &data) {
@@ -86,8 +96,6 @@ public:
   }
 
   // TODO: add a thread-safe method to set the report from a different task
-
-  bool set_output_report(asel::buf_view data) override;
 
   static constexpr InterfaceDescriptor make_interface_descriptor() {
     return HidInterface::make_boot_interface_descriptor(HidProtocol::Keyboard);
@@ -125,9 +133,18 @@ public:
   }
 
 private:
+  class SetLedHandler;
+
+  device::CtrlOutXfer *set_report(device::MessagePipe *pipe,
+                                  const SetupPacket &packet,
+                                  HidReportType report_type,
+                                  uint8_t report_id) override;
+  void set_leds(uint8_t value);
+
   static constexpr auto report_descriptor_ = make_kbd_report_descriptor();
 
   hid::HidReportMapStorage<KbdReportInfo> report_map_;
+  KeyboardLedCallback *callback_ = nullptr;
 };
 
 } // namespace ausb::kbd

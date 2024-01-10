@@ -16,8 +16,10 @@ namespace ausb::hid {
 
 class HidInterfaceCallback {
 public:
-  [[nodiscard]] virtual bool set_output_report(asel::buf_view data) = 0;
-  [[nodiscard]] virtual bool set_protocol(uint8_t protocol) = 0;
+  virtual device::CtrlOutXfer *set_report(device::MessagePipe *pipe,
+                                          const SetupPacket &packet,
+                                          HidReportType report_type,
+                                          uint8_t report_id) = 0;
 };
 
 class HidInterface : public device::Interface {
@@ -28,11 +30,13 @@ public:
                          const uint8_t *report_descriptor,
                          size_t report_descriptor_size,
                          HidReportMap *report_map,
-                         HidReportMap *boot_report_map = nullptr)
+                         HidReportMap *boot_report_map = nullptr,
+                         HidInterfaceCallback *callback = nullptr)
       : report_descriptor_(report_descriptor),
         report_descriptor_size_(report_descriptor_size),
         report_map_(report_map),
         boot_report_map_(report_map),
+        callback_(callback),
         in_endpoint_(manager, in_endpoint_num, max_packet_size, report_map_) {}
 
   template <size_t S>
@@ -40,13 +44,17 @@ public:
                          uint8_t in_endpoint_num,
                          uint16_t max_packet_size,
                          const std::array<uint8_t, S> &report_descriptor,
-                         HidReportMap *report_map)
+                         HidReportMap *report_map,
+                         HidReportMap *boot_report_map = nullptr,
+                         HidInterfaceCallback *callback = nullptr)
       : HidInterface(manager,
                      in_endpoint_num,
                      max_packet_size,
                      report_descriptor.data(),
                      report_descriptor.size(),
-                     report_map) {}
+                     report_map,
+                     boot_report_map,
+                     callback) {}
 
   HidInEndpoint &in_endpoint() {
     return in_endpoint_;
@@ -75,8 +83,6 @@ public:
                                          const SetupPacket &packet) override;
   device::CtrlInXfer *process_in_setup(device::MessagePipe *pipe,
                                        const SetupPacket &packet) override;
-
-  [[nodiscard]] virtual bool set_output_report(asel::buf_view data) = 0;
 
   /**
    * Return an interface descriptor for a non-boot interface.
@@ -130,6 +136,7 @@ private:
   HidReportProtocol protocol_ = HidReportProtocol::Report;
   HidReportMap *const report_map_ = nullptr;
   HidReportMap *const boot_report_map_ = nullptr;
+  HidInterfaceCallback *callback_ = nullptr;
   HidInEndpoint in_endpoint_;
 };
 

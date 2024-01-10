@@ -21,7 +21,6 @@ set(
     "ausb/hid/HidInEndpoint.cpp"
     "ausb/hid/HidInterface.cpp"
     "ausb/hid/HidReportQueue.cpp"
-    "ausb/hid/HidSetReport.cpp"
     "ausb/hid/kbd/BootKeyboard.cpp"
     "ausb/hid/kbd/BootReport.cpp"
     "ausb/hid/kbd/KeyBitmap.cpp"
