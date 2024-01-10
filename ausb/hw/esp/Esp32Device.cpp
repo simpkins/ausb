@@ -610,8 +610,9 @@ void Esp32Device::process_out_xfer_complete(uint8_t endpoint_num) {
     return;
   }
 
+  const auto bytes_read = xfer.bytes_read;
   xfer.reset();
-  mgr_->on_out_xfer_complete(endpoint_num, xfer.bytes_read);
+  mgr_->on_out_xfer_complete(endpoint_num, bytes_read);
 }
 
 void Esp32Device::process_setup_received(uint8_t endpoint_num) {
