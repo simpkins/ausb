@@ -115,6 +115,7 @@ StdControlHandler::process_std_device_out(MessagePipe *pipe,
                                           const SetupPacket &packet) {
   const auto std_req_type = packet.get_std_request();
   if (std_req_type == StdRequestType::SetAddress) {
+    callback_->on_address_set(packet.value);
     return pipe->new_out_handler<SetAddress>(pipe);
   } else if (std_req_type == StdRequestType::SetConfiguration) {
     return process_set_configuration(pipe, packet);
