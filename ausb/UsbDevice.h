@@ -68,8 +68,8 @@ private:
   static constexpr auto descriptors_ = UsbDeviceImpl::make_descriptor_map();
 
   HwDeviceType hw_;
-  StdControlHandler ctrl_handler{this};
-  EndpointManager ep_manager_{&hw_, &ctrl_handler};
+  StdControlHandler ctrl_handler_{this};
+  EndpointManager ep_manager_{&hw_, &ctrl_handler_};
   UsbDeviceImpl impl_{&ep_manager_};
 };
 
